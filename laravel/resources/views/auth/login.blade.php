@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login | Haven Suites</title>
+<style>body{margin:0;background:#f4f6fa;color:#203456;font:16px Arial,sans-serif;display:grid;place-items:center;min-height:100vh}.login{width:min(380px,calc(100vw - 80px));padding:32px;background:white;border:1px solid #e2e8f0;border-radius:16px;border-top:4px solid #e98d50;box-shadow:0 12px 32px #20345612}h1{margin:0 0 8px;font-size:25px}p{color:#64748b;line-height:1.5}label{display:block;margin:20px 0 8px}input[type=email],input[type=password]{box-sizing:border-box;width:100%;padding:13px;border:1px solid #b8c5d9;border-radius:8px;font:inherit}button{width:100%;padding:13px;border:0;border-radius:8px;background:#294780;color:white;font:inherit;margin-top:24px;cursor:pointer}.error{color:#a32222}input:focus-visible,button:focus-visible{outline:3px solid #e98d50;outline-offset:3px}</style></head>
+<body><main class="login"><h1>Haven Suites</h1><p>Sign in to manage your apartments and guest experiences.</p>
+@if($errors->any())<p class="error" role="alert">{{ $errors->first() }}</p>@endif
+<form method="post" action="{{ url('/login') }}">@csrf
+<label for="email">Email address</label><input id="email" type="email" name="email" value="{{ old('email') }}" autocomplete="username" required autofocus>
+<label for="password">Password</label><input id="password" type="password" name="password" autocomplete="current-password" required>
+<label><input type="checkbox" name="remember" value="1"> Remember me</label><button type="submit">Sign in</button></form></main></body></html>

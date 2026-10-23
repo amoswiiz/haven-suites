@@ -1,4 +1,10 @@
-# CodeIgniter 4 Application Starter
+# Haven Suites
+
+The Laravel 13 migration is in [`laravel/`](laravel/). See [migration, running, verification, and rollback instructions](LARAVEL-MIGRATION.md).
+
+The original CodeIgniter application is retained at the repository root for comparison and rollback.
+
+## Original CodeIgniter starter documentation
 
 ## What is CodeIgniter?
 

@@ -1,0 +1,237 @@
+
+:root {
+    --hs-navy: #172b49;
+    --hs-blue: #2563eb;
+    --hs-bg: #f4f6fa;
+    --hs-text: #243247;
+    --hs-muted: #78869b;
+}
+
+body {
+    margin: 0;
+    background: var(--hs-bg);
+    font-family: Arial, Helvetica, sans-serif;
+    color: var(--hs-text);
+}
+
+.hs-sidebar {
+    width: 250px;
+    min-height: 100vh;
+    background: var(--hs-navy);
+    color: white;
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+.hs-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 28px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+}
+
+.hs-brand-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #3b82f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-weight: bold;
+}
+
+.hs-brand small {
+    color: #aebfd5;
+    font-size: 11px;
+}
+
+.hs-menu-heading {
+    padding: 26px 20px 12px;
+    font-size: 11px;
+    color: #8fa4c0;
+    letter-spacing: 1.5px;
+}
+
+.hs-nav {
+    padding: 0 12px;
+}
+
+.hs-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    color: #c0cde0;
+    text-decoration: none;
+    padding: 13px 15px;
+    border-radius: 9px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    transition: .2s;
+}
+
+.hs-nav-link svg {
+    width: 19px;
+    height: 19px;
+}
+
+.hs-nav-link:hover {
+    background: rgba(255,255,255,.08);
+    color: white;
+}
+
+.hs-nav-link.active {
+    background: #2c4d7b;
+    color: white;
+    font-weight: 600;
+}
+
+.hs-sidebar-footer {
+    margin-top: auto;
+    padding: 22px;
+    border-top: 1px solid rgba(255,255,255,.1);
+    font-size: 12px;
+    color: #aebfd5;
+}
+
+.hs-main {
+    margin-left: 250px;
+    min-height: 100vh;
+}
+
+.hs-topbar {
+    background: white;
+    padding: 20px 30px;
+    border-bottom: 1px solid #e8edf3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hs-content {
+    padding: 30px;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.hs-stat-card {
+    background: white;
+    border: 1px solid #e8edf3;
+    border-radius: 14px;
+    padding: 24px;
+    height: 100%;
+}
+
+.hs-stat-label {
+    color: var(--hs-muted);
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.hs-stat-value {
+    font-size: 30px;
+    font-weight: 700;
+}
+
+.hs-stat-icon {
+    width: 45px;
+    height: 45px;
+    background: #eef4ff;
+    color: var(--hs-blue);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hs-panel {
+    background: white;
+    border: 1px solid #e8edf3;
+    border-radius: 14px;
+    padding: 24px;
+    height: 100%;
+}
+
+.hs-panel h5 {
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+    .hs-sidebar {
+        width: 75px;
+    }
+
+    .hs-brand {
+        padding: 20px 12px;
+        justify-content: center;
+    }
+
+    .hs-brand > div:last-child,
+    .hs-menu-heading,
+    .hs-nav-link span,
+    .hs-sidebar-footer {
+        display: none;
+    }
+
+    .hs-nav {
+        padding: 10px;
+    }
+
+    .hs-nav-link {
+        justify-content: center;
+        padding: 14px;
+    }
+
+    .hs-main {
+        margin-left: 75px;
+    }
+
+    .hs-content {
+        padding: 16px;
+    }
+
+    .hs-topbar {
+        padding: 16px;
+    }
+}
+
+/* Haven Suites: independently scrollable fixed sidebar */
+.hs-sidebar {
+    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #7086a6 transparent;
+}
+
+.hs-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.hs-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.hs-sidebar::-webkit-scrollbar-thumb {
+    background: #7086a6;
+    border-radius: 8px;
+}
+
+.hs-sidebar::-webkit-scrollbar-thumb:hover {
+    background: #9bb0cc;
+}
+
+/* Keep the brand and footer from shrinking when the menu is long. */
+.hs-brand,
+.hs-sidebar-footer {
+    flex-shrink: 0;
+}
