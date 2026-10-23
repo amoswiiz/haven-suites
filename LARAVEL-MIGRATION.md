@@ -60,7 +60,15 @@ php artisan haven:tenant-create acme "Acme Apartments" admin@acme.example
 
 This creates a new, empty database from the operational schema, assigns a company administrator, and seeds expense categories. A new account's password is requested privately; an existing email is assigned a company membership without changing its password. Configure cleaning rates, properties, units, staff and host agreements before operational use. Provisioning requires MySQL database-creation privileges; use a dedicated provisioning account in production rather than giving normal web workers unrestricted database-creation access.
 
-SaaS isolation and provisioning are implemented. Subscription billing, pricing plans, self-service signup, invitations, quota enforcement, platform administration UI, and password-recovery email delivery are **not** part of this migration. They must be implemented before offering a self-service commercial SaaS product. Password resets of accounts shared across companies are blocked in the tenant staff workflow.
+SaaS signup is available at `/register`, followed by email verification, company creation, and first-apartment onboarding. Company administrators can update company settings, invite and revoke members, change company roles, and request subscription plans. A separate platform administrator can manage company access and subscriptions at `/platform`; company Super Administrators do not automatically receive platform access. Password recovery uses Laravel's reset-token flow. Password resets of accounts shared across companies remain blocked in the tenant staff workflow; the account holder can use password recovery instead.
+
+New companies receive a 14-day Starter trial. Monthly prices are Starter KES 300 (3 apartments/3 members), Team KES 1,500 (15 apartments/10 members), and Scale KES 2,500 (100 apartments/50 members). Expired subscriptions keep read access but block operational writes; requesting a plan does not automatically grant higher limits. Haven's imported company retains its existing legacy access.
+
+Stripe test-card checkout, M-Pesa sandbox checkout, and sandbox manual invoices are implemented, including callback validation and idempotent settlement. Billing is disabled by default, requires explicit `SAAS_BILLING_SANDBOX_ENABLED=true`, accepts only Stripe test keys and Safaricom sandbox endpoints, and is blocked in production. Prices and test credential variables are listed in `laravel/.env.example`. No live charges have been made, and live billing is not enabled. Sandbox payments simulate one month of access; automatic recurring charges are not implemented.
+
+Mail defaults to the local log transport, so signup, verification, reset, and invitation emails are written to Laravel's private logs until a real mail transport is configured. Configure SMTP before external user testing. Grant platform access to an existing account using `php artisan haven:platform-admin email@example.com`; for a separate local test account, append `--create-local`. Platform accounts can manage company metadata but do not gain access to company booking/guest/financial records without an explicit company membership.
+
+The one-time `tools/port-laravel.php` source port is now guarded against rerunning after SaaS development, to prevent it overwriting these native Laravel modules.
 
 ## Verification
 

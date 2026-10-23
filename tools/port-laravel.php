@@ -2,6 +2,9 @@
 // Deterministic source port. The CI application remains unchanged.
 $root = dirname(__DIR__);
 $target = $root . '/laravel';
+if (is_file($target.'/config/saas.php')) {
+    throw new RuntimeException('The initial port is archived. SaaS development has started; edit the Laravel application directly to preserve its new modules.');
+}
 function put(string $path, string $contents): void {
     if (!is_dir(dirname($path))) mkdir(dirname($path), 0775, true);
     if (preg_match('/\.(php|md|json|sql)$/i',$path)) {

@@ -5,4 +5,4 @@
 <form method="post" action="{{ url('/login') }}">@csrf
 <label for="email">Email address</label><input id="email" type="email" name="email" value="{{ old('email') }}" autocomplete="username" required autofocus>
 <label for="password">Password</label><input id="password" type="password" name="password" autocomplete="current-password" required>
-<label><input type="checkbox" name="remember" value="1"> Remember me</label><button type="submit">Sign in</button></form></main></body></html>
+<label><input type="checkbox" name="remember" value="1"> Remember me</label><button type="submit">Sign in</button></form><p><a href="{{ route('password.request') }}">Forgot password?</a></p><p>New to Haven Suites? <a href="{{ route('register') }}">Create your company account</a></p>@if(session('success'))<p role="status">{{ session('success') }}</p>@endif</main></body></html>
