@@ -21,10 +21,10 @@ $propertyList = $properties ?? [];
 <div style="max-width:1000px">
 
     <div class="mb-4">
-        <a href="<?= site_url('units') ?>"
+        <?php if (haven_can_access(site_url('units'), 'GET')): ?><a href="<?= site_url('units') ?>"
            class="text-decoration-none">
             &larr; Back to Apartment Units
-        </a>
+        </a><?php endif; ?>
     </div>
 
     <div class="mb-4">
@@ -305,10 +305,10 @@ $propertyList = $properties ?? [];
                             : 'Save Apartment' ?>
                     </button>
 
-                    <a href="<?= site_url('units') ?>"
+                    <?php if (haven_can_access(site_url('units'), 'GET')): ?><a href="<?= site_url('units') ?>"
                        class="btn btn-outline-secondary px-4">
                         Cancel
-                    </a>
+                    </a><?php endif; ?>
 
                 </div>
 

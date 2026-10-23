@@ -1,7 +1,7 @@
 @extends('layouts/main')
 @section('content')
 <?php $v = static function (string $key, $default = '') use ($agreement) { return old($key, $agreement[$key] ?? $default); }; ?>
-<div class="container-fluid py-3"><div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold mb-0"><?= esc($pageTitle) ?></h3><a href="<?= site_url('host-agreements') ?>" class="btn btn-outline-secondary">Back</a></div>
+<div class="container-fluid py-3"><div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold mb-0"><?= esc($pageTitle) ?></h3><?php if (haven_can_access(site_url('host-agreements'), 'GET')): ?><a href="<?= site_url('host-agreements') ?>" class="btn btn-outline-secondary">Back</a><?php endif; ?></div>
 <?php if (session('error')): ?><div class="alert alert-danger"><?= esc(session('error')) ?></div><?php endif; ?>
 <form action="<?= esc($action, 'attr') ?>" method="post" class="card border-0 shadow-sm"><div class="card-body row g-3">
 <?= csrf_field() ?>

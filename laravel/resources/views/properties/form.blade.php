@@ -21,10 +21,10 @@ $value = static function ($field, $default = '') use ($property) {
 
     <!-- Back navigation -->
     <div class="mb-4">
-        <a href="<?= site_url('properties') ?>"
+        <?php if (haven_can_access(site_url('properties'), 'GET')): ?><a href="<?= site_url('properties') ?>"
            class="text-decoration-none">
             &larr; Back to Properties
-        </a>
+        </a><?php endif; ?>
     </div>
 
     <!-- Page heading -->
@@ -189,10 +189,10 @@ $value = static function ($field, $default = '') use ($property) {
 
                     </button>
 
-                    <a href="<?= site_url('properties') ?>"
+                    <?php if (haven_can_access(site_url('properties'), 'GET')): ?><a href="<?= site_url('properties') ?>"
                        class="btn btn-outline-secondary px-4">
                         Cancel
-                    </a>
+                    </a><?php endif; ?>
 
                 </div>
 

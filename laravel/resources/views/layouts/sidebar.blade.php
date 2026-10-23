@@ -7,8 +7,8 @@ $groups = [
         ['label' => 'Reservations', 'path' => 'reservations', 'icon' => 'calendar', 'permission' => 'reservations.view'],
         ['label' => 'Quotations', 'path' => 'quotations', 'icon' => 'file-text', 'permission' => 'reservations.view'],
         ['label' => 'Availability', 'path' => 'availability', 'icon' => 'calendar-days', 'permission' => 'availability.view'],
-        ['label' => 'Customers', 'path' => 'customers', 'icon' => 'contact', 'permission' => 'reservations.view'],
-        ['label' => 'Guest KYC', 'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'reservations.view'],
+        ['label' => 'Customers', 'path' => 'customers', 'icon' => 'contact', 'permission' => 'finance.view'],
+        ['label' => 'Guest KYC', 'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'finance.view'],
     ]],
     ['label' => 'Properties', 'icon' => 'building-2', 'items' => [
         ['label' => 'Apartment Units', 'path' => 'units', 'icon' => 'house', 'permission' => 'units.view'],
@@ -94,9 +94,9 @@ $canAccess = static function (array $item) use ($user): bool {
     <div class="hs-menu-heading">MAIN MENU</div>
     <nav class="hs-nav" aria-label="Main navigation">
         <?php if ($user !== null && $user->can('dashboard.view')): ?>
-            <a href="<?= site_url('dashboard') ?>" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>">
+            <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>">
                 <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
-            </a>
+            </a><?php endif; ?>
         <?php endif; ?>
         <?php foreach ($groups as $group): ?>
             <?php
@@ -116,10 +116,10 @@ $canAccess = static function (array $item) use ($user): bool {
                 </summary>
                 <div class="hs-subnav">
                     <?php foreach ($visible as $item): ?>
-                        <a href="<?= site_url($item['path']) ?>" class="hs-nav-link <?= $isActive($item['path']) ? 'active' : '' ?>" <?= $isActive($item['path']) ? 'aria-current="page"' : '' ?>>
+                        <?php if (haven_can_access(site_url($item['path']), 'GET')): ?><a href="<?= site_url($item['path']) ?>" class="hs-nav-link <?= $isActive($item['path']) ? 'active' : '' ?>" <?= $isActive($item['path']) ? 'aria-current="page"' : '' ?>>
                             <i data-lucide="<?= esc($item['icon'], 'attr') ?>"></i>
                             <span><?= esc($item['label']) ?></span>
-                        </a>
+                        </a><?php endif; ?>
                     <?php endforeach; ?>
                 </div>
             </details>

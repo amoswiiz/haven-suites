@@ -45,10 +45,10 @@ $getPropertyName = static function (array $unit): string {
         </p>
     </div>
 
-    <a href="<?= site_url('units/create') ?>"
+    <?php if (haven_can_access(site_url('units/create'), 'GET')): ?><?php if (haven_auth()->user()?->can('units.manage')): ?><a href="<?= site_url('units/create') ?>"
        class="btn hs-unit-primary-btn">
         <i data-lucide="plus" aria-hidden="true"></i> Add Apartment
-    </a>
+    </a><?php endif; ?><?php endif; ?>
 
 </div>
 
@@ -235,10 +235,10 @@ $getPropertyName = static function (array $unit): string {
                             </td>
 
                             <td>
-                                <a href="<?= site_url('units/edit/' . $unit['id']) ?>"
+                                <?php if (haven_can_access(site_url('units/edit/' . $unit['id']), 'GET')): ?><?php if (haven_auth()->user()?->can('units.manage')): ?><a href="<?= site_url('units/edit/' . $unit['id']) ?>"
                                    class="btn btn-sm btn-outline-primary hs-unit-edit">
                                     Edit
-                                </a>
+                                </a><?php endif; ?><?php endif; ?>
                             </td>
 
                         </tr>
@@ -253,10 +253,10 @@ $getPropertyName = static function (array $unit): string {
 
                                 <p>No apartment units registered yet.</p>
 
-                                <a href="<?= site_url('units/create') ?>"
+                                <?php if (haven_can_access(site_url('units/create'), 'GET')): ?><?php if (haven_auth()->user()?->can('units.manage')): ?><a href="<?= site_url('units/create') ?>"
                                    class="btn btn-primary">
                                     Add Your First Apartment
-                                </a>
+                                </a><?php endif; ?><?php endif; ?>
 
                             </td>
                         </tr>

@@ -9,7 +9,7 @@
         <button type="button" class="btn btn-outline-secondary d-print-none" onclick="window.print()">Print Report</button>
     </div>
 
-    <form method="get" action="<?= site_url('reports/monthly-unit-expenses') ?>" class="card border-0 shadow-sm mb-4 d-print-none">
+    <?php if (haven_can_access(site_url('reports/monthly-unit-expenses'), 'GET')): ?><form method="get" action="<?= site_url('reports/monthly-unit-expenses') ?>" class="card border-0 shadow-sm mb-4 d-print-none">
         <div class="card-body"><div class="row g-3 align-items-end">
             <div class="col-md-3"><label class="form-label" for="month">Month</label><input class="form-control" type="month" id="month" name="month" value="<?= esc($month, 'attr') ?>" required></div>
             <div class="col-md-3"><label class="form-label" for="property_id">Property</label><select class="form-select" id="property_id" name="property_id"><option value="">All properties</option>
@@ -18,9 +18,9 @@
             <div class="col-md-4"><label class="form-label" for="unit_id">Unit</label><select class="form-select" id="unit_id" name="unit_id"><option value="">All units</option>
                 <?php foreach ($units as $unit): ?><option data-property="<?= (int) $unit['property_id'] ?>" value="<?= (int) $unit['id'] ?>" <?= $unitId === (int) $unit['id'] ? 'selected' : '' ?>><?= esc(($unit['property_name'] ?? '') . ' / ' . $unit['unit_number']) ?></option><?php endforeach; ?>
             </select></div>
-            <div class="col-md-2 d-flex gap-2"><button class="btn btn-primary flex-fill" type="submit">Apply</button><a class="btn btn-outline-secondary" href="<?= site_url('reports/monthly-unit-expenses') ?>">Reset</a></div>
+            <div class="col-md-2 d-flex gap-2"><button class="btn btn-primary flex-fill" type="submit">Apply</button><?php if (haven_can_access(site_url('reports/monthly-unit-expenses'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('reports/monthly-unit-expenses') ?>">Reset</a><?php endif; ?></div>
         </div></div>
-    </form>
+    </form><?php endif; ?>
 
     <div class="row g-3 mb-4">
         <?php foreach (['incurred' => 'Expenses Incurred', 'paidByEnd' => 'Paid by Month-End', 'outstandingAtEnd' => 'Outstanding at Month-End'] as $key => $label): ?>
@@ -47,7 +47,7 @@
                 <td class="text-end"><?= number_format((float) $expense['amount'], 2) ?></td>
                 <td class="text-end"><?= number_format((float) $expense['paid_to_end'], 2) ?></td>
                 <td class="text-end"><?= number_format((float) $expense['balance_at_end'], 2) ?></td>
-                <td class="d-print-none"><a class="btn btn-sm btn-outline-primary" href="<?= site_url('expenses/' . (int) $expense['id'] . '/payments') ?>">Payments</a></td>
+                <td class="d-print-none"><?php if (haven_can_access(site_url('expenses/' . (int) $expense['id'] . '/payments'), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('expenses/' . (int) $expense['id'] . '/payments') ?>">Payments</a><?php endif; ?></td>
             </tr><?php endforeach; ?>
             <?php if (!$expenses): ?><tr><td colspan="8" class="text-center text-muted py-4">No expenses for this month and selection.</td></tr><?php endif; ?>
         </tbody></table></div>

@@ -6,7 +6,7 @@
             <h3 class="fw-bold mb-1">Cleaner Outstanding Balances</h3>
             <p class="text-muted mb-0">Completed cleaning charges less payments allocated to those tasks.</p>
         </div>
-        <a class="btn btn-outline-primary" href="<?= site_url('payments/cleaners') ?>">Payment History</a>
+        <?php if (haven_can_access(site_url('payments/cleaners'), 'GET')): ?><a class="btn btn-outline-primary" href="<?= site_url('payments/cleaners') ?>">Payment History</a><?php endif; ?>
     </div>
 
     <?php if (session('error')): ?>
@@ -14,7 +14,7 @@
     <?php endif; ?>
 
     <div class="card border-0 shadow-sm mb-4"><div class="card-body">
-        <form method="get" action="<?= site_url('payments/cleaners/balances') ?>" class="row g-3 align-items-end">
+        <?php if (haven_can_access(site_url('payments/cleaners/balances'), 'GET')): ?><form method="get" action="<?= site_url('payments/cleaners/balances') ?>" class="row g-3 align-items-end">
             <div class="col-md-4">
                 <label class="form-label fw-semibold" for="balanceMonth">Completion month</label>
                 <input id="balanceMonth" type="month" name="month" class="form-control" value="<?= esc($month, 'attr') ?>">
@@ -31,9 +31,9 @@
             </div>
             <div class="col-md-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Apply Filters</button>
-                <a href="<?= site_url('payments/cleaners/balances') ?>" class="btn btn-outline-secondary">Reset</a>
+                <?php if (haven_can_access(site_url('payments/cleaners/balances'), 'GET')): ?><a href="<?= site_url('payments/cleaners/balances') ?>" class="btn btn-outline-secondary">Reset</a><?php endif; ?>
             </div>
-        </form>
+        </form><?php endif; ?>
     </div></div>
 
     <div class="row g-3 mb-4">
@@ -55,7 +55,7 @@
                     <td class="text-end fw-semibold"><?= number_format($item['outstanding'], 2) ?></td>
                     <td class="text-end">
                         <?php if ($item['staff_id'] !== null && $item['outstanding'] > 0): ?>
-                            <a class="btn btn-sm btn-outline-primary" href="<?= site_url('payments/cleaners/create') . '?staff_id=' . (int) $item['staff_id'] ?>">Record Payment</a>
+                            <?php if (haven_can_access(site_url('payments/cleaners/create') . '?staff_id=' . (int) $item['staff_id'], 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('payments/cleaners/create') . '?staff_id=' . (int) $item['staff_id'] ?>">Record Payment</a><?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>

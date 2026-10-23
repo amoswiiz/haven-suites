@@ -10,11 +10,11 @@ $isIssued = ($invoice['status'] ?? '') === 'issued';
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
   <div>
-    <a class="text-decoration-none small" href="<?= site_url('invoices/' . $invoiceId) ?>">&larr; Back to Invoice</a>
+    <?php if (haven_can_access(site_url('invoices/' . $invoiceId), 'GET')): ?><a class="text-decoration-none small" href="<?= site_url('invoices/' . $invoiceId) ?>">&larr; Back to Invoice</a><?php endif; ?>
     <h3 class="fw-bold mt-2 mb-1">Invoice Payment Allocations</h3>
     <p class="text-muted mb-0">Invoice <?= esc($invoice['invoice_number'] ?: '#' . $invoiceId . ' (Draft)') ?> &middot; <?= esc($invoice['customer_name'] ?? '') ?></p>
   </div>
-  <a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">All Invoices</a>
+  <?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">All Invoices</a><?php endif; ?>
 </div>
 <?php if (haven_session()->getFlashdata('success')): ?>
   <div class="alert alert-success" role="alert"><?= esc(haven_session()->getFlashdata('success')) ?></div>
@@ -39,7 +39,7 @@ $isIssued = ($invoice['status'] ?? '') === 'issued';
     <?php if (! $hasAvailable): ?>
       <div class="alert alert-info mb-0">No unallocated guest payments are available for this reservation. Record the payment in Guest Payments first.</div>
     <?php else: ?>
-      <form method="post" action="<?= site_url('invoices/' . $invoiceId . '/payments') ?>" class="row g-3 align-items-end">
+      <?php if (haven_can_access(site_url('invoices/' . $invoiceId . '/payments'), 'POST')): ?><form method="post" action="<?= site_url('invoices/' . $invoiceId . '/payments') ?>" class="row g-3 align-items-end">
         <?= csrf_field() ?>
         <div class="col-lg-7">
           <label for="guest_payment_id" class="form-label">Existing Guest Payment</label>
@@ -58,7 +58,7 @@ $isIssued = ($invoice['status'] ?? '') === 'issued';
           <input class="form-control" type="number" id="amount" name="amount" min="0.01" max="<?= number_format($balance, 2, '.', '') ?>" step="0.01" required placeholder="0.00">
         </div>
         <div class="col-lg-2"><button type="submit" class="btn btn-primary w-100" onclick="return confirm('Allocate this existing payment to the invoice?')">Allocate</button></div>
-      </form>
+      </form><?php endif; ?>
     <?php endif; ?>
   <?php endif; ?>
 </div>
@@ -95,7 +95,7 @@ $isIssued = ($invoice['status'] ?? '') === 'issued';
           <td><?= esc($allocation['payment_method']) ?></td>
           <td><?= esc($allocation['reference'] ?: '—') ?></td>
           <td class="text-end"><?= number_format((float) $allocation['amount'], 2) ?></td>
-          <td class="text-end"><a class="btn btn-sm btn-outline-primary text-nowrap" href="<?= site_url('receipts/' . (int) $allocation['id']) ?>">View Receipt</a></td>
+          <td class="text-end"><?php if (haven_can_access(site_url('receipts/' . (int) $allocation['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary text-nowrap" href="<?= site_url('receipts/' . (int) $allocation['id']) ?>">View Receipt</a><?php endif; ?></td>
         </tr>
       <?php endforeach; ?>
       <?php if (empty($history)): ?><tr><td colspan="7" class="text-center text-muted py-4">No payments have been allocated to this invoice.</td></tr><?php endif; ?>

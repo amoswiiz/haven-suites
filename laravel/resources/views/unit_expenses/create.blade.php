@@ -12,7 +12,7 @@
     <?php endif; ?>
 
     <div class="card shadow-sm border-0"><div class="card-body">
-        <form action="<?= site_url('expenses') ?>" method="post">
+        <?php if (haven_can_access(site_url('expenses'), 'POST')): ?><form action="<?= site_url('expenses') ?>" method="post">
             <?= csrf_field() ?>
             <div class="row g-3">
                 <div class="col-md-6">
@@ -82,7 +82,7 @@
                 Payment method and date are required if the amount paid is greater than zero.
             </div>
             <button class="btn btn-primary" type="submit">Save Expense</button>
-        </form>
+        </form><?php endif; ?>
     </div></div>
 </div>
 @endsection

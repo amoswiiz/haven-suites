@@ -28,7 +28,7 @@ $method = match ($payment['payment_method']) {
 <div class="container-fluid py-3">
     <div class="hs-receipt">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 hs-no-print">
-            <a class="btn btn-outline-secondary" href="<?= site_url('payments/cleaners') ?>">Back to Payments</a>
+            <?php if (haven_can_access(site_url('payments/cleaners'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('payments/cleaners') ?>">Back to Payments</a><?php endif; ?>
             <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
         </div>
 

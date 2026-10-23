@@ -68,14 +68,14 @@ $logo = $quote['logo_url'] ?? base_url('assets/images/logo.png');
       <p class="small muted">After paying, paste your complete M-Pesa SMS. Your payment remains unverified until our team checks it.</p>
       <?php if (!empty($notice)): ?><p style="color:#14733a"><?= $h($notice) ?></p><?php endif; ?>
       <?php if (!empty($error)): ?><p style="color:#ad2525"><?= $h($error) ?></p><?php endif; ?>
-      <form method="post" action="<?= esc(site_url('q/'.$token.'/payment'),'attr') ?>">
+      <?php if (haven_can_access(esc(site_url('q/'.$token.'/payment'),'attr'), 'POST')): ?><form method="post" action="<?= esc(site_url('q/'.$token.'/payment'),'attr') ?>">
         <?= csrf_field() ?>
         <label for="amount">Amount paid (KES)</label>
         <input id="amount" name="amount" type="number" min="1" step="0.01" required style="display:block;width:100%;padding:12px;margin:6px 0 12px;border:1px solid #ccd5e1;border-radius:8px">
         <label for="mpesa_message">M-Pesa confirmation message</label>
         <textarea id="mpesa_message" name="mpesa_message" minlength="20" maxlength="2000" required rows="4" placeholder="Paste your complete M-Pesa SMS here" style="display:block;width:100%;padding:12px;margin:6px 0 12px;border:1px solid #ccd5e1;border-radius:8px"></textarea>
         <button type="submit" class="btn">Submit for Verification</button>
-      </form>
+      </form><?php endif; ?>
     </div>
     <div class="section"><strong>GUEST VERIFICATION (KYC)</strong><p class="small muted">Please complete your guest verification form before check-in.</p><a class="btn" href="<?= esc($quote['kyc_url'] ?? '#','attr') ?>" target="_blank" rel="noopener noreferrer">Complete Guest Verification Form</a></div>
     <?php endif; ?>

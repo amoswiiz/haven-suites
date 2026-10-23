@@ -37,7 +37,7 @@ $roleCount = count(array_unique(array_filter(array_map(static fn($member) => tri
             <p class="text-muted mb-0">Manage Haven Suites team members and assignments.</p>
             <div class="hs-staff-accent" aria-hidden="true"></div>
         </div>
-        <a href="<?= site_url('staff/create') ?>" class="btn hs-staff-primary px-3 py-2">+ Add Staff Member</a>
+        <?php if (haven_can_access(site_url('staff/create'), 'GET')): ?><a href="<?= site_url('staff/create') ?>" class="btn hs-staff-primary px-3 py-2">+ Add Staff Member</a><?php endif; ?>
     </div>
 
     <div class="row g-3 mb-4">
@@ -82,7 +82,7 @@ $roleCount = count(array_unique(array_filter(array_map(static fn($member) => tri
                                 <td><?= esc($member['phone'] ?? '') ?></td>
                                 <td><?= esc($member['email'] ?? '') ?></td>
                                 <td><span class="hs-staff-badge <?= $status === 'active' ? 'hs-staff-badge-active' : 'hs-staff-badge-inactive' ?>"><?= esc(ucfirst($status)) ?></span></td>
-                                <td><a href="<?= site_url('staff/edit/' . (int) $member['id']) ?>" class="btn btn-sm btn-outline-primary hs-staff-edit">Edit</a></td>
+                                <td><?php if (haven_can_access(site_url('staff/edit/' . (int) $member['id']), 'GET')): ?><a href="<?= site_url('staff/edit/' . (int) $member['id']) ?>" class="btn btn-sm btn-outline-primary hs-staff-edit">Edit</a><?php endif; ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($staffList)): ?>

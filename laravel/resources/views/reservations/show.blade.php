@@ -22,8 +22,8 @@ $status = (string) ($r['status'] ?? 'pending');
 ?>
 <div class="hs-booking">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <a class="hs-link text-decoration-none" href="<?= site_url('reservations') ?>">&larr; All Reservations</a>
-    <a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">Invoices</a>
+    <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a class="hs-link text-decoration-none" href="<?= site_url('reservations') ?>">&larr; All Reservations</a><?php endif; ?>
+    <?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">Invoices</a><?php endif; ?>
   </div>
   <?php if (haven_session()->getFlashdata('success')): ?><div class="alert alert-success"><?= esc(haven_session()->getFlashdata('success')) ?></div><?php endif; ?>
   <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
@@ -65,7 +65,7 @@ $status = (string) ($r['status'] ?? 'pending');
   </div>
   <div class="hs-card mb-4"><h5>Related Invoices</h5>
     <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Invoice</th><th>Status</th><th>Issue Date</th><th class="text-end">Total</th><th>Action</th></tr></thead><tbody>
-      <?php foreach (($invoices ?? []) as $inv): ?><tr><td><?= esc(($inv['invoice_number'] ?? '') ?: 'Draft #' . $inv['id']) ?></td><td><?= esc(ucfirst($inv['status'] ?? 'draft')) ?></td><td><?= esc(($inv['issue_date'] ?? '') ?: '—') ?></td><td class="text-end text-nowrap"><?= esc($inv['currency'] ?? 'KES') ?> <?= number_format((float) ($inv['total_amount'] ?? 0),2) ?></td><td><a class="btn btn-sm btn-outline-primary" href="<?= site_url('invoices/' . (int) $inv['id']) ?>">View Invoice</a></td></tr><?php endforeach; ?>
+      <?php foreach (($invoices ?? []) as $inv): ?><tr><td><?= esc(($inv['invoice_number'] ?? '') ?: 'Draft #' . $inv['id']) ?></td><td><?= esc(ucfirst($inv['status'] ?? 'draft')) ?></td><td><?= esc(($inv['issue_date'] ?? '') ?: '—') ?></td><td class="text-end text-nowrap"><?= esc($inv['currency'] ?? 'KES') ?> <?= number_format((float) ($inv['total_amount'] ?? 0),2) ?></td><td><?php if (haven_can_access(site_url('invoices/' . (int) $inv['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('invoices/' . (int) $inv['id']) ?>">View Invoice</a><?php endif; ?></td></tr><?php endforeach; ?>
       <?php if (empty($invoices)): ?><tr><td colspan="5" class="text-muted text-center py-3">No invoices linked to this reservation.</td></tr><?php endif; ?>
     </tbody></table></div>
   </div>

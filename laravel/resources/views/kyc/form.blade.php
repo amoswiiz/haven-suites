@@ -46,7 +46,7 @@
             </div>
         <?php endif; ?>
 
-        <form method="post" action="<?= esc(site_url('kyc/' . $token . '/submit'), 'attr') ?>" enctype="multipart/form-data">
+        <?php if (haven_can_access(esc(site_url('kyc/' . $token . '/submit'), 'attr'), 'POST')): ?><form method="post" action="<?= esc(site_url('kyc/' . $token . '/submit'), 'attr') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <div class="field">
                 <label for="full_name">Full name as shown on your ID <span class="required">*</span></label>
@@ -83,7 +83,7 @@
                 <span>I confirm that the information is accurate and understand it will be used for guest identification, reservation administration and invoicing.</span>
             </label>
             <button class="submit" type="submit">Submit Guest Registration</button>
-        </form>
+        </form><?php endif; ?>
     </div>
     <p class="foot">Haven Suites BNB &bull; Guest information is handled for reservation and identification purposes.</p>
 </main>

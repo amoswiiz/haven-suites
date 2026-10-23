@@ -73,12 +73,12 @@
     ] as [$label, $count, $path, $permission, $scope]): ?>
       <?php if (haven_auth()->user()?->can($permission)): ?>
       <div class="col-12 col-sm-6 col-xl-3">
-        <a class="hs-dash-card hs-activity-link" href="<?= esc(site_url($path), 'attr') ?>">
+        <?php if (haven_can_access(esc(site_url($path), 'attr'), 'GET')): ?><a class="hs-dash-card hs-activity-link" href="<?= esc(site_url($path), 'attr') ?>">
           <div class="hs-stat-label"><?= esc($label) ?></div>
           <div class="hs-stat-value"><?= number_format($count) ?></div>
           <div class="hs-activity-scope"><?= esc($scope) ?></div>
           <div class="small mt-3">View records &rarr;</div>
-        </a>
+        </a><?php endif; ?>
       </div>
       <?php endif; ?>
     <?php endforeach; ?>
@@ -90,15 +90,15 @@
   <h2 class="mb-2">Welcome to Haven Suites</h2>
   <p class="mb-0">Manage apartments, guest experiences, bookings and finances from one place.</p>
   <div class="hs-dash-quicklinks">
-    <a href="<?= site_url('reservations') ?>">Reservations &rarr;</a>
-    <a href="<?= site_url('availability') ?>">Availability &rarr;</a>
-    <?php if (!empty($canViewFinance)): ?><a href="<?= site_url('invoices') ?>">Invoices &rarr;</a><?php endif; ?>
-    <a href="<?= site_url('housekeeping') ?>">Housekeeping &rarr;</a>
-    <a href="<?= site_url('maintenance') ?>">Maintenance &rarr;</a>
+    <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a href="<?= site_url('reservations') ?>">Reservations &rarr;</a><?php endif; ?>
+    <?php if (haven_can_access(site_url('availability'), 'GET')): ?><a href="<?= site_url('availability') ?>">Availability &rarr;</a><?php endif; ?>
+    <?php if (!empty($canViewFinance)): ?><?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a href="<?= site_url('invoices') ?>">Invoices &rarr;</a><?php endif; ?><?php endif; ?>
+    <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>">Housekeeping &rarr;</a><?php endif; ?>
+    <?php if (haven_can_access(site_url('maintenance'), 'GET')): ?><a href="<?= site_url('maintenance') ?>">Maintenance &rarr;</a><?php endif; ?>
   </div>
 </section>
         <?php if (!empty($canViewFinance)): ?>
-        <form method="get" action="<?= site_url('dashboard') ?>" class="hs-dash-filter mb-4">
+        <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><form method="get" action="<?= site_url('dashboard') ?>" class="hs-dash-filter mb-4">
             <div class="card-body">
                 <div class="row g-3 align-items-end">
                     <div class="col-md-4"><label class="form-label">Accounting Month</label>
@@ -109,10 +109,10 @@
                                 <option value="<?= (int)$unit['id'] ?>" <?= (int)$financeFilters['unit_id'] === (int)$unit['id'] ? 'selected' : '' ?>><?= esc($unit['property_name'] . ' – ' . $unit['unit_number']) ?></option>
                             <?php endforeach; ?>
                         </select></div>
-                    <div class="col-md-4 d-flex gap-2"><button class="btn btn-primary hs-dash-btn flex-fill" type="submit">Apply Filters</button><a class="btn btn-outline-secondary" href="<?= site_url('dashboard') ?>">Reset</a></div>
+                    <div class="col-md-4 d-flex gap-2"><button class="btn btn-primary hs-dash-btn flex-fill" type="submit">Apply Filters</button><?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('dashboard') ?>">Reset</a><?php endif; ?></div>
                 </div>
             </div>
-        </form>
+        </form><?php endif; ?>
 
         <!-- Company-wide income is independent of the Apartment Unit filter above. -->
         <div class="hs-dash-section">
@@ -120,7 +120,7 @@
                 <h4 class="fw-bold mb-1">Company Income</h4>
                 <p class="text-muted small mb-0">Company-wide for <?= esc(date('F Y', strtotime($financeMonth . '-01'))) ?>, regardless of the apartment filter. Before operating expenses, refunds and adjustments.</p>
             </div>
-            <a class="btn btn-outline-primary btn-sm" href="<?= site_url('reports/monthly-company-income') . '?month=' . rawurlencode($financeMonth) ?>">View Detailed Income Report &rarr;</a>
+            <?php if (haven_can_access(site_url('reports/monthly-company-income') . '?month=' . rawurlencode($financeMonth), 'GET')): ?><a class="btn btn-outline-primary btn-sm" href="<?= site_url('reports/monthly-company-income') . '?month=' . rawurlencode($financeMonth) ?>">View Detailed Income Report &rarr;</a><?php endif; ?>
         </div>
         <div class="row g-3 mb-3">
             <?php foreach ([
@@ -144,7 +144,7 @@
         <?php if (!empty($companyIncomeSummary['issues'])): ?>
             <div class="alert alert-warning small mb-4">
                 <?= (int) $companyIncomeSummary['issues'] ?> income record(s) need review. Totals exclude records with missing or invalid agreement/payout data.
-                <a href="<?= site_url('reports/monthly-company-income') . '?month=' . rawurlencode($financeMonth) ?>">Review issues</a>.
+                <?php if (haven_can_access(site_url('reports/monthly-company-income') . '?month=' . rawurlencode($financeMonth), 'GET')): ?><a href="<?= site_url('reports/monthly-company-income') . '?month=' . rawurlencode($financeMonth) ?>">Review issues</a><?php endif; ?>.
             </div>
         <?php endif; ?>
 
@@ -168,7 +168,7 @@
                         <div>
                             <div class="hs-stat-label"><?= esc($label) ?></div>
                             <div class="fs-4 fw-bold">KES <?= number_format((float) $value, 2) ?></div>
-                            <a class="small text-decoration-none" href="<?= site_url($path) ?>">View details &rarr;</a>
+                            <?php if (haven_can_access(site_url($path), 'GET')): ?><a class="small text-decoration-none" href="<?= site_url($path) ?>">View details &rarr;</a><?php endif; ?>
                         </div>
                         <div class="hs-stat-icon flex-shrink-0"><i data-lucide="<?= esc($icon, 'attr') ?>"></i></div>
                     </div>
@@ -260,10 +260,10 @@
                 <div class="hs-dash-panel">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5>Upcoming Check-ins</h5>
-                        <a href="<?= site_url('reservations') ?>"
+                        <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a href="<?= site_url('reservations') ?>"
                            class="small text-decoration-none">
                             View All
-                        </a>
+                        </a><?php endif; ?>
                     </div>
 
                     <div class="table-responsive">
@@ -305,10 +305,10 @@
                 <div class="hs-dash-panel">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5>Outstanding Maintenance</h5>
-                        <a href="<?= site_url('maintenance') ?>"
+                        <?php if (haven_can_access(site_url('maintenance'), 'GET')): ?><a href="<?= site_url('maintenance') ?>"
                            class="small text-decoration-none">
                             View All
-                        </a>
+                        </a><?php endif; ?>
                     </div>
 
                     <?php foreach ($recentMaintenance as $task): ?>

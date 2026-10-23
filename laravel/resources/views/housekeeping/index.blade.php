@@ -33,7 +33,7 @@
 <?php if (haven_service('request')->getGet('activity') === 'pending'): ?>
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3">
     <span>Showing pending, assigned and in-progress cleanings.</span>
-    <a href="<?= site_url('housekeeping') ?>">Show all cleanings</a>
+    <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>">Show all cleanings</a><?php endif; ?>
 </div>
 <?php endif; ?>
 <?php
@@ -56,7 +56,7 @@ $types = ['checkout' => 'Check-out', 'pre_checkin' => 'Pre check-in', 'routine' 
             <p class="text-muted mb-0">Manage cleaning schedules, assignments and progress.</p>
         </div>
         <?php if (!$isCleaner && haven_auth()->user()?->can('housekeeping.manage')): ?>
-            <a class="btn btn-primary px-3" href="<?= site_url('housekeeping/create') ?>">+ Schedule Cleaning</a>
+            <?php if (haven_can_access(site_url('housekeeping/create'), 'GET')): ?><a class="btn btn-primary px-3" href="<?= site_url('housekeeping/create') ?>">+ Schedule Cleaning</a><?php endif; ?>
         <?php endif; ?>
     </div>
 
@@ -85,7 +85,7 @@ $types = ['checkout' => 'Check-out', 'pre_checkin' => 'Pre check-in', 'routine' 
 
     <div class="hs-hk-card mb-4"><div class="card-body">
         <div class="hs-hk-filter-title mb-3">Filter Cleaning Tasks</div>
-        <form method="get" action="<?= site_url('housekeeping') ?>">
+        <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><form method="get" action="<?= site_url('housekeeping') ?>">
             <div class="row g-3 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label" for="taskMonth">Scheduled month</label>
@@ -120,10 +120,10 @@ $types = ['checkout' => 'Check-out', 'pre_checkin' => 'Pre check-in', 'routine' 
                 </div>
                 <div class="col-12 d-flex gap-2">
                     <button class="btn btn-primary" type="submit">Apply Filters</button>
-                    <a class="btn btn-outline-secondary" href="<?= site_url('housekeeping') ?>">Reset</a>
+                    <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('housekeeping') ?>">Reset</a><?php endif; ?>
                 </div>
             </div>
-        </form>
+        </form><?php endif; ?>
     </div></div>
 
     <div class="hs-hk-card"><div class="card-body">
@@ -150,7 +150,7 @@ $types = ['checkout' => 'Check-out', 'pre_checkin' => 'Pre check-in', 'routine' 
                             <td><?= $task['cleaning_charge'] === null ? '-' : number_format((float) $task['cleaning_charge'], 2) ?></td>
                             <td>
                                 <?php if (!$isCleaner && haven_auth()->user()?->can('housekeeping.manage')): ?>
-                                    <a class="btn btn-sm btn-outline-primary" href="<?= site_url('housekeeping/edit/' . (int) $task['id']) ?>">Edit</a>
+                                    <?php if (haven_can_access(site_url('housekeeping/edit/' . (int) $task['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('housekeeping/edit/' . (int) $task['id']) ?>">Edit</a><?php endif; ?>
                                 <?php elseif ($isCleaner && in_array($status, ['pending', 'assigned', 'in_progress'], true)): ?>
                                     <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#progress-<?= (int) $task['id'] ?>" aria-expanded="false">Update Progress</button>
                                 <?php else: ?>
@@ -161,7 +161,7 @@ $types = ['checkout' => 'Check-out', 'pre_checkin' => 'Pre check-in', 'routine' 
                         <?php if ($isCleaner && in_array($status, ['pending', 'assigned', 'in_progress'], true)): ?>
                             <tr><td colspan="8" class="p-0 border-0">
                                 <div class="collapse p-3 border rounded mb-2" id="progress-<?= (int) $task['id'] ?>">
-                                    <form method="post" action="<?= site_url('housekeeping/progress/' . (int) $task['id']) ?>">
+                                    <?php if (haven_can_access(site_url('housekeeping/progress/' . (int) $task['id']), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/progress/' . (int) $task['id']) ?>">
                                         <?= csrf_field() ?>
                                         <div class="row g-3">
                                             <div class="col-md-3">
@@ -190,7 +190,7 @@ $types = ['checkout' => 'Check-out', 'pre_checkin' => 'Pre check-in', 'routine' 
                                             </div>
                                             <div class="col-12"><button class="btn btn-primary" type="submit">Save Progress</button></div>
                                         </div>
-                                    </form>
+                                    </form><?php endif; ?>
                                 </div>
                             </td></tr>
                         <?php endif; ?>

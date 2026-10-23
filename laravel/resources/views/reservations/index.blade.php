@@ -59,7 +59,7 @@
 <?php if (in_array($activity, ['checkins', 'checkouts'], true)): ?>
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3">
     <span>Showing today's <?= $activity === 'checkins' ? 'check-ins' : 'check-outs' ?> &mdash; <?= esc(date('j M Y')) ?>.</span>
-    <a href="<?= site_url('reservations') ?>">Show all reservations</a>
+    <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a href="<?= site_url('reservations') ?>">Show all reservations</a><?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -112,10 +112,10 @@ $statusLabels = [
         </p>
     </div>
 
-    <a href="<?= site_url('reservations/create') ?>"
+    <?php if (haven_can_access(site_url('reservations/create'), 'GET')): ?><a href="<?= site_url('reservations/create') ?>"
        class="btn btn-primary hs-reservation-add">
         <i data-lucide="plus" aria-hidden="true"></i> New Reservation
-    </a>
+    </a><?php endif; ?>
 
 </div>
 
@@ -266,12 +266,12 @@ $statusLabels = [
                         data-status="<?= esc($status, 'attr') ?>">
 
                         <td class="fw-semibold">
-                            <a class="hs-guest-link" href="<?= site_url('reservations/' . (int) $reservation['id']) ?>" aria-label="Open booking #<?= (int) $reservation['id'] ?>">#<?= (int) $reservation['id'] ?></a>
+                            <?php if (haven_can_access(site_url('reservations/' . (int) $reservation['id']), 'GET')): ?><a class="hs-guest-link" href="<?= site_url('reservations/' . (int) $reservation['id']) ?>" aria-label="Open booking #<?= (int) $reservation['id'] ?>">#<?= (int) $reservation['id'] ?></a><?php endif; ?>
                         </td>
 
                         <td>
                             <div class="fw-semibold">
-                                <a class="hs-guest-link" href="<?= site_url('reservations/' . (int) $reservation['id']) ?>" aria-label="Open reservation for <?= esc($reservation['guest_name'], 'attr') ?>"><?= esc($reservation['guest_name']) ?></a>
+                                <?php if (haven_can_access(site_url('reservations/' . (int) $reservation['id']), 'GET')): ?><a class="hs-guest-link" href="<?= site_url('reservations/' . (int) $reservation['id']) ?>" aria-label="Open reservation for <?= esc($reservation['guest_name'], 'attr') ?>"><?= esc($reservation['guest_name']) ?></a><?php endif; ?>
                             </div>
 
                             <div class="small text-muted">
@@ -339,9 +339,9 @@ $statusLabels = [
                             </span>
                         </td>
                         <td><div class="hs-action-group">
-                            <a class="hs-view-btn text-decoration-none" href="<?= site_url('reservations/' . (int) $reservation['id']) ?>">View</a>
+                            <?php if (haven_can_access(site_url('reservations/' . (int) $reservation['id']), 'GET')): ?><a class="hs-view-btn text-decoration-none" href="<?= site_url('reservations/' . (int) $reservation['id']) ?>">View</a><?php endif; ?>
                             <?php if (haven_auth()->user()?->can('reservations.manage')): ?>
-                                <a class="hs-edit-btn" aria-label="Edit reservation #<?= (int) $reservation['id'] ?>" href="<?= site_url('reservations/' . (int) $reservation['id'] . '/edit') ?>">Edit</a>
+                                <?php if (haven_can_access(site_url('reservations/' . (int) $reservation['id'] . '/edit'), 'GET')): ?><a class="hs-edit-btn" aria-label="Edit reservation #<?= (int) $reservation['id'] ?>" href="<?= site_url('reservations/' . (int) $reservation['id'] . '/edit') ?>">Edit</a><?php endif; ?>
                             <?php endif; ?>
                             <button type="button" class="hs-view-btn" data-bs-toggle="modal" data-bs-target="#reservationDetail<?= (int) $reservation['id'] ?>">Quick View</button>
                         </div></td>
@@ -370,10 +370,10 @@ $statusLabels = [
                 Showing <?= $totalReservations ?> reservations
             </span>
 
-            <a href="<?= site_url('availability') ?>"
+            <?php if (haven_can_access(site_url('availability'), 'GET')): ?><a href="<?= site_url('availability') ?>"
                class="small text-decoration-none">
                 View Availability Calendar &rarr;
-            </a>
+            </a><?php endif; ?>
         </div>
 
     </div>

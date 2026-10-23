@@ -4,14 +4,14 @@
 <h2>Monthly Owner Remittances</h2>
 <?php if (session('error')): ?><div class="alert alert-danger"><?= esc(session('error')) ?></div><?php endif ?>
 <?php if (session('success')): ?><div class="alert alert-success"><?= esc(session('success')) ?></div><?php endif ?>
-<form method="get" action="<?= site_url('owner-remittances') ?>" class="row g-2 mb-4">
+<?php if (haven_can_access(site_url('owner-remittances'), 'GET')): ?><form method="get" action="<?= site_url('owner-remittances') ?>" class="row g-2 mb-4">
 <div class="col-md-3"><label class="form-label">Accounting month</label><input class="form-control" type="month" name="month" value="<?= esc($month) ?>" required></div>
 <div class="col-md-5"><label class="form-label">Apartment</label><select name="unit_id" class="form-select" required><option value="">Select apartment</option>
 <?php foreach ($units as $unit): ?><option value="<?= (int)$unit['id'] ?>" <?= $unitId === (int)$unit['id'] ? 'selected' : '' ?>><?= esc(($unit['property_name'] ?? '') . ' — ' . $unit['unit_number']) ?></option><?php endforeach ?>
-</select></div><div class="col-md-2 align-self-end"><button class="btn btn-primary">View statement</button></div></form>
+</select></div><div class="col-md-2 align-self-end"><button class="btn btn-primary">View statement</button></div></form><?php endif; ?>
 <?php if ($report): ?>
 <h5><?= esc(($selected['property_name'] ?? '') . ' — ' . $selected['unit_number']) ?> | <?= esc($month) ?></h5>
-<p><a class="btn btn-outline-secondary btn-sm" href="<?= site_url('owner-remittances/export') . '?month=' . rawurlencode($month) . '&unit_id=' . (int)$unitId ?>">Download CSV statement</a></p>
+<p><?php if (haven_can_access(site_url('owner-remittances/export') . '?month=' . rawurlencode($month) . '&unit_id=' . (int)$unitId, 'GET')): ?><a class="btn btn-outline-secondary btn-sm" href="<?= site_url('owner-remittances/export') . '?month=' . rawurlencode($month) . '&unit_id=' . (int)$unitId ?>">Download CSV statement</a><?php endif; ?></p>
 <table class="table table-bordered" style="max-width:720px"><tbody>
 <tr><th>Opening balance (carried forward)</th><td class="text-end">KES <?= esc($report['opening_balance']) ?></td></tr>
 <tr><th>Guest collections received</th><td class="text-end">KES <?= esc($report['collected']) ?></td></tr>
@@ -26,7 +26,7 @@
 <?php foreach ($report['issues'] as $issue): ?><div class="alert alert-warning"><?= esc($issue) ?></div><?php endforeach ?>
 <?php if ($canManage && !$report['issues'] && (float)$report['outstanding'] > 0): ?>
 <h5>Record owner remittance</h5>
-<form method="post" action="<?= site_url('owner-remittances') ?>" class="row g-2 mb-4">
+<?php if (haven_can_access(site_url('owner-remittances'), 'POST')): ?><form method="post" action="<?= site_url('owner-remittances') ?>" class="row g-2 mb-4">
 <?= csrf_field() ?>
 <input type="hidden" name="unit_id" value="<?= (int)$unitId ?>"><input type="hidden" name="month" value="<?= esc($month) ?>">
 <div class="col-md-2"><label class="form-label">Payment date</label><input class="form-control" type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required></div>
@@ -35,7 +35,7 @@
 <div class="col-md-2"><label class="form-label">Reference</label><input class="form-control" name="reference" maxlength="100"></div>
 <div class="col-md-3"><label class="form-label">Notes</label><input class="form-control" name="notes"></div>
 <div class="col-md-1 align-self-end"><button class="btn btn-primary">Save</button></div>
-</form>
+</form><?php endif; ?>
 <?php endif ?>
 <h5>Remittance history for <?= esc($month) ?></h5>
 <table class="table table-striped"><thead><tr><th>Date paid</th><th>Method</th><th>Reference</th><th>Notes</th><th class="text-end">Amount (KES)</th></tr></thead><tbody>

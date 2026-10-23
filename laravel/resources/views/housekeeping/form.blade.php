@@ -55,10 +55,10 @@ $selectedStaffId = (string) $value('assigned_staff_id');
 <div style="max-width:1100px">
 
     <div class="mb-4">
-        <a href="<?= site_url('housekeeping') ?>"
+        <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>"
            class="text-decoration-none">
             &larr; Back to Housekeeping
-        </a>
+        </a><?php endif; ?>
     </div>
 
     <div class="mb-4">
@@ -456,10 +456,10 @@ $selectedStaffId = (string) $value('assigned_staff_id');
 
                     </button>
 
-                    <a href="<?= site_url('housekeeping') ?>"
+                    <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>"
                        class="btn btn-outline-secondary px-4">
                         Cancel
-                    </a>
+                    </a><?php endif; ?>
 
                 </div>
 

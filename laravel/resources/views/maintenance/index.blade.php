@@ -4,7 +4,7 @@
 <?php if (haven_service('request')->getGet('activity') === 'open'): ?>
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3">
     <span>Showing unresolved maintenance across all dates: open, assigned, in progress or on hold.</span>
-    <a href="<?= site_url('maintenance') ?>">Show all maintenance</a>
+    <?php if (haven_can_access(site_url('maintenance'), 'GET')): ?><a href="<?= site_url('maintenance') ?>">Show all maintenance</a><?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -70,10 +70,10 @@ $priorityLabels = [
         </p>
     </div>
 
-    <a href="<?= site_url('maintenance/create') ?>"
+    <?php if (haven_can_access(site_url('maintenance/create'), 'GET')): ?><a href="<?= site_url('maintenance/create') ?>"
        class="btn btn-primary hs-maintenance-primary">
         + Report Maintenance Issue
-    </a>
+    </a><?php endif; ?>
 
 </div>
 
@@ -366,12 +366,14 @@ $priorityLabels = [
                             </td>
 
                             <td>
-                                <a href="<?= site_url(
+                                <?php if (haven_can_access(site_url(
+                                    'maintenance/edit/' . $issue['id']
+                                ), 'GET')): ?><a href="<?= site_url(
                                     'maintenance/edit/' . $issue['id']
                                 ) ?>"
                                    class="btn btn-sm btn-outline-primary">
                                     Edit
-                                </a>
+                                </a><?php endif; ?>
                             </td>
 
                         </tr>
@@ -385,10 +387,10 @@ $priorityLabels = [
 
                                 <p>No maintenance issues recorded yet.</p>
 
-                                <a href="<?= site_url('maintenance/create') ?>"
+                                <?php if (haven_can_access(site_url('maintenance/create'), 'GET')): ?><a href="<?= site_url('maintenance/create') ?>"
                                    class="btn btn-primary">
                                     Report First Issue
-                                </a>
+                                </a><?php endif; ?>
 
                             </td>
                         </tr>
@@ -406,10 +408,10 @@ $priorityLabels = [
                 Showing <?= $totalIssues ?> issues
             </span>
 
-            <a href="<?= site_url('staff') ?>"
+            <?php if (haven_can_access(site_url('staff'), 'GET')): ?><a href="<?= site_url('staff') ?>"
                class="small text-decoration-none">
                 Manage Staff &rarr;
-            </a>
+            </a><?php endif; ?>
 
         </div>
 

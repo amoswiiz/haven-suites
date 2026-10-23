@@ -8,6 +8,8 @@ Run `powershell -ExecutionPolicy Bypass -File tools/start-laravel.ps1` from the 
 
 Existing staff emails and password hashes were imported. The previously created demo email and password work in Laravel, with the same manager permissions. Staff permissions are now tenant-specific. Sign out uses a CSRF-protected POST.
 
+For local role testing, `php artisan haven:demo-accounts --tenant=haven` creates one account per configured role with generated passwords and linked staff identities. Existing accounts are not reset. Passwords are printed once and are not committed. Restricted actions are hidden using the destination route's permission checks; direct unauthorized requests still return 403. Cleaner accounts land on housekeeping, and Owner/Standard User accounts land on a limited account page rather than the management dashboard. Owner-specific reporting remains unconfigured. Login throttling applies per email/IP, with an additional overall IP limit, so testing different roles does not share one six-attempt bucket.
+
 Laravel 13 requires PHP 8.3+. Do not serve this application with XAMPP PHP 8.2. The production document root must be `laravel/public`, not the repository root. The built-in local server is for development only.
 
 ## What moved

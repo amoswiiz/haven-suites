@@ -50,7 +50,7 @@ $oldCleaner = (string) (old('assigned_staff_id') ?? '');
 <div class="hs-cleaner-entry">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
         <div>
-            <a href="<?= site_url('housekeeping') ?>" class="text-decoration-none small">&larr; My Cleaning Tasks</a>
+            <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>" class="text-decoration-none small">&larr; My Cleaning Tasks</a><?php endif; ?>
             <h3 class="hs-title mt-2 mb-1">Record a Completed Cleaning</h3>
             <p class="text-muted mb-0">HAVEN SUITES · BNBs and STR Homes</p>
         </div>
@@ -65,7 +65,7 @@ $oldCleaner = (string) (old('assigned_staff_id') ?? '');
 
     <div class="hs-panel p-4 p-md-5">
         <p class="text-muted mb-4">Select the apartment you cleaned. Your cleaning fee is determined by the configured rate for the number of bedrooms actually cleaned. Your submission will await management verification.</p>
-        <form method="post" action="<?= site_url('housekeeping/my-cleanings') ?>" id="hs-cleaning-entry-form">
+        <?php if (haven_can_access(site_url('housekeeping/my-cleanings'), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/my-cleanings') ?>" id="hs-cleaning-entry-form">
             <?= csrf_field() ?>
             <div class="row g-3">
                 <div class="col-md-8">
@@ -132,10 +132,10 @@ $oldCleaner = (string) (old('assigned_staff_id') ?? '');
                 </div>
                 <div class="col-12 d-flex gap-2 flex-wrap mt-4">
                     <button type="submit" class="btn hs-primary px-4" <?= empty($unitOptions) ? 'disabled' : '' ?>>Submit Completed Cleaning</button>
-                    <a href="<?= site_url('housekeeping') ?>" class="btn btn-outline-secondary">Cancel</a>
+                    <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>" class="btn btn-outline-secondary">Cancel</a><?php endif; ?>
                 </div>
             </div>
-        </form>
+        </form><?php endif; ?>
         <?php if (empty($unitOptions)): ?>
             <div class="alert alert-warning mt-3 mb-0">No apartments with valid bedroom counts are available. Ask management to configure the units first.</div>
         <?php endif; ?>

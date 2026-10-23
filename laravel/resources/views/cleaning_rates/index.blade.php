@@ -15,7 +15,7 @@
     <div class="card border-0 shadow-sm">
         <div class="card-body p-4">
 
-            <form method="post"
+            <?php if (haven_can_access(site_url('settings/cleaning-rates/update'), 'POST')): ?><form method="post"
                   action="<?= site_url('settings/cleaning-rates/update') ?>">
 
                 <?= csrf_field() ?>
@@ -67,12 +67,12 @@
                     Save Cleaning Rates
                 </button>
 
-                <a href="<?= site_url('housekeeping') ?>"
+                <?php if (haven_can_access(site_url('housekeeping'), 'GET')): ?><a href="<?= site_url('housekeeping') ?>"
                    class="btn btn-outline-secondary ms-2">
                     Back to Housekeeping
-                </a>
+                </a><?php endif; ?>
 
-            </form>
+            </form><?php endif; ?>
 
         </div>
     </div>

@@ -30,3 +30,10 @@ function haven_private_path(): string {
 function uri_string(): string { return preg_replace('#^t/[^/]+/?#', '', request()->path()); }
 function current_url(): string { return url()->current(); }
 function model(string $class): object { return new $class(); }
+function haven_can_access(string $url, string $method = 'GET'): bool { return app(\App\Support\RouteAccess::class)->allows($url,$method); }
+function haven_landing(): string {
+    $user=auth()->user();
+    if ($user?->can('dashboard.view')) return site_url('dashboard');
+    if ($user?->can('housekeeping.view')) return site_url('housekeeping');
+    return site_url('home');
+}

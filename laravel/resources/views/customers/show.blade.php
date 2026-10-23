@@ -22,7 +22,7 @@ $canViewFinance = haven_auth()->user()?->can('finance.view') ?? false;
 $canViewKyc = $canViewFinance;
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
-  <div><a href="<?= site_url('customers') ?>" class="text-decoration-none small">&larr; All Customers</a>
+  <div><?php if (haven_can_access(site_url('customers'), 'GET')): ?><a href="<?= site_url('customers') ?>" class="text-decoration-none small">&larr; All Customers</a><?php endif; ?>
     <h3 class="fw-bold mt-2 mb-1"><?= esc($customer['full_name']) ?></h3>
     <p class="text-muted mb-0">Customer profile #<?= $customerId ?></p>
   </div>
@@ -58,7 +58,7 @@ $canViewKyc = $canViewFinance;
       <td>#<?= (int) $invoice['reservation_id'] ?></td><td><?= esc($invoice['issue_date'] ?: '—') ?></td>
       <td><?= esc(ucfirst((string) $invoice['status'])) ?></td>
       <td class="text-end"><?= number_format((float) $invoice['total_amount'], 2) ?></td>
-      <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="<?= site_url('invoices/' . (int) $invoice['id']) ?>">View Invoice</a></td></tr>
+      <td class="text-end"><?php if (haven_can_access(site_url('invoices/' . (int) $invoice['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('invoices/' . (int) $invoice['id']) ?>">View Invoice</a><?php endif; ?></td></tr>
     <?php endforeach; ?>
     <?php if (!$invoices): ?><tr><td colspan="6" class="text-center text-muted py-4">No invoices linked to this customer's reservations.</td></tr><?php endif; ?>
     </tbody></table></div>
@@ -75,7 +75,7 @@ $canViewKyc = $canViewFinance;
       <td><?= !empty($entry['reservation_id']) ? '#' . (int) $entry['reservation_id'] : '—' ?></td>
       <td><?= esc(ucfirst((string) $entry['status'])) ?></td>
       <td><?= esc($entry['submitted_at'] ?: '—') ?></td><td><?= esc($entry['reviewed_at'] ?: '—') ?></td>
-      <td class="text-end"><?php if ($canViewKyc && !empty($entry['submitted_at'])): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('staff/kyc/' . (int) $entry['id']) ?>">Review</a><?php endif; ?></td></tr>
+      <td class="text-end"><?php if ($canViewKyc && !empty($entry['submitted_at'])): ?><?php if (haven_can_access(site_url('staff/kyc/' . (int) $entry['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('staff/kyc/' . (int) $entry['id']) ?>">Review</a><?php endif; ?><?php endif; ?></td></tr>
     <?php endforeach; ?>
     <?php if (!$kyc): ?><tr><td colspan="6" class="text-center text-muted py-4">No KYC submissions yet.</td></tr><?php endif; ?>
     </tbody></table></div>

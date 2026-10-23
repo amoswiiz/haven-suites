@@ -137,7 +137,7 @@
                             <td class="text-end text-nowrap">KES <?= number_format($owed, 2) ?></td>
                             <td class="text-end text-nowrap">KES <?= number_format($paid, 2) ?></td>
                             <td class="text-end text-nowrap fw-semibold <?= (float) $booking['balance'] > 0 ? 'hs-payment-balance' : '' ?>">KES <?= number_format((float) $booking['balance'], 2) ?></td>
-                            <td class="text-end"><a class="btn btn-sm btn-outline-primary hs-view-button text-nowrap" href="<?= site_url('payments/partners/' . (int) $booking['id']) ?>">View payments</a></td>
+                            <td class="text-end"><?php if (haven_can_access(site_url('payments/partners/' . (int) $booking['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary hs-view-button text-nowrap" href="<?= site_url('payments/partners/' . (int) $booking['id']) ?>">View payments</a><?php endif; ?></td>
                         </tr>
                     <?php endforeach; ?>
                     <tr id="partner-no-match" style="display:none"><td colspan="9" class="text-center text-muted py-4">No bookings match these filters.</td></tr>

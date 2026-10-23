@@ -3,7 +3,7 @@
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
     <div>
-        <a href="<?= site_url('payments/partners/owners') ?>" class="small text-decoration-none">&larr; All Partner Owner Balances</a>
+        <?php if (haven_can_access(site_url('payments/partners/owners'), 'GET')): ?><a href="<?= site_url('payments/partners/owners') ?>" class="small text-decoration-none">&larr; All Partner Owner Balances</a><?php endif; ?>
         <h3 class="fw-bold mt-2 mb-1">Partner Owner Statement</h3>
         <p class="text-muted mb-0"><?= esc($apartment['owner_name']) ?> · <?= esc($apartment['apartment_name']) ?></p>
         <p class="text-muted small mb-0"><?= esc($apartment['location']) ?><?= !empty($apartment['building_name']) ? ' · ' . esc($apartment['building_name']) : '' ?></p>
@@ -42,7 +42,7 @@
                         <td class="text-end text-nowrap">KES <?= number_format((float) $booking['owed'], 2) ?></td>
                         <td class="text-end text-nowrap">KES <?= number_format((float) $booking['paid'], 2) ?></td>
                         <td class="text-end text-nowrap">KES <?= number_format((float) $booking['balance'], 2) ?></td>
-                        <td><a class="btn btn-sm btn-outline-primary text-nowrap" href="<?= site_url('payments/partners/' . (int) $booking['id']) ?>">View</a></td>
+                        <td><?php if (haven_can_access(site_url('payments/partners/' . (int) $booking['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary text-nowrap" href="<?= site_url('payments/partners/' . (int) $booking['id']) ?>">View</a><?php endif; ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (empty($bookings)): ?>
@@ -62,7 +62,7 @@
                 <?php foreach ($payments as $payment): ?>
                     <tr>
                         <td><?= esc($payment['payment_date']) ?></td>
-                        <td><a href="<?= site_url('payments/partners/' . (int) $payment['reservation_id']) ?>">#<?= (int) $payment['reservation_id'] ?></a></td>
+                        <td><?php if (haven_can_access(site_url('payments/partners/' . (int) $payment['reservation_id']), 'GET')): ?><a href="<?= site_url('payments/partners/' . (int) $payment['reservation_id']) ?>">#<?= (int) $payment['reservation_id'] ?></a><?php endif; ?></td>
                         <td><?= esc(ucwords(str_replace('_', ' ', $payment['payment_method']))) ?></td>
                         <td><?= esc($payment['payment_reference'] ?: '—') ?></td>
                         <td><?= esc($payment['notes'] ?: '—') ?></td>

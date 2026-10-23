@@ -29,16 +29,16 @@ foreach ($payments as $payment) {
 
         <div class="d-flex flex-wrap gap-2">
 
-            <a href="<?= site_url('payments/cleaners/balances') ?>"
+            <?php if (haven_can_access(site_url('payments/cleaners/balances'), 'GET')): ?><a href="<?= site_url('payments/cleaners/balances') ?>"
                class="btn btn-outline-secondary">
                 Outstanding Balances
-            </a>
+            </a><?php endif; ?>
 
             <?php if ($canManage): ?>
-                <a href="<?= site_url('payments/cleaners/create') ?>"
+                <?php if (haven_can_access(site_url('payments/cleaners/create'), 'GET')): ?><a href="<?= site_url('payments/cleaners/create') ?>"
                    class="btn btn-primary">
                     Record Payment
-                </a>
+                </a><?php endif; ?>
             <?php endif; ?>
 
         </div>
@@ -241,13 +241,15 @@ foreach ($payments as $payment) {
                                 </td>
 
                                 <td>
-                                    <a
+                                    <?php if (haven_can_access(site_url(
+                                            'payments/cleaners/' . $paymentId
+                                        ), 'GET')): ?><a
                                         href="<?= site_url(
                                             'payments/cleaners/' . $paymentId
                                         ) ?>"
                                         class="btn btn-sm btn-outline-primary">
                                         View Receipt
-                                    </a>
+                                    </a><?php endif; ?>
                                 </td>
 
                             </tr>

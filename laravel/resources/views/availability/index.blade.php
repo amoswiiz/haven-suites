@@ -235,10 +235,10 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
         </p>
     </div>
 
-    <a href="<?= site_url('reservations/create') ?>"
+    <?php if (haven_can_access(site_url('reservations/create'), 'GET')): ?><a href="<?= site_url('reservations/create') ?>"
        class="btn btn-primary">
         + New Reservation
-    </a>
+    </a><?php endif; ?>
 
 </div>
 
@@ -303,7 +303,7 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
 
             <div class="d-flex align-items-center gap-2 flex-wrap">
 
-                <form method="get"
+                <?php if (haven_can_access(site_url('availability'), 'GET')): ?><form method="get"
                       action="<?= site_url('availability') ?>"
                       class="d-flex gap-2 flex-wrap">
 
@@ -342,7 +342,7 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
                         </button>
                     </noscript>
 
-                </form>
+                </form><?php endif; ?>
 
                 <a href="<?= esc($previousUrl) ?>"
                    class="btn btn-outline-secondary hs-calendar-nav"
@@ -350,10 +350,10 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
                     &larr;
                 </a>
 
-                <a href="<?= site_url('availability') ?>"
+                <?php if (haven_can_access(site_url('availability'), 'GET')): ?><a href="<?= site_url('availability') ?>"
                    class="btn btn-outline-secondary hs-calendar-nav">
                     Today
-                </a>
+                </a><?php endif; ?>
 
                 <a href="<?= esc($nextUrl) ?>"
                    class="btn btn-outline-secondary hs-calendar-nav"

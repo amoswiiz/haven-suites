@@ -9,7 +9,7 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
             <h3 class="mb-1">Expense Payments #<?= (int) $expense['id'] ?></h3>
             <div class="text-muted"><?= $e($expense['property_name']) ?> / <?= $e($expense['unit_number']) ?> — <?= $e($expense['category_name']) ?></div>
         </div>
-        <a href="<?= site_url('expenses') ?>" class="btn btn-outline-secondary">Back to Expense Register</a>
+        <?php if (haven_can_access(site_url('expenses'), 'GET')): ?><a href="<?= site_url('expenses') ?>" class="btn btn-outline-secondary">Back to Expense Register</a><?php endif; ?>
     </div>
 
     <?php if (haven_session()->getFlashdata('success')): ?>
@@ -35,7 +35,7 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
     <?php if ($canManage && !$reconciliationIssue && (float) $balance > 0): ?>
     <div class="card shadow-sm mb-3"><div class="card-body">
         <h5 class="mb-3">Record Additional Payment</h5>
-        <form method="post" action="<?= site_url('expenses/' . (int) $expense['id'] . '/payments') ?>">
+        <?php if (haven_can_access(site_url('expenses/' . (int) $expense['id'] . '/payments'), 'POST')): ?><form method="post" action="<?= site_url('expenses/' . (int) $expense['id'] . '/payments') ?>">
             <?= csrf_field() ?>
             <div class="row g-3">
                 <div class="col-md-3"><label class="form-label">Payment Date</label><input type="date" name="payment_date" class="form-control" value="<?= esc(old('payment_date', date('Y-m-d'))) ?>" required></div>
@@ -45,7 +45,7 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
                 <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"><?= esc(old('notes')) ?></textarea></div>
                 <div class="col-12"><button type="submit" class="btn btn-primary">Save Payment</button></div>
             </div>
-        </form>
+        </form><?php endif; ?>
     </div></div>
     <?php endif; ?>
 

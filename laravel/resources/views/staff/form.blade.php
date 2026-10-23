@@ -10,7 +10,7 @@ $hasLoginAccount = (bool) ($hasLoginAccount ?? false);
 $canResetPassword = (bool) ($canResetPassword ?? false);
 ?>
 <div style="max-width:900px">
-    <a href="<?= site_url('staff') ?>" class="text-decoration-none">&larr; Back to Staff</a>
+    <?php if (haven_can_access(site_url('staff'), 'GET')): ?><a href="<?= site_url('staff') ?>" class="text-decoration-none">&larr; Back to Staff</a><?php endif; ?>
     <div class="card border-0 shadow-sm mt-3">
         <div class="card-body p-4">
             <h3 class="fw-bold mb-4"><?= $isEdit ? 'Edit Staff Member' : 'Add Staff Member' ?></h3>
@@ -85,7 +85,7 @@ $canResetPassword = (bool) ($canResetPassword ?? false);
                 <?php endif; ?>
                 <div class="mt-4 d-flex gap-2">
                     <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Update Staff' : 'Save Staff' ?></button>
-                    <a href="<?= site_url('staff') ?>" class="btn btn-outline-secondary">Cancel</a>
+                    <?php if (haven_can_access(site_url('staff'), 'GET')): ?><a href="<?= site_url('staff') ?>" class="btn btn-outline-secondary">Cancel</a><?php endif; ?>
                 </div>
             </form>
         </div>

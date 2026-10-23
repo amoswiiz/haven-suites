@@ -11,7 +11,7 @@
                 <td>#<?= esc($row['id']) ?></td><td><?= esc($row['property_name'] ?? '') ?></td><td><?= esc($row['unit_number'] ?? '') ?></td>
                 <td class="text-end"><?= esc($row['earned']) ?></td><td class="text-end"><?= esc($row['paid']) ?></td><td class="text-end"><?= esc($row['balance']) ?></td>
                 <td><?= $row['needs_review'] ? '<span class="badge bg-warning text-dark">Review</span>' : '<span class="badge bg-success">OK</span>' ?></td>
-                <td><a class="btn btn-sm btn-outline-primary" href="<?= site_url('payments/hosts/' . $row['id']) ?>">Details</a></td>
+                <td><?php if (haven_can_access(site_url('payments/hosts/' . $row['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('payments/hosts/' . $row['id']) ?>">Details</a><?php endif; ?></td>
             </tr>
         <?php endforeach ?>
         <?php if (!$rows): ?><tr><td colspan="8" class="text-center text-muted">No reservations found.</td></tr><?php endif ?>

@@ -53,10 +53,10 @@ $statuses = [
     <!-- Page Header -->
     <div class="mb-4">
 
-        <a href="<?= site_url('maintenance') ?>"
+        <?php if (haven_can_access(site_url('maintenance'), 'GET')): ?><a href="<?= site_url('maintenance') ?>"
            class="text-decoration-none">
             &larr; Back to Maintenance
-        </a>
+        </a><?php endif; ?>
 
     </div>
 
@@ -518,10 +518,10 @@ $statuses = [
 
                     </button>
 
-                    <a href="<?= site_url('maintenance') ?>"
+                    <?php if (haven_can_access(site_url('maintenance'), 'GET')): ?><a href="<?= site_url('maintenance') ?>"
                        class="btn btn-outline-secondary px-4">
                         Cancel
-                    </a>
+                    </a><?php endif; ?>
 
                 </div>
 

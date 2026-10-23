@@ -11,11 +11,16 @@ class AuthController
             return back()->withErrors(['email'=>'The supplied login details are incorrect.'])->onlyInput('email');
         }
         $request->session()->regenerate();
-        return redirect()->intended('/');
+        $request->session()->forget('url.intended');
+        return redirect('/');
     }
     public function home(Request $request) {
         $tenants = $request->user()->tenants()->where('active', true)->get();
-        if ($tenants->count() === 1) return redirect('/t/'.$tenants->first()->slug.'/dashboard');
+        if ($tenants->count() === 1) {
+            app()->instance('currentTenant',$tenants->first());
+            $landing=haven_landing(); app()->forgetInstance('currentTenant');
+            return redirect($landing);
+        }
         return view('auth.tenants', compact('tenants'));
     }
     public function logout(Request $request) {

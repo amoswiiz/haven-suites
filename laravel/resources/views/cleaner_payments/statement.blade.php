@@ -25,7 +25,7 @@
         <div class="alert alert-danger hs-no-print"><?= esc(haven_session()->getFlashdata('error')) ?></div>
     <?php endif; ?>
 
-    <form method="get" action="<?= site_url('payments/cleaners/statements') ?>" class="card border-0 shadow-sm mb-4 hs-no-print">
+    <?php if (haven_can_access(site_url('payments/cleaners/statements'), 'GET')): ?><form method="get" action="<?= site_url('payments/cleaners/statements') ?>" class="card border-0 shadow-sm mb-4 hs-no-print">
         <div class="card-body">
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
@@ -50,7 +50,7 @@
                 </div>
             </div>
         </div>
-    </form>
+    </form><?php endif; ?>
 
     <?php if ($selectedStaff === null): ?>
         <div class="alert alert-info">Select a cleaner and date range to generate a statement.</div>

@@ -553,4 +553,5 @@ Route::post('housekeeping/progress/{id}', [\App\Http\Controllers\Haven\Housekeep
   2 => 'permission:housekeeping.view',
 ))->whereNumber('id');
 Route::get('owner-remittances/export', [\App\Http\Controllers\Haven\OwnerRemittances::class, 'export'])->middleware(['auth','tenant.member','permission:finance.view']);
+Route::get('home', function () { return haven_landing() === site_url('home') ? view('auth.company-home') : redirect()->to(haven_landing()); })->middleware(['auth','tenant.member']);
 Route::get('payments/cleaners/{id}', [\App\Http\Controllers\Haven\CleanerPaymentDetails::class, 'show'])->whereNumber('id')->middleware(['auth','tenant.member','permission:finance.view']);

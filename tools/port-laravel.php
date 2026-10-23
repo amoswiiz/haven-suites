@@ -73,7 +73,25 @@ foreach ($iterator as $file) {
     $code = preg_replace('/<\?=\s*\$this->renderSection\([\'"]([^\'"]+)[\'"]\)\s*\?>/', "@yield('$1')", $code);
     $code = preg_replace('/<\?=\s*\$this->include\([\'"]([^\'"]+)[\'"]\)\s*\?>/', "@include('$1')", $code);
     $relative = strtolower(str_replace('\\', '/', $relative));
+    // Action visibility uses the same permissions as the Laravel endpoints.
+    foreach (['a','form'] as $tag) {
+        $code = preg_replace_callback('/<'.$tag.'\b[\s\S]*?<\/'.$tag.'>/', function ($match) use ($tag) {
+            $attribute=$tag==='a'?'href':'action';
+            if (!preg_match('/\b'.$attribute.'="<\?=\s*(.*?)\s*\?>"/s',$match[0],$url) || !str_contains($url[1],'site_url(')) return $match[0];
+            $method=$tag==='form' && preg_match('/\bmethod="post"/i',$match[0])?'POST':'GET';
+            return '<?php if (haven_can_access('.$url[1].', \''.$method.'\')): ?>'.$match[0].'<?php endif; ?>';
+        }, $code);
+    }
+    if ($relative==='invoices/show.php') {
+        $code=str_replace("if (haven_can_access(site_url('invoices/' . (int) \$invoice['id'] . '/payments'), 'GET'))", "if (\$canManage && !empty(\$invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) \$invoice['id'] . '/payments'), 'GET'))",$code);
+    }
+    if ($relative === 'units/index.php') {
+        $code = preg_replace_callback('/<a href="<\?= site_url\(\'units\/(?:create|edit\/)[\s\S]*?<\/a>/',
+            fn($match) => "<?php if (haven_auth()->user()?->can('units.manage')): ?>".$match[0]."<?php endif; ?>", $code);
+    }
     if ($relative === 'layouts/sidebar.php') {
+        $code=str_replace("'path' => 'customers', 'icon' => 'contact', 'permission' => 'reservations.view'", "'path' => 'customers', 'icon' => 'contact', 'permission' => 'finance.view'",$code);
+        $code=str_replace("'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'reservations.view'", "'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'finance.view'",$code);
         $code = str_replace('<div class="hs-sidebar-footer">', '<div class="hs-sidebar-footer"><div class="mb-2"><?= esc(app("currentTenant")->name) ?></div><form method="post" action="<?= url("/logout") ?>"><?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline-light mb-3">Sign out</button></form>', $code);
     }
     put($target . '/resources/views/' . substr($relative, 0, -4) . '.blade.php', $code);
@@ -101,6 +119,7 @@ foreach ($matches as $match) {
     $routes[strtoupper($verb) . ' ' . $uri] ??= $line . ';';
 }
 $routes['GET owner-remittances/export'] = "Route::get('owner-remittances/export', [\\App\\Http\\Controllers\\Haven\\OwnerRemittances::class, 'export'])->middleware(['auth','tenant.member','permission:finance.view']);";
+$routes['GET home'] = "Route::get('home', function () { return haven_landing() === site_url('home') ? view('auth.company-home') : redirect()->to(haven_landing()); })->middleware(['auth','tenant.member']);";
 $routes['GET payments/cleaners/{id}'] = "Route::get('payments/cleaners/{id}', [\\App\\Http\\Controllers\\Haven\\CleanerPaymentDetails::class, 'show'])->whereNumber('id')->middleware(['auth','tenant.member','permission:finance.view']);";
 put($target . '/routes/haven.php', "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" . implode("\n", $routes) . "\n");
 // Authorization matrix remains identical to the reviewed application.

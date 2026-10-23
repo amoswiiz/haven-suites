@@ -15,9 +15,9 @@
             </p>
         </div>
 
-        <a href="<?= site_url('staff') ?>" class="btn btn-outline-secondary">
+        <?php if (haven_can_access(site_url('staff'), 'GET')): ?><a href="<?= site_url('staff') ?>" class="btn btn-outline-secondary">
             Back to Staff
-        </a>
+        </a><?php endif; ?>
     </div>
 
     <?php if (haven_session()->getFlashdata('error')): ?>
@@ -29,7 +29,7 @@
     <div class="card shadow-sm">
         <div class="card-body">
 
-            <form method="post"
+            <?php if (haven_can_access(site_url('staff/' . $member['id'] . '/account/store'), 'POST')): ?><form method="post"
                   action="<?= site_url('staff/' . $member['id'] . '/account/store') ?>">
 
                 <?= csrf_field() ?>
@@ -83,7 +83,7 @@
                     Create Login Account
                 </button>
 
-            </form>
+            </form><?php endif; ?>
 
         </div>
     </div>

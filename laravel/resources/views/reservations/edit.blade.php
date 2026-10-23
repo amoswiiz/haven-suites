@@ -16,11 +16,11 @@ $ownerValue = old('owner_nightly_rate') ?? number_format($ownerNightly, 2, '.', 
 <div class="hs-edit">
   <div class="hs-head d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
     <div><div class="small text-white-50 mb-1">HAVEN SUITES · RESERVATION #<?= $id ?></div><h3 class="fw-bold mb-1">Edit Reservation</h3><div class="small">Update guest, stay and apartment information</div></div>
-    <a class="btn btn-light" href="<?= site_url('reservations/' . $id) ?>">Back to Booking</a>
+    <?php if (haven_can_access(site_url('reservations/' . $id), 'GET')): ?><a class="btn btn-light" href="<?= site_url('reservations/' . $id) ?>">Back to Booking</a><?php endif; ?>
   </div>
   <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger" role="alert"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
   <?php if (haven_session()->getFlashdata('success')): ?><div class="alert alert-success" role="status"><?= esc(haven_session()->getFlashdata('success')) ?></div><?php endif; ?>
-  <form method="post" action="<?= site_url('reservations/update/' . $id) ?>" id="reservationEditForm">
+  <?php if (haven_can_access(site_url('reservations/update/' . $id), 'POST')): ?><form method="post" action="<?= site_url('reservations/update/' . $id) ?>" id="reservationEditForm">
     <?= csrf_field() ?>
     <div class="hs-panel"><h5>Guest Details</h5><div class="row g-3">
       <div class="col-md-6"><label for="guest_name">Guest Name *</label><input required maxlength="150" class="form-control" id="guest_name" name="guest_name" value="<?= esc($val('guest_name'), 'attr') ?>"></div>
@@ -46,8 +46,8 @@ $ownerValue = old('owner_nightly_rate') ?? number_format($ownerNightly, 2, '.', 
       <div class="col-md-4"><div class="text-muted small">Nights</div><div class="fw-bold" id="previewNights">—</div></div><div class="col-md-4"><div class="text-muted small">Estimated Booking Total</div><div class="hs-total" id="previewTotal">—</div></div><div class="col-md-4"><div class="text-muted small">Recorded Paid Amount</div><div class="fw-bold">KES <?= number_format((float) ($r['amount_paid'] ?? 0), 2) ?></div></div>
     </div><p class="small text-muted mt-3 mb-0">Payments are not editable here. The server checks availability and prevents totals below recorded payments. Non-draft invoices may restrict changes to booking totals.</p></div>
     <div class="hs-panel"><h5>Internal Notes</h5><label for="notes">Booking Notes</label><textarea class="form-control" id="notes" name="notes" rows="4"><?= esc($val('notes')) ?></textarea></div>
-    <div class="d-flex justify-content-end gap-2 flex-wrap mb-4"><a href="<?= site_url('reservations/' . $id) ?>" class="btn btn-outline-secondary">Cancel</a><button type="submit" class="btn btn-save px-4">Save Changes</button></div>
-  </form>
+    <div class="d-flex justify-content-end gap-2 flex-wrap mb-4"><?php if (haven_can_access(site_url('reservations/' . $id), 'GET')): ?><a href="<?= site_url('reservations/' . $id) ?>" class="btn btn-outline-secondary">Cancel</a><?php endif; ?><button type="submit" class="btn btn-save px-4">Save Changes</button></div>
+  </form><?php endif; ?>
 </div>
 @endsection
 @section('scripts')

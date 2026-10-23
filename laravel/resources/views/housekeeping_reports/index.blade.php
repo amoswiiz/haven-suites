@@ -38,7 +38,7 @@ $exportUrl = site_url('reports/housekeeping/export')
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
 
-            <form method="get"
+            <?php if (haven_can_access(site_url('reports/housekeeping'), 'GET')): ?><form method="get"
                   action="<?= site_url('reports/housekeeping') ?>">
 
                 <div class="row g-3 align-items-end">
@@ -125,14 +125,14 @@ $exportUrl = site_url('reports/housekeeping/export')
                             Apply Filters
                         </button>
 
-                        <a href="<?= site_url('reports/housekeeping') ?>"
+                        <?php if (haven_can_access(site_url('reports/housekeeping'), 'GET')): ?><a href="<?= site_url('reports/housekeeping') ?>"
                            class="btn btn-outline-secondary ms-2">
                             Reset
-                        </a>
+                        </a><?php endif; ?>
                     </div>
 
                 </div>
-            </form>
+            </form><?php endif; ?>
 
         </div>
     </div>

@@ -15,10 +15,10 @@ $propertyList = $properties ?? [];
         </p>
     </div>
 
-    <a href="<?= site_url('properties/create') ?>"
+    <?php if (haven_can_access(site_url('properties/create'), 'GET')): ?><a href="<?= site_url('properties/create') ?>"
        class="btn btn-primary">
         + Add Property
-    </a>
+    </a><?php endif; ?>
 
 </div>
 
@@ -137,10 +137,10 @@ $propertyList = $properties ?? [];
                         </td>
 
                         <td>
-                            <a href="<?= site_url('properties/edit/' . $property['id']) ?>"
+                            <?php if (haven_can_access(site_url('properties/edit/' . $property['id']), 'GET')): ?><a href="<?= site_url('properties/edit/' . $property['id']) ?>"
                                class="btn btn-sm btn-outline-primary">
                                 Edit
-                            </a>
+                            </a><?php endif; ?>
                         </td>
 
                     </tr>
@@ -158,10 +158,10 @@ $propertyList = $properties ?? [];
 
                             <p>No properties registered yet.</p>
 
-                            <a href="<?= site_url('properties/create') ?>"
+                            <?php if (haven_can_access(site_url('properties/create'), 'GET')): ?><a href="<?= site_url('properties/create') ?>"
                                class="btn btn-primary">
                                 Add Your First Property
-                            </a>
+                            </a><?php endif; ?>
 
                         </td>
                     </tr>

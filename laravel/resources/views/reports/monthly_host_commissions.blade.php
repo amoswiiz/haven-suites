@@ -2,7 +2,7 @@
 @section('content')
 <div class="container-fluid py-3">
     <h1 class="h3 mb-3">Monthly Host Commissions</h1>
-    <form method="get" action="<?= site_url('reports/monthly-host-commissions') ?>" class="row g-2 mb-4">
+    <?php if (haven_can_access(site_url('reports/monthly-host-commissions'), 'GET')): ?><form method="get" action="<?= site_url('reports/monthly-host-commissions') ?>" class="row g-2 mb-4">
         <div class="col-md-3"><label class="form-label" for="month">Collection month</label><input id="month" type="month" name="month" class="form-control" value="<?= esc($month) ?>" required></div>
         <div class="col-md-5"><label class="form-label" for="unit">Apartment</label><select id="unit" name="unit_id" class="form-select"><option value="0">All apartments</option>
             <?php foreach ($units as $unit): ?>
@@ -10,7 +10,7 @@
             <?php endforeach ?>
         </select></div>
         <div class="col-md-2 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">View Report</button></div>
-    </form>
+    </form><?php endif; ?>
     <div class="row g-3 mb-4">
         <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">All guest collections</div><div class="h4 mb-0">KES <?= number_format((float) $totalCollections, 2) ?></div></div></div></div>
         <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Calculated host commission</div><div class="h4 mb-0">KES <?= number_format((float) $totalCommission, 2) ?></div></div></div></div>

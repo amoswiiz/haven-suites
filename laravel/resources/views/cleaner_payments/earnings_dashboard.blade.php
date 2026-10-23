@@ -42,7 +42,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
             <h3 class="hs-heading mb-1">Monthly Cleaner Earnings</h3>
             <p class="text-muted mb-0"><?= esc($monthLabel ? $monthLabel->format('F Y') : $month) ?> · Cleaning jobs and payment allocations</p>
         </div>
-        <a class="btn btn-outline-secondary" href="<?= site_url('housekeeping/my-cleanings/new') ?>">+ Record Cleaning</a>
+        <?php if (haven_can_access(site_url('housekeeping/my-cleanings/new'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('housekeeping/my-cleanings/new') ?>">+ Record Cleaning</a><?php endif; ?>
     </div>
 
     <?php if ($success = haven_session()->getFlashdata('success')): ?>
@@ -53,7 +53,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
     <?php endif; ?>
 
     <div class="hs-card p-3 p-md-4 mb-4">
-        <form method="get" action="<?= site_url('payments/cleaners/earnings') ?>" class="row g-3 align-items-end">
+        <?php if (haven_can_access(site_url('payments/cleaners/earnings'), 'GET')): ?><form method="get" action="<?= site_url('payments/cleaners/earnings') ?>" class="row g-3 align-items-end">
             <div class="col-md-4">
                 <label for="earningsMonth" class="form-label fw-semibold">Cleaning month</label>
                 <input id="earningsMonth" name="month" type="month" class="form-control" required value="<?= esc($month, 'attr') ?>">
@@ -70,7 +70,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
                 </div>
             <?php endif; ?>
             <div class="col-md-3"><button type="submit" class="btn hs-btn w-100">Apply filters</button></div>
-        </form>
+        </form><?php endif; ?>
     </div>
 
     <div class="row g-3 mb-4">
@@ -120,7 +120,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
         <div class="p-3 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h5 class="hs-heading mb-0">Cleaning job details</h5>
             <?php if ($canVerify && (int)$totals['pending_jobs'] > 0): ?>
-                <form method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
+                <?php if (haven_can_access(site_url('housekeeping/verify-from-earnings'), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
                       onsubmit="return confirm('Verify all pending cleaning jobs currently displayed? This cannot be undone here.');">
                     <?= csrf_field() ?>
                     <input type="hidden" name="month" value="<?= esc($month, 'attr') ?>">
@@ -131,7 +131,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
                         <?php endif; ?>
                     <?php endforeach; ?>
                     <button type="submit" class="btn hs-btn btn-sm">Verify All Pending</button>
-                </form>
+                </form><?php endif; ?>
             <?php endif; ?>
         </div>
         <div class="table-responsive">
@@ -153,14 +153,14 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
                            <?php if ($canVerify): ?>
                                <td>
                                    <?php if (!$approved): ?>
-                                       <form method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
+                                       <?php if (haven_can_access(site_url('housekeeping/verify-from-earnings'), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
                                              onsubmit="return confirm('Verify this completed cleaning job?');">
                                            <?= csrf_field() ?>
                                            <input type="hidden" name="job_ids[]" value="<?= (int)$job['id'] ?>">
                                            <input type="hidden" name="month" value="<?= esc($month, 'attr') ?>">
                                            <input type="hidden" name="staff_id" value="<?= esc((string)($staffId ?? ''), 'attr') ?>">
                                            <button type="submit" class="btn btn-sm hs-btn">Verify</button>
-                                       </form>
+                                       </form><?php endif; ?>
                                    <?php else: ?>—<?php endif; ?>
                                </td>
                            <?php endif; ?>

@@ -1,7 +1,7 @@
 @extends('layouts/main')
 @section('content')
 <div class="container-fluid py-3">
-    <a href="<?= site_url('payments/guests') ?>" class="btn btn-link px-0 mb-2">&larr; Guest Payments</a>
+    <?php if (haven_can_access(site_url('payments/guests'), 'GET')): ?><a href="<?= site_url('payments/guests') ?>" class="btn btn-link px-0 mb-2">&larr; Guest Payments</a><?php endif; ?>
     <h3 class="fw-bold">Reservation #<?= (int) $reservation['id'] ?> — <?= esc($reservation['guest_name']) ?></h3>
     <p class="text-muted"><?= esc(($reservation['property_name'] ?? '-') . ' / ' . ($reservation['unit_number'] ?? '-')) ?></p>
     <?php if (session('success')): ?><div class="alert alert-success"><?= esc(session('success')) ?></div><?php endif; ?>
@@ -12,7 +12,7 @@
         <div class="card-body">
             <h5><?= $total === null ? 'Set Guest Total' : 'Update Guest Total' ?></h5>
             <p class="text-muted small">Set the full amount payable by the guest for this reservation. This does not record a payment.</p>
-            <form method="post" action="<?= site_url('payments/guests/' . (int) $reservation['id'] . '/total') ?>" class="row g-3 align-items-end">
+            <?php if (haven_can_access(site_url('payments/guests/' . (int) $reservation['id'] . '/total'), 'POST')): ?><form method="post" action="<?= site_url('payments/guests/' . (int) $reservation['id'] . '/total') ?>" class="row g-3 align-items-end">
                 <?= csrf_field() ?>
                 <div class="col-md-4">
                     <label for="guest_total" class="form-label">Guest Total (KES)</label>
@@ -21,7 +21,7 @@
                 <div class="col-md-auto">
                     <button type="submit" class="btn btn-primary">Save Guest Total</button>
                 </div>
-            </form>
+            </form><?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
@@ -33,7 +33,7 @@
     </div>
     <?php if ($canManage && $total !== null && !$overpaid && (float) $balance > 0): ?>
     <div class="card border-0 shadow-sm mb-4"><div class="card-body"><h5>Record Guest Payment</h5>
-        <form method="post" action="<?= site_url('payments/guests/' . (int) $reservation['id']) ?>" class="row g-3">
+        <?php if (haven_can_access(site_url('payments/guests/' . (int) $reservation['id']), 'POST')): ?><form method="post" action="<?= site_url('payments/guests/' . (int) $reservation['id']) ?>" class="row g-3">
             <?= csrf_field() ?>
             <div class="col-md-3"><label class="form-label">Payment Date</label><input type="date" name="payment_date" class="form-control" required value="<?= esc(old('payment_date', date('Y-m-d')), 'attr') ?>"></div>
             <div class="col-md-3"><label class="form-label">Amount (KES)</label><input type="number" name="amount" min="0.01" step="0.01" max="<?= esc($balance, 'attr') ?>" class="form-control" required value="<?= esc(old('amount', ''), 'attr') ?>"></div>
@@ -43,7 +43,7 @@
             <div class="col-md-3"><label class="form-label">Reference</label><input name="reference" maxlength="100" class="form-control" value="<?= esc(old('reference', ''), 'attr') ?>"></div>
             <div class="col-md-12"><label class="form-label">Notes</label><textarea name="notes" rows="2" class="form-control"><?= esc(old('notes', '')) ?></textarea></div>
             <div class="col-12"><button class="btn btn-primary">Save Payment</button></div>
-        </form>
+        </form><?php endif; ?>
     </div></div>
     <?php endif; ?>
     <div class="card border-0 shadow-sm"><div class="card-body"><h5>Payment History</h5><div class="table-responsive"><table class="table table-striped align-middle">

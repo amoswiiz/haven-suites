@@ -46,7 +46,7 @@ $logoUrl = base_url('assets/images/haven-suites-logo.png');
 </style>
 <div class="hs-receipt-shell">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 hs-receipt-actions">
-        <a href="<?= site_url('invoices/' . (int) $r['invoice_id'] . '/payments') ?>" class="btn btn-outline-secondary">&larr; Invoice Payments</a>
+        <?php if (haven_can_access(site_url('invoices/' . (int) $r['invoice_id'] . '/payments'), 'GET')): ?><a href="<?= site_url('invoices/' . (int) $r['invoice_id'] . '/payments') ?>" class="btn btn-outline-secondary">&larr; Invoice Payments</a><?php endif; ?>
         <button type="button" onclick="window.print()" class="btn btn-primary">Print / Save as PDF</button>
     </div>
     <article class="hs-receipt-paper">

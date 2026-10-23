@@ -7,10 +7,10 @@
         <h3 class="fw-bold mb-1">Monthly Company Income</h3>
         <p class="text-muted mb-0">Management commissions follow guest payment dates. Partner markup follows checkout dates for completed stays.</p>
     </div>
-    <a class="btn btn-outline-secondary" href="<?= site_url('dashboard') ?>">Back to dashboard</a>
+    <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('dashboard') ?>">Back to dashboard</a><?php endif; ?>
 </div>
 
-<form method="get" action="<?= site_url('reports/monthly-company-income') ?>" class="card border-0 shadow-sm mb-4">
+<?php if (haven_can_access(site_url('reports/monthly-company-income'), 'GET')): ?><form method="get" action="<?= site_url('reports/monthly-company-income') ?>" class="card border-0 shadow-sm mb-4">
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <div class="col-md-4">
@@ -22,7 +22,7 @@
             </div>
         </div>
     </div>
-</form>
+</form><?php endif; ?>
 
 <div class="row g-3 mb-4">
     <?php foreach ([

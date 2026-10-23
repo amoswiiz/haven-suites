@@ -18,10 +18,10 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
 <div style="max-width:1100px">
 
     <div class="mb-4">
-        <a href="<?= site_url('reservations') ?>"
+        <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a href="<?= site_url('reservations') ?>"
            class="text-decoration-none">
             &larr; Back to Reservations
-        </a>
+        </a><?php endif; ?>
     </div>
 
     <div class="mb-4">
@@ -31,7 +31,7 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
         </p>
     </div>
 
-    <form method="post"
+    <?php if (haven_can_access(site_url('reservations/store'), 'POST')): ?><form method="post"
           action="<?= site_url('reservations/store') ?>"
           id="reservationForm">
 
@@ -515,17 +515,17 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
                         Save Reservation
                     </button>
 
-                    <a href="<?= site_url('reservations') ?>"
+                    <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a href="<?= site_url('reservations') ?>"
                        class="btn btn-outline-secondary px-4">
                         Cancel
-                    </a>
+                    </a><?php endif; ?>
 
                 </div>
 
             </div>
         </div>
 
-    </form>
+    </form><?php endif; ?>
 
 </div>
 

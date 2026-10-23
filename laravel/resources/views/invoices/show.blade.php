@@ -9,14 +9,14 @@
 @endsection
 @section('content')
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 no-print">
- <a href="<?= site_url('invoices') ?>" class="text-decoration-none">&larr; All Invoices</a>
+ <?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a href="<?= site_url('invoices') ?>" class="text-decoration-none">&larr; All Invoices</a><?php endif; ?>
  <div class="d-flex gap-2 flex-wrap">
   <?php if ($invoice['status'] === 'issued' && $canManage && (float)$balance > 0): ?><a class="btn btn-primary" style="background:#294780;border-color:#294780" href="#record-invoice-payment">+ Record Payment</a><?php endif; ?>
-  <?php if ($invoice['status'] === 'issued'): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><button class="btn btn-outline-primary" onclick="window.print()">Print / Save PDF</button><?php endif; ?>
+  <?php if ($invoice['status'] === 'issued'): ?><?php if ($canManage && !empty($invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/payments'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><?php endif; ?><button class="btn btn-outline-primary" onclick="window.print()">Print / Save PDF</button><?php endif; ?>
   <?php if ($invoice['status'] === 'draft' && $canManage): ?>
-   <form method="post" action="<?= site_url('invoices/' . (int) $invoice['id'] . '/issue') ?>" onsubmit="return confirm('Issue this invoice? It will receive an official invoice number and cannot be returned to draft.');">
+   <?php if (haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/issue'), 'POST')): ?><form method="post" action="<?= site_url('invoices/' . (int) $invoice['id'] . '/issue') ?>" onsubmit="return confirm('Issue this invoice? It will receive an official invoice number and cannot be returned to draft.');">
     <?= csrf_field() ?><button class="btn btn-primary" style="background:#294780;border-color:#294780">Issue Invoice</button>
-   </form>
+   </form><?php endif; ?>
   <?php endif; ?>
  </div>
 </div>
@@ -60,7 +60,7 @@
  <div class="mt-4 pt-3 border-top">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
    <h5 class="hs-invoice-title mb-0">Payment History</h5>
-   <a class="btn btn-sm btn-outline-primary no-print" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a>
+   <?php if ($canManage && !empty($invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/payments'), 'GET')): ?><a class="btn btn-sm btn-outline-primary no-print" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><?php endif; ?>
   </div>
   <div class="table-responsive"><table class="table table-sm align-middle">
    <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th><th class="text-end no-print">Receipt</th></tr></thead>
@@ -71,7 +71,7 @@
      <td><?= esc($payment['payment_method'] ?? '—') ?></td>
      <td><?= esc(($payment['reference'] ?? '') ?: '—') ?></td>
      <td class="text-end text-nowrap"><?= esc($invoice['currency'] ?? 'KES') ?> <?= number_format((float) $payment['amount'], 2) ?></td>
-     <td class="text-end no-print"><a class="btn btn-sm btn-outline-primary" href="<?= site_url('receipts/' . (int) $payment['id']) ?>">View Receipt</a></td>
+     <td class="text-end no-print"><?php if (haven_can_access(site_url('receipts/' . (int) $payment['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('receipts/' . (int) $payment['id']) ?>">View Receipt</a><?php endif; ?></td>
     </tr>
    <?php endforeach; ?>
    <?php if (empty($paymentHistory)): ?><tr><td colspan="5" class="text-muted text-center py-3">No payments allocated to this invoice yet.</td></tr><?php endif; ?>
@@ -89,7 +89,7 @@
 <section class="hs-customer-panel no-print" aria-labelledby="hs-customer-heading">
  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
   <div><h5 id="hs-customer-heading" class="mb-1">Linked Customer</h5><p class="text-muted small mb-0">Connect this invoice to an existing customer profile. The invoice billing details and payments will not change.</p></div>
-  <?php if (!empty($linkedCustomer)): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('customers/' . (int) $linkedCustomer['id']) ?>">View Customer Profile</a><?php endif; ?>
+  <?php if (!empty($linkedCustomer)): ?><?php if (haven_can_access(site_url('customers/' . (int) $linkedCustomer['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('customers/' . (int) $linkedCustomer['id']) ?>">View Customer Profile</a><?php endif; ?><?php endif; ?>
  </div>
  <?php if (!empty($linkedCustomer)): ?>
   <div class="mb-3"><strong><?= esc($linkedCustomer['full_name'] ?? '') ?></strong>
@@ -97,7 +97,7 @@
   </div>
  <?php else: ?><p class="small text-muted mb-3">No customer profile is linked to this invoice yet.</p><?php endif; ?>
  <?php if ($canManage): ?>
-  <form method="post" action="<?= site_url('invoices/' . (int) $invoice['id'] . '/customer') ?>">
+  <?php if (haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/customer'), 'POST')): ?><form method="post" action="<?= site_url('invoices/' . (int) $invoice['id'] . '/customer') ?>">
    <?= csrf_field() ?>
    <label for="hs-customer-search" class="form-label fw-semibold">Find an existing customer</label>
    <input type="search" id="hs-customer-search" class="form-control mb-2" placeholder="Search name, phone or email..." autocomplete="off" aria-controls="hs-customer-id">
@@ -113,7 +113,7 @@
     </div>
     <button type="submit" class="btn btn-primary">Save Customer Link</button>
    </div>
-  </form>
+  </form><?php endif; ?>
  <?php endif; ?>
 </section>
 <?php endif; ?>
@@ -136,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function () {
   <div><h5 id="record-payment-heading" class="mb-1">Record Payment</h5><p class="small text-muted mb-0">Record a new payment and automatically allocate it to this invoice. A separate receipt will be generated.</p></div>
   <div class="text-end"><div class="small text-muted">Outstanding balance</div><div class="fw-bold" style="color:#294780"><?= esc($invoice['currency'] ?? 'KES') ?> <?= number_format((float)$balance, 2) ?></div></div>
  </div>
- <form method="post" action="<?= site_url('invoices/' . (int)$invoice['id'] . '/payments/record') ?>" onsubmit="return confirm('Confirm this payment has actually been received? Recording it will create a payment and receipt.');">
+ <?php if (haven_can_access(site_url('invoices/' . (int)$invoice['id'] . '/payments/record'), 'POST')): ?><form method="post" action="<?= site_url('invoices/' . (int)$invoice['id'] . '/payments/record') ?>" onsubmit="return confirm('Confirm this payment has actually been received? Recording it will create a payment and receipt.');">
   <?= csrf_field() ?>
   <div class="row g-3">
    <div class="col-md-4"><label for="hs-payment-amount" class="form-label fw-semibold">Amount (KES) *</label><input id="hs-payment-amount" name="amount" type="number" class="form-control" min="0.01" max="<?= number_format((float)$balance, 2, '.', '') ?>" step="0.01" inputmode="decimal" value="<?= esc(old('amount') ?? '', 'attr') ?>" placeholder="0.00" required></div>
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function () {
    <div class="col-md-6"><label for="hs-payment-notes" class="form-label fw-semibold">Notes (optional)</label><textarea id="hs-payment-notes" name="notes" class="form-control" rows="2" maxlength="5000" placeholder="Additional payment details"><?= esc(old('notes') ?? '') ?></textarea></div>
   </div>
   <div class="d-flex flex-wrap gap-2 align-items-center mt-3"><button type="submit" class="btn btn-primary hs-payment-submit">Save Payment &amp; Generate Receipt</button><span class="small text-muted">Only record payments already received. Do not submit twice.</span></div>
- </form>
+ </form><?php endif; ?>
 </section>
 <?php endif; ?>
 @endsection

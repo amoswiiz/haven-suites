@@ -12,7 +12,7 @@ $documentTypes = ['national_id' => 'National ID', 'passport' => 'Passport', 'ali
     <h3 class="fw-bold mb-1">KYC Review #<?= $id ?></h3>
     <p class="text-muted mb-0">Guest identity verification and staff decision.</p>
   </div>
-  <a href="<?= site_url('staff/kyc') ?>" class="btn btn-outline-secondary">Back to KYC Reviews</a>
+  <?php if (haven_can_access(site_url('staff/kyc'), 'GET')): ?><a href="<?= site_url('staff/kyc') ?>" class="btn btn-outline-secondary">Back to KYC Reviews</a><?php endif; ?>
 </div>
 <?php if (haven_session()->getFlashdata('success')): ?>
   <div class="alert alert-success" role="alert"><?= esc(haven_session()->getFlashdata('success')) ?></div>
@@ -42,7 +42,7 @@ $documentTypes = ['national_id' => 'National ID', 'passport' => 'Passport', 'ali
       <p class="mb-2"><strong>Type:</strong> <?= esc($documentTypes[$record['document_type'] ?? ''] ?? ($record['document_type'] ?? '—')) ?></p>
       <p class="mb-3"><strong>Uploaded filename:</strong> <?= esc($record['document_original_name'] ?? '—') ?></p>
       <?php if (!empty($record['document_storage_key'])): ?>
-        <a class="btn btn-outline-primary" href="<?= site_url('staff/kyc/' . $id . '/document') ?>" target="_blank" rel="noopener noreferrer">View Identification Document</a>
+        <?php if (haven_can_access(site_url('staff/kyc/' . $id . '/document'), 'GET')): ?><a class="btn btn-outline-primary" href="<?= site_url('staff/kyc/' . $id . '/document') ?>" target="_blank" rel="noopener noreferrer">View Identification Document</a><?php endif; ?>
         <p class="small text-muted mt-2 mb-0">Opens through a staff-authorized route. Do not share document links with guests.</p>
       <?php else: ?>
         <div class="alert alert-warning mb-0">No identification document is recorded.</div>
@@ -55,10 +55,10 @@ $documentTypes = ['national_id' => 'National ID', 'passport' => 'Passport', 'ali
       <h5 class="fw-bold mb-2">Reservation Invoice</h5>
       <p class="text-muted mb-3">Prepare an invoice using the submitted KYC details and reservation #<?= (int) $record['reservation_id'] ?>. If an active invoice already exists, it will be opened instead of creating a duplicate.</p>
       <?php if (haven_auth()->user()?->can('finance.manage')): ?>
-        <form method="post" action="<?= site_url('staff/kyc/' . $id . '/invoice') ?>">
+        <?php if (haven_can_access(site_url('staff/kyc/' . $id . '/invoice'), 'POST')): ?><form method="post" action="<?= site_url('staff/kyc/' . $id . '/invoice') ?>">
           <?= csrf_field() ?>
           <button type="submit" class="btn btn-primary">Create / Open Invoice</button>
-        </form>
+        </form><?php endif; ?>
       <?php else: ?>
         <p class="text-muted small mb-0">Invoice creation requires finance management permission.</p>
       <?php endif; ?>
@@ -68,7 +68,7 @@ $documentTypes = ['national_id' => 'National ID', 'passport' => 'Passport', 'ali
       <h5 class="fw-bold mb-3">Staff Review</h5>
       <?php if ($status === 'pending'): ?>
         <p class="text-muted">Check the document against the submitted guest details before making a decision.</p>
-        <form method="post" action="<?= site_url('staff/kyc/' . $id . '/decide') ?>">
+        <?php if (haven_can_access(site_url('staff/kyc/' . $id . '/decide'), 'POST')): ?><form method="post" action="<?= site_url('staff/kyc/' . $id . '/decide') ?>">
           <?= csrf_field() ?>
           <label class="form-label" for="review_notes">Review notes</label>
           <textarea class="form-control mb-2" id="review_notes" name="review_notes" rows="5" maxlength="5000" placeholder="Record any verification notes or reason for rejection."><?= esc(old('review_notes')) ?></textarea>
@@ -77,7 +77,7 @@ $documentTypes = ['national_id' => 'National ID', 'passport' => 'Passport', 'ali
             <button class="btn btn-success" type="submit" name="decision" value="approved" onclick="return confirm('Approve this KYC submission?')">Approve</button>
             <button class="btn btn-outline-danger" type="submit" name="decision" value="rejected" onclick="return confirm('Reject this KYC submission?')">Reject</button>
           </div>
-        </form>
+        </form><?php endif; ?>
       <?php else: ?>
         <p><strong>Decision:</strong> <?= esc(ucfirst($status)) ?></p>
         <p><strong>Reviewed at:</strong> <?= esc($record['reviewed_at'] ?? '—') ?></p>

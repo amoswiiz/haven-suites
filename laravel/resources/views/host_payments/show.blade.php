@@ -1,7 +1,7 @@
 @extends('layouts/main')
 @section('content')
 <div class="container-fluid py-3">
-    <a href="<?= site_url('payments/hosts') ?>">&larr; Host Payments</a>
+    <?php if (haven_can_access(site_url('payments/hosts'), 'GET')): ?><a href="<?= site_url('payments/hosts') ?>">&larr; Host Payments</a><?php endif; ?>
     <h2 class="mt-2">Reservation #<?= esc($reservation['id']) ?> — Host Payments</h2>
     <p><?= esc($reservation['property_name'] ?? '') ?> / <?= esc($reservation['unit_number'] ?? '') ?></p>
     <?php if (session('success')): ?><div class="alert alert-success"><?= esc(session('success')) ?></div><?php endif ?>
@@ -24,7 +24,7 @@
     </tbody></table></div>
     <?php if ($canManage && !$needsReview && (float) $balance > 0): ?>
         <div class="card mt-4"><div class="card-body"><h4>Record host payment</h4>
-            <form method="post" action="<?= site_url('payments/hosts/' . $reservation['id']) ?>">
+            <?php if (haven_can_access(site_url('payments/hosts/' . $reservation['id']), 'POST')): ?><form method="post" action="<?= site_url('payments/hosts/' . $reservation['id']) ?>">
                 <?= csrf_field() ?>
                 <div class="row g-3">
                     <div class="col-md-3"><label class="form-label">Payment date</label><input type="date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d') ?>" required></div>
@@ -34,7 +34,7 @@
                     <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" rows="2" class="form-control"></textarea></div>
                     <div class="col-12"><button class="btn btn-primary">Save host payment</button></div>
                 </div>
-            </form>
+            </form><?php endif; ?>
         </div></div>
     <?php endif ?>
 </div>

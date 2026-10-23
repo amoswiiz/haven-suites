@@ -16,7 +16,7 @@ $statuses = ['pending' => ['warning', 'Pending'], 'approved' => ['success', 'App
     <h3 class="fw-bold mb-1">KYC Reviews</h3>
     <p class="text-muted mb-0">Review submitted guest identity details and documents.</p>
   </div>
-  <a href="<?= site_url('customers') ?>" class="btn btn-outline-secondary">Customer Directory</a>
+  <?php if (haven_can_access(site_url('customers'), 'GET')): ?><a href="<?= site_url('customers') ?>" class="btn btn-outline-secondary">Customer Directory</a><?php endif; ?>
 </div>
 
 <div class="row g-3 mb-4">
@@ -27,7 +27,7 @@ $statuses = ['pending' => ['warning', 'Pending'], 'approved' => ['success', 'App
 </div>
 
 <div class="hs-panel mb-3">
-  <form method="get" action="<?= site_url('staff/kyc') ?>" class="row g-3 align-items-end">
+  <?php if (haven_can_access(site_url('staff/kyc'), 'GET')): ?><form method="get" action="<?= site_url('staff/kyc') ?>" class="row g-3 align-items-end">
     <div class="col-md-4">
       <label class="form-label" for="kyc-status">Verification status</label>
       <select class="form-select" id="kyc-status" name="status">
@@ -38,8 +38,8 @@ $statuses = ['pending' => ['warning', 'Pending'], 'approved' => ['success', 'App
       </select>
     </div>
     <div class="col-md-auto"><button class="btn btn-primary" type="submit">Apply Filter</button></div>
-    <div class="col-md-auto"><a href="<?= site_url('staff/kyc') ?>" class="btn btn-outline-secondary">Clear</a></div>
-  </form>
+    <div class="col-md-auto"><?php if (haven_can_access(site_url('staff/kyc'), 'GET')): ?><a href="<?= site_url('staff/kyc') ?>" class="btn btn-outline-secondary">Clear</a><?php endif; ?></div>
+  </form><?php endif; ?>
   <p class="text-muted small mb-0 mt-3">Showing up to 200 recent submissions. Counts reflect only the records displayed.</p>
 </div>
 
@@ -57,7 +57,7 @@ $statuses = ['pending' => ['warning', 'Pending'], 'approved' => ['success', 'App
             <td><?= !empty($record['reservation_id']) ? '#' . (int) $record['reservation_id'] : '—' ?></td>
             <td><?= esc($record['submitted_at'] ?: '—') ?></td>
             <td><span class="badge bg-<?= esc($style[0]) ?><?= $style[0] === 'warning' ? ' text-dark' : '' ?>"><?= esc($style[1]) ?></span></td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="<?= site_url('staff/kyc/' . (int) $record['id']) ?>">Review</a></td>
+            <td class="text-end"><?php if (haven_can_access(site_url('staff/kyc/' . (int) $record['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('staff/kyc/' . (int) $record['id']) ?>">Review</a><?php endif; ?></td>
           </tr>
         <?php endforeach; ?>
         <?php if (!$records): ?>

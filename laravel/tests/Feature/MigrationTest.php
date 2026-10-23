@@ -32,6 +32,14 @@ class MigrationTest extends TestCase
         $tenant = $this->tenant(); $this->actingAs($this->user($tenant,['manager']))
             ->post('/t/migration-test/payments/cleaners',['amount'=>'100'])->assertForbidden();
     }
+    public function test_manager_can_view_units_but_cannot_edit_them(): void {
+        $tenant=$this->tenant(); $this->actingAs($this->user($tenant,['manager']));
+        $this->get('/t/migration-test/units')->assertOk()
+            ->assertDontSee('href="http://127.0.0.1:8001/t/migration-test/units/edit/',false)
+            ->assertDontSee('href="http://127.0.0.1:8001/t/migration-test/units/create"',false);
+        $this->get('/t/migration-test/units/edit/1')->assertForbidden();
+        $this->post('/t/migration-test/units/update/1',[])->assertForbidden();
+    }
     public function test_login_works_and_logout_ends_session(): void {
         $tenant = $this->tenant(); $user = $this->user($tenant);
         $this->post('/login',['email'=>$user->email,'password'=>'Testing!Password123'])->assertRedirect('/');

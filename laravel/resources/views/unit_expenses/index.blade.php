@@ -22,17 +22,17 @@ $f = $filters;
         </div>
 
         <?php if ($canManage): ?>
-            <a href="<?= site_url('expenses/create') ?>"
+            <?php if (haven_can_access(site_url('expenses/create'), 'GET')): ?><a href="<?= site_url('expenses/create') ?>"
                class="btn btn-primary">
                 <i data-lucide="plus" class="me-1"></i>
                 Record Expense
-            </a>
+            </a><?php endif; ?>
         <?php endif; ?>
 
     </div>
 
     <!-- Filters -->
-    <form action="<?= site_url('expenses') ?>"
+    <?php if (haven_can_access(site_url('expenses'), 'GET')): ?><form action="<?= site_url('expenses') ?>"
           method="get"
           class="card border-0 shadow-sm mb-4">
 
@@ -196,10 +196,10 @@ $f = $filters;
                         Apply Filters
                     </button>
 
-                    <a href="<?= site_url('expenses') ?>"
+                    <?php if (haven_can_access(site_url('expenses'), 'GET')): ?><a href="<?= site_url('expenses') ?>"
                        class="btn btn-outline-secondary">
                         Reset
-                    </a>
+                    </a><?php endif; ?>
 
                 </div>
 
@@ -207,7 +207,7 @@ $f = $filters;
 
         </div>
 
-    </form>
+    </form><?php endif; ?>
 
     <!-- Financial Summary -->
     <div class="row g-3 mb-4">
@@ -394,7 +394,11 @@ $f = $filters;
                                 <!-- Actions -->
                                 <td class="text-nowrap">
 
-                                    <a
+                                    <?php if (haven_can_access(site_url(
+                                            'expenses/' .
+                                            $expenseId .
+                                            '/payments'
+                                        ), 'GET')): ?><a
                                         href="<?= site_url(
                                             'expenses/' .
                                             $expenseId .
@@ -405,7 +409,7 @@ $f = $filters;
                                         <i data-lucide="wallet" class="me-1"></i>
                                         Payments
 
-                                    </a>
+                                    </a><?php endif; ?>
 
                                 </td>
 

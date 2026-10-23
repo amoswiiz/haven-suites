@@ -6,10 +6,10 @@
 @endsection
 @section('content')
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
- <div><a href="<?= site_url('invoices') ?>" class="small text-decoration-none">&larr; Invoice Directory</a><h3 class="fw-bold mt-2 hs-invoice-title">Create Invoice Draft</h3><p class="text-muted mb-0">Choose a reservation or bill a customer directly.</p></div>
+ <div><?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a href="<?= site_url('invoices') ?>" class="small text-decoration-none">&larr; Invoice Directory</a><?php endif; ?><h3 class="fw-bold mt-2 hs-invoice-title">Create Invoice Draft</h3><p class="text-muted mb-0">Choose a reservation or bill a customer directly.</p></div>
 </div>
 <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
-<form method="post" action="<?= site_url('invoices') ?>" id="invoice-create-form">
+<?php if (haven_can_access(site_url('invoices'), 'POST')): ?><form method="post" action="<?= site_url('invoices') ?>" id="invoice-create-form">
  <?= csrf_field() ?>
  <div class="card border-0 shadow-sm hs-invoice-section mb-4"><div class="card-body">
   <h5 class="fw-bold mb-3">Invoice Type</h5>
@@ -43,9 +43,9 @@
   <div class="text-end fw-bold hs-invoice-accent">Subtotal: KES <span id="items-total">0.00</span></div>
  </div></div>
  <div class="card border-0 shadow-sm mb-4"><div class="card-body"><label class="form-label" for="notes">Notes (optional)</label><textarea class="form-control" id="notes" name="notes" rows="3" maxlength="5000"><?= esc(old('notes') ?? '') ?></textarea></div></div>
- <div class="d-flex flex-wrap gap-2"><button class="btn btn-primary hs-invoice-primary" type="submit">Save Draft Invoice</button><a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">Cancel</a></div>
+ <div class="d-flex flex-wrap gap-2"><button class="btn btn-primary hs-invoice-primary" type="submit">Save Draft Invoice</button><?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">Cancel</a><?php endif; ?></div>
  <p class="text-muted small mt-3">Drafts have no invoice number and do not allocate payments or alter booking totals. Issuing and PDF printing come in the next stage.</p>
-</form>
+</form><?php endif; ?>
 @endsection
 @section('scripts')
 <script>

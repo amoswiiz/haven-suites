@@ -51,7 +51,7 @@ foreach ($invoices as $inv) {
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
  <div><h3 class="fw-bold mb-1 hs-invoice-heading">Invoices</h3><p class="text-muted mb-0">Reservation and standalone invoices for Haven Suites.</p></div>
- <?php if (haven_auth()->user()?->can('finance.manage')): ?><a href="<?= site_url('invoices/create') ?>" class="btn btn-primary" style="background:#294780;border-color:#294780">+ Create Invoice</a><?php endif; ?>
+ <?php if (haven_auth()->user()?->can('finance.manage')): ?><?php if (haven_can_access(site_url('invoices/create'), 'GET')): ?><a href="<?= site_url('invoices/create') ?>" class="btn btn-primary" style="background:#294780;border-color:#294780">+ Create Invoice</a><?php endif; ?><?php endif; ?>
 </div>
 <div class="row g-3 mb-4">
  <?php foreach ([

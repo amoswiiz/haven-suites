@@ -4,7 +4,7 @@
     <div class="mb-4"><h3 class="fw-bold mb-1">Record Cleaner Payment</h3><p class="text-muted">Allocate one payment to one or more completed cleaning tasks.</p></div>
     <?php if (session('error')): ?><div class="alert alert-danger"><?= esc(session('error')) ?></div><?php endif; ?>
     <div class="card border-0 shadow-sm mb-3"><div class="card-body">
-        <form method="get" action="<?= site_url('payments/cleaners/create') ?>" class="row g-3 align-items-end">
+        <?php if (haven_can_access(site_url('payments/cleaners/create'), 'GET')): ?><form method="get" action="<?= site_url('payments/cleaners/create') ?>" class="row g-3 align-items-end">
             <div class="col-md-7"><label class="form-label fw-semibold" for="staffFilter">Cleaner / Staff Member</label>
                 <select class="form-select" name="staff_id" id="staffFilter" required>
                     <option value="">Choose staff member</option>
@@ -12,10 +12,10 @@
                 </select>
             </div>
             <div class="col-md-auto"><button type="submit" class="btn btn-outline-primary">Load Unpaid Tasks</button></div>
-        </form>
+        </form><?php endif; ?>
     </div></div>
     <?php if ($staffId): ?>
-        <form method="post" action="<?= site_url('payments/cleaners') ?>" id="paymentForm">
+        <?php if (haven_can_access(site_url('payments/cleaners'), 'POST')): ?><form method="post" action="<?= site_url('payments/cleaners') ?>" id="paymentForm">
             <?= csrf_field() ?>
             <input type="hidden" name="staff_id" value="<?= (int) $staffId ?>">
             <div class="card border-0 shadow-sm mb-3"><div class="card-body">
@@ -46,9 +46,9 @@
                     <?php if (!$tasks): ?><tr><td colspan="5" class="text-center text-muted py-4">No unpaid completed cleaning tasks for this staff member.</td></tr><?php endif; ?>
                     </tbody>
                 </table></div>
-                <div class="d-flex justify-content-end gap-2 mt-3"><a href="<?= site_url('payments/cleaners') ?>" class="btn btn-outline-secondary">Cancel</a><button class="btn btn-primary" type="submit" <?= !$tasks ? 'disabled' : '' ?>>Save Payment</button></div>
+                <div class="d-flex justify-content-end gap-2 mt-3"><?php if (haven_can_access(site_url('payments/cleaners'), 'GET')): ?><a href="<?= site_url('payments/cleaners') ?>" class="btn btn-outline-secondary">Cancel</a><?php endif; ?><button class="btn btn-primary" type="submit" <?= !$tasks ? 'disabled' : '' ?>>Save Payment</button></div>
             </div></div>
-        </form>
+        </form><?php endif; ?>
     <?php endif; ?>
 </div>
 @endsection

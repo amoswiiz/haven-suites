@@ -30,7 +30,7 @@
             <h3 class="fw-bold mb-1 hs-owner-title">Partner Owner Balances</h3>
             <p class="text-muted mb-0">Owner balances grouped by partner apartment, across all non-cancelled partner bookings.</p>
         </div>
-        <a href="<?= site_url('payments/partners') ?>" class="btn hs-owner-action">View Partner Bookings</a>
+        <?php if (haven_can_access(site_url('payments/partners'), 'GET')): ?><a href="<?= site_url('payments/partners') ?>" class="btn hs-owner-action">View Partner Bookings</a><?php endif; ?>
     </div>
 
     <div class="row g-3 mb-4">
@@ -84,7 +84,7 @@
                             <td class="text-end text-nowrap">KES <?= number_format((float) $owner['owed'], 2) ?></td>
                             <td class="text-end text-nowrap">KES <?= number_format((float) $owner['paid'], 2) ?></td>
                             <td class="text-end text-nowrap <?= (float) $owner['balance'] > 0 ? 'balance-amount' : 'settled-amount' ?>">KES <?= number_format((float) $owner['balance'], 2) ?></td>
-                            <td class="text-end"><a class="btn btn-sm btn-outline-primary statement-link" href="<?= site_url('payments/partners/owners/' . (int) $owner['partner_apartment_id']) ?>">Statement</a></td>
+                            <td class="text-end"><?php if (haven_can_access(site_url('payments/partners/owners/' . (int) $owner['partner_apartment_id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary statement-link" href="<?= site_url('payments/partners/owners/' . (int) $owner['partner_apartment_id']) ?>">Statement</a><?php endif; ?></td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if (empty($owners)): ?>

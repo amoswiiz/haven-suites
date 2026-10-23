@@ -54,14 +54,14 @@ $canRecordPayment = $canManage
 <div class="partner-payment-page">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
         <div>
-            <a href="<?= site_url('payments/partners') ?>" class="hs-page-link small">&larr; All Partner Owner Payments</a>
+            <?php if (haven_can_access(site_url('payments/partners'), 'GET')): ?><a href="<?= site_url('payments/partners') ?>" class="hs-page-link small">&larr; All Partner Owner Payments</a><?php endif; ?>
             <h3 class="fw-bold mt-2 mb-1">Partner Booking #<?= (int) $booking['id'] ?></h3>
             <p class="text-muted mb-0"><?= esc($booking['apartment_name']) ?><?= !empty($booking['building_name']) ? ' &middot; ' . esc($booking['building_name']) : '' ?></p>
         </div>
         <div class="d-flex flex-column align-items-md-end gap-2">
             <span class="hs-status <?= esc($bookingStatus, 'attr') ?>"><?= esc(ucwords(str_replace('_', ' ', $bookingStatus))) ?></span>
             <div class="hs-top-actions">
-                <a href="<?= site_url('reservations/' . (int) $booking['id']) ?>" class="btn hs-outline-btn">View Reservation</a>
+                <?php if (haven_can_access(site_url('reservations/' . (int) $booking['id']), 'GET')): ?><a href="<?= site_url('reservations/' . (int) $booking['id']) ?>" class="btn hs-outline-btn">View Reservation</a><?php endif; ?>
                 <?php if ($canRecordPayment): ?>
                     <button type="button" class="btn hs-action-btn" id="hs-toggle-owner-payment" aria-controls="hs-owner-payment-form" aria-expanded="<?= old('amount') !== null ? 'true' : 'false' ?>">+ Record Payment</button>
                 <?php endif; ?>
@@ -113,13 +113,13 @@ $canRecordPayment = $canManage
     </div>
 
     <?php if ($canManage && !$canRecordPayment && (float) $booking['balance'] > 0 && !in_array($bookingStatus, ['confirmed', 'checked_in', 'checked_out'], true)): ?>
-        <div class="hs-disabled-hint mb-4">Owner payments can be recorded only after this booking is Confirmed, Checked In or Checked Out. <a href="<?= site_url('reservations/' . (int) $booking['id']) ?>">View reservation</a>.</div>
+        <div class="hs-disabled-hint mb-4">Owner payments can be recorded only after this booking is Confirmed, Checked In or Checked Out. <?php if (haven_can_access(site_url('reservations/' . (int) $booking['id']), 'GET')): ?><a href="<?= site_url('reservations/' . (int) $booking['id']) ?>">View reservation</a><?php endif; ?>.</div>
     <?php endif; ?>
 
     <?php if ($canRecordPayment): ?>
         <div class="hs-card p-4 mb-4 hs-payment-form" id="hs-owner-payment-form" <?= old('amount') === null ? 'hidden' : '' ?>>
             <div class="hs-card-header"><h5 class="hs-card-title">Record Owner Payment</h5></div>
-            <form method="post" action="<?= site_url('payments/partners/' . (int) $booking['id']) ?>" onsubmit="return confirm('Confirm that this payment was actually sent to the partner owner?');">
+            <?php if (haven_can_access(site_url('payments/partners/' . (int) $booking['id']), 'POST')): ?><form method="post" action="<?= site_url('payments/partners/' . (int) $booking['id']) ?>" onsubmit="return confirm('Confirm that this payment was actually sent to the partner owner?');">
                 <?= csrf_field() ?>
                 <div class="row g-3">
                     <div class="col-md-4">
@@ -153,7 +153,7 @@ $canRecordPayment = $canManage
                         <button type="submit" class="btn hs-action-btn px-4">Record Payment</button>
                     </div>
                 </div>
-            </form>
+            </form><?php endif; ?>
         </div>
     <?php elseif (!$canManage): ?>
         <p class="hs-muted-note mb-4">You have view-only access to these payment records.</p>
@@ -176,7 +176,7 @@ $canRecordPayment = $canManage
                     <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('payments/partners/' . (int) $booking['id']) ?>#hs-payment-history">Cancel Editing</a>
                 </div>
                 <p class="hs-muted-note">Correct payment details below. The recorded amount is locked to protect owner balances.</p>
-                <form method="post" action="<?= site_url('payments/partners/payments/' . $editId . '/update') ?>" onsubmit="return confirm('Save these corrections to the owner payment?');">
+                <?php if (haven_can_access(site_url('payments/partners/payments/' . $editId . '/update'), 'POST')): ?><form method="post" action="<?= site_url('payments/partners/payments/' . $editId . '/update') ?>" onsubmit="return confirm('Save these corrections to the owner payment?');">
                     <?= csrf_field() ?>
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -213,7 +213,7 @@ $canRecordPayment = $canManage
                             <button class="btn hs-action-btn px-4" type="submit">Save Changes</button>
                         </div>
                     </div>
-                </form>
+                </form><?php endif; ?>
             </div>
         <?php elseif ($canManage && $editPaymentId > 0): ?>
             <div class="alert alert-warning">This payment could not be found under the selected booking.</div>
