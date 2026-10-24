@@ -4,14 +4,15 @@ namespace App\Http\Controllers\Haven;
 
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\UnitModel;
-use App\Support\Migration\Connection as BaseConnection;
+use App\Support\Migration\PageNotFoundException;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\DB;
 
 class Reservations extends BaseController
 {
     public function index()
     {
-        $model = new ReservationModel();
+        $model = new ReservationModel;
         $activity = $this->request->getGet('activity');
         if ($activity === 'checkins') {
             $model->where('reservations.check_in', date('Y-m-d'))
@@ -22,8 +23,8 @@ class Reservations extends BaseController
         }
         $reservations = $model
             ->select('reservations.*, units.unit_number, properties.name AS property_name, '
-                . 'pa.apartment_name AS partner_name, pa.building_name AS partner_building, '
-                . 'pa.location AS partner_location, pa.owner_name AS partner_owner')
+                .'pa.apartment_name AS partner_name, pa.building_name AS partner_building, '
+                .'pa.location AS partner_location, pa.owner_name AS partner_owner')
             ->join('units', 'units.id = reservations.unit_id', 'left')
             ->join('properties', 'properties.id = units.property_id', 'left')
             ->join('partner_apartments pa', 'pa.id = reservations.partner_apartment_id', 'left')
@@ -41,15 +42,15 @@ class Reservations extends BaseController
         $db = db_connect();
         $reservation = $db->table('reservations AS r')
             ->select('r.*, u.unit_number, p.name AS property_name, '
-                . 'pa.apartment_name AS partner_name, pa.building_name AS partner_building, '
-                . 'pa.location AS partner_location, pa.owner_name AS partner_owner')
+                .'pa.apartment_name AS partner_name, pa.building_name AS partner_building, '
+                .'pa.location AS partner_location, pa.owner_name AS partner_owner')
             ->join('units AS u', 'u.id = r.unit_id', 'left')
             ->join('properties AS p', 'p.id = u.property_id', 'left')
             ->join('partner_apartments AS pa', 'pa.id = r.partner_apartment_id', 'left')
             ->where('r.id', $id)->get()->getRowArray();
 
-        if (!$reservation) {
-            throw \App\Support\Migration\PageNotFoundException::forPageNotFound('Reservation not found.');
+        if (! $reservation) {
+            throw PageNotFoundException::forPageNotFound('Reservation not found.');
         }
 
         $payments = $db->table('guest_payments')
@@ -70,7 +71,12 @@ class Reservations extends BaseController
 
     public function create()
     {
-        $units = (new UnitModel())
+        $salesLead = null;
+        if (request()->filled('lead_id')) {
+            abort_unless(auth()->user()->can('sales.view'), 403);
+            $salesLead = DB::table('sales_leads')->where('tenant_id', app('currentTenant')->id)->where('id', request()->integer('lead_id'))->firstOrFail();
+        }
+        $units = (new UnitModel)
             ->select('units.*, properties.name AS property_name')
             ->join('properties', 'properties.id = units.property_id', 'left')
             ->where('units.status', 'active')
@@ -81,15 +87,15 @@ class Reservations extends BaseController
             ->where('status', 'active')
             ->orderBy('apartment_name', 'ASC')->get()->getResultArray();
 
-        return haven_view('reservations/form', ['units' => $units, 'partners' => $partners]);
+        return haven_view('reservations/form', ['units' => $units, 'partners' => $partners, 'salesLead' => $salesLead]);
     }
 
     public function store()
     {
         $db = db_connect();
-        $reservationModel = new ReservationModel();
+        $reservationModel = new ReservationModel;
         $type = trim((string) $this->request->getPost('booking_type'));
-        if (!in_array($type, ['managed', 'partner'], true)) {
+        if (! in_array($type, ['managed', 'partner'], true)) {
             return $this->formError('Select a valid booking type.');
         }
 
@@ -99,8 +105,8 @@ class Reservations extends BaseController
         $unit = null;
         if ($type === 'managed') {
             $unitId = (int) $this->request->getPost('unit_id');
-            $unit = (new UnitModel())->find($unitId);
-            if (!$unit || $unit['status'] !== 'active') {
+            $unit = (new UnitModel)->find($unitId);
+            if (! $unit || $unit['status'] !== 'active') {
                 return $this->formError('Please select an active managed apartment.');
             }
         } else {
@@ -109,7 +115,7 @@ class Reservations extends BaseController
                 $partnerId = (int) $this->request->getPost('partner_apartment_id');
                 $partner = $db->table('partner_apartments')->where('id', $partnerId)
                     ->where('status', 'active')->get()->getRowArray();
-                if (!$partner) {
+                if (! $partner) {
                     return $this->formError('Please select an active partner apartment.');
                 }
             } elseif ($choice === 'new') {
@@ -135,10 +141,10 @@ class Reservations extends BaseController
                 }
                 foreach (['owner_phone' => 40, 'owner_email' => 150, 'building_name' => 150, 'unit_number' => 50] as $field => $limit) {
                     if (mb_strlen($newPartner[$field]) > $limit) {
-                        return $this->formError('Partner details are too long: ' . $field);
+                        return $this->formError('Partner details are too long: '.$field);
                     }
                 }
-                if ($newPartner['owner_email'] !== '' && !filter_var($newPartner['owner_email'], FILTER_VALIDATE_EMAIL)) {
+                if ($newPartner['owner_email'] !== '' && ! filter_var($newPartner['owner_email'], FILTER_VALIDATE_EMAIL)) {
                     return $this->formError('Please enter a valid partner email address.');
                 }
                 if (filter_var($newPartner['bedrooms'], FILTER_VALIDATE_INT) === false || (int) $newPartner['bedrooms'] < 0) {
@@ -161,13 +167,13 @@ class Reservations extends BaseController
         $checkOut = trim((string) $this->request->getPost('check_out'));
         $start = DateTimeImmutable::createFromFormat('!Y-m-d', $checkIn);
         $end = DateTimeImmutable::createFromFormat('!Y-m-d', $checkOut);
-        if (!$start || !$end || $start->format('Y-m-d') !== $checkIn
+        if (! $start || ! $end || $start->format('Y-m-d') !== $checkIn
             || $end->format('Y-m-d') !== $checkOut || $end <= $start) {
             return $this->formError('Check-out must be later than check-in.');
         }
         $nights = (int) $start->diff($end)->days;
         $status = trim((string) $this->request->getPost('status'));
-        if (!in_array($status, ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'], true)) {
+        if (! in_array($status, ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'], true)) {
             return $this->formError('Invalid reservation status.');
         }
         $adults = $this->request->getPost('adults');
@@ -180,12 +186,12 @@ class Reservations extends BaseController
         $guestPhone = trim((string) $this->request->getPost('guest_phone'));
         $guestEmail = trim((string) $this->request->getPost('guest_email'));
         if ($guestName === '' || mb_strlen($guestName) > 150 || $guestPhone === '' || mb_strlen($guestPhone) > 40
-            || ($guestEmail !== '' && (mb_strlen($guestEmail) > 150 || !filter_var($guestEmail, FILTER_VALIDATE_EMAIL)))) {
+            || ($guestEmail !== '' && (mb_strlen($guestEmail) > 150 || ! filter_var($guestEmail, FILTER_VALIDATE_EMAIL)))) {
             return $this->formError('Please enter valid guest contact details.');
         }
         $amountPaid = $this->request->getPost('amount_paid');
         $amountPaid = ($amountPaid === '' || $amountPaid === null) ? 0 : $amountPaid;
-        if (!is_numeric($amountPaid) || !is_finite((float) $amountPaid) || (float) $amountPaid < 0) {
+        if (! is_numeric($amountPaid) || ! is_finite((float) $amountPaid) || (float) $amountPaid < 0) {
             return $this->formError('Enter a valid amount paid.');
         }
         $ownerNet = null;
@@ -193,8 +199,8 @@ class Reservations extends BaseController
             // Partner prices are negotiated PER NIGHT, never for the entire stay.
             $guestNightly = $this->request->getPost('guest_total');
             $ownerNightly = $this->request->getPost('owner_net_amount');
-            if (!is_numeric($guestNightly) || !is_numeric($ownerNightly)
-                || !is_finite((float) $guestNightly) || !is_finite((float) $ownerNightly)
+            if (! is_numeric($guestNightly) || ! is_numeric($ownerNightly)
+                || ! is_finite((float) $guestNightly) || ! is_finite((float) $ownerNightly)
                 || (float) $guestNightly <= 0 || (float) $ownerNightly < 0
                 || (float) $ownerNightly > (float) $guestNightly) {
                 return $this->formError('Guest nightly rate must be positive and at least the owner net nightly rate.');
@@ -209,7 +215,7 @@ class Reservations extends BaseController
             if ($rate === '' || $rate === null) {
                 $rate = $unit['nightly_rate'];
             }
-            if (!is_numeric($rate) || !is_finite((float) $rate) || (float) $rate < 0) {
+            if (! is_numeric($rate) || ! is_finite((float) $rate) || (float) $rate < 0) {
                 return $this->formError('Please enter a valid nightly rate.');
             }
             $rate = round((float) $rate, 2);
@@ -240,7 +246,7 @@ class Reservations extends BaseController
         $db->transBegin();
         try {
             if ($newPartner !== null) {
-                if (!$db->table('partner_apartments')->insert($newPartner)) {
+                if (! $db->table('partner_apartments')->insert($newPartner)) {
                     throw new \RuntimeException('Could not create partner apartment.');
                 }
                 $partnerId = (int) $db->insertID();
@@ -268,9 +274,11 @@ class Reservations extends BaseController
         } catch (\Throwable $e) {
             $db->transRollback();
             log_message('error', 'Reservation save failed: {error}', ['error' => $e->getMessage()]);
+
             return $this->formError($e instanceof \RuntimeException ? $e->getMessage()
                 : 'Unable to save reservation. Please check the details.');
         }
+
         return redirect()->to(site_url('reservations'))
             ->with('success', 'Reservation created successfully.');
     }
@@ -280,10 +288,10 @@ class Reservations extends BaseController
     {
         $db = db_connect();
         $reservation = $db->table('reservations')->where('id', $id)->get()->getRowArray();
-        if (!$reservation) {
-            throw \App\Support\Migration\PageNotFoundException::forPageNotFound('Reservation not found.');
+        if (! $reservation) {
+            throw PageNotFoundException::forPageNotFound('Reservation not found.');
         }
-        $units = (new UnitModel())
+        $units = (new UnitModel)
             ->select('units.*, properties.name AS property_name')
             ->join('properties', 'properties.id = units.property_id', 'left')
             ->groupStart()->where('units.status', 'active')->orWhere('units.id', $reservation['unit_id'] ?: 0)->groupEnd()
@@ -291,6 +299,7 @@ class Reservations extends BaseController
         $partners = $db->table('partner_apartments')
             ->groupStart()->where('status', 'active')->orWhere('id', $reservation['partner_apartment_id'] ?: 0)->groupEnd()
             ->orderBy('apartment_name', 'ASC')->get()->getResultArray();
+
         return haven_view('reservations/edit', compact('reservation', 'units', 'partners'));
     }
 
@@ -299,22 +308,22 @@ class Reservations extends BaseController
     {
         $db = db_connect();
         $original = $db->table('reservations')->where('id', $id)->get()->getRowArray();
-        if (!$original) {
-            throw \App\Support\Migration\PageNotFoundException::forPageNotFound('Reservation not found.');
+        if (! $original) {
+            throw PageNotFoundException::forPageNotFound('Reservation not found.');
         }
         $type = (string) ($original['booking_type'] ?: 'managed');
         $name = trim((string) $this->request->getPost('guest_name'));
         $phone = trim((string) $this->request->getPost('guest_phone'));
         $email = trim((string) $this->request->getPost('guest_email'));
         if ($name === '' || mb_strlen($name) > 150 || $phone === '' || mb_strlen($phone) > 40
-            || ($email !== '' && (mb_strlen($email) > 150 || !filter_var($email, FILTER_VALIDATE_EMAIL)))) {
+            || ($email !== '' && (mb_strlen($email) > 150 || ! filter_var($email, FILTER_VALIDATE_EMAIL)))) {
             return $this->formError('Please enter valid guest contact details.');
         }
         $checkIn = trim((string) $this->request->getPost('check_in'));
         $checkOut = trim((string) $this->request->getPost('check_out'));
         $start = DateTimeImmutable::createFromFormat('!Y-m-d', $checkIn);
         $end = DateTimeImmutable::createFromFormat('!Y-m-d', $checkOut);
-        if (!$start || !$end || $start->format('Y-m-d') !== $checkIn
+        if (! $start || ! $end || $start->format('Y-m-d') !== $checkIn
             || $end->format('Y-m-d') !== $checkOut || $end <= $start) {
             return $this->formError('Check-out must be later than check-in.');
         }
@@ -325,7 +334,7 @@ class Reservations extends BaseController
             return $this->formError('Please enter valid guest numbers.');
         }
         $status = trim((string) $this->request->getPost('status'));
-        if (!in_array($status, ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'], true)) {
+        if (! in_array($status, ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'], true)) {
             return $this->formError('Invalid reservation status.');
         }
         $unitId = null;
@@ -333,18 +342,18 @@ class Reservations extends BaseController
         if ($type === 'partner') {
             $partnerId = (int) $this->request->getPost('partner_apartment_id');
             $partner = $db->table('partner_apartments')->where('id', $partnerId)->get()->getRowArray();
-            if (!$partner || ($partner['status'] !== 'active' && $partnerId !== (int) $original['partner_apartment_id'])) {
+            if (! $partner || ($partner['status'] !== 'active' && $partnerId !== (int) $original['partner_apartment_id'])) {
                 return $this->formError('Please select an active partner apartment.');
             }
         } else {
             $unitId = (int) $this->request->getPost('unit_id');
-            $unit = (new UnitModel())->find($unitId);
-            if (!$unit || ($unit['status'] !== 'active' && $unitId !== (int) $original['unit_id'])) {
+            $unit = (new UnitModel)->find($unitId);
+            if (! $unit || ($unit['status'] !== 'active' && $unitId !== (int) $original['unit_id'])) {
                 return $this->formError('Please select an active managed apartment.');
             }
         }
         $rateInput = $this->request->getPost('nightly_rate');
-        if (!is_numeric($rateInput) || !is_finite((float) $rateInput) || (float) $rateInput < 0
+        if (! is_numeric($rateInput) || ! is_finite((float) $rateInput) || (float) $rateInput < 0
             || ($type === 'partner' && (float) $rateInput <= 0)) {
             return $this->formError('Please enter a valid nightly rate.');
         }
@@ -354,7 +363,7 @@ class Reservations extends BaseController
         $ownerNet = $original['owner_net_amount'];
         if ($type === 'partner') {
             $ownerNightlyInput = $this->request->getPost('owner_nightly_rate');
-            if (!is_numeric($ownerNightlyInput) || !is_finite((float) $ownerNightlyInput)
+            if (! is_numeric($ownerNightlyInput) || ! is_finite((float) $ownerNightlyInput)
                 || (float) $ownerNightlyInput < 0 || (float) $ownerNightlyInput > $rate) {
                 return $this->formError('Owner nightly rate must be between zero and guest nightly rate.');
             }
@@ -401,16 +410,18 @@ class Reservations extends BaseController
                     throw new \RuntimeException('This apartment has another confirmed booking for those dates.');
                 }
             }
-            if (!$db->table('reservations')->where('id', $id)->update($data) || $db->transStatus() === false) {
+            if (! $db->table('reservations')->where('id', $id)->update($data) || $db->transStatus() === false) {
                 throw new \RuntimeException('Reservation could not be updated.');
             }
             $db->transCommit();
         } catch (\Throwable $e) {
             $db->transRollback();
             log_message('error', 'Reservation update failed: {error}', ['error' => $e->getMessage()]);
+
             return $this->formError($e instanceof \RuntimeException ? $e->getMessage() : 'Unable to update reservation.');
         }
-        return redirect()->to(site_url('reservations/' . $id))
+
+        return redirect()->to(site_url('reservations/'.$id))
             ->with('success', 'Reservation updated successfully.');
     }
 

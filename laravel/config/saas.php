@@ -7,5 +7,5 @@ return [
         'team' => ['name' => 'Team', 'units' => 15, 'members' => 10],
         'scale' => ['name' => 'Scale', 'units' => 100, 'members' => 50],
     ],
-    'invitable_roles' => ['admin', 'manager', 'operations', 'cleaner', 'owner', 'user'],
+    'invitable_roles' => ['admin', 'manager', 'operations', 'sales', 'cleaner', 'owner', 'user'],
 ];

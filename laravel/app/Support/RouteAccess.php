@@ -16,6 +16,9 @@ class RouteAccess
         if (! is_string($path)) {
             return false;
         }
+        if (! CompanyModules::allowsPath($path)) {
+            return false;
+        }
         $prefix = '/t/'.app('currentTenant')->slug;
         if (app('currentTenant')->plan !== 'legacy' && preg_match('#/staff/\d+/account/(create|store)$#', $path)) {
             return false;

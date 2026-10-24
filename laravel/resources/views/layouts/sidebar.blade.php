@@ -3,6 +3,23 @@ $currentPath = trim(uri_string(), '/');
 $user = haven_auth()->user();
 
 $groups = [
+    ['label' => 'Communications', 'icon' => 'message-circle', 'items' => [
+        ['label' => 'Compose SMS', 'path' => 'communications/sms', 'permission' => 'messaging.view', 'icon' => 'mail'],
+        ['label' => 'Channel connections', 'path' => 'sales/connections', 'permission' => 'messaging.view', 'icon' => 'message-circle'],
+        ['label' => 'System notifications', 'path' => 'investor-notifications', 'permission' => 'notifications.view', 'icon' => 'mail'],
+    ]],
+    ['label' => 'Investors & Owners', 'icon' => 'users', 'items' => [
+        ['label' => 'Investor directory', 'path' => 'investors', 'permission' => 'investors.view', 'icon' => 'users'],
+        ['label' => 'My investor portal', 'path' => 'investor-portal', 'permission' => 'investor.portal', 'icon' => 'house'],
+        ['label' => 'Investor reports', 'path' => 'investor-portal/reports', 'permission' => 'investor.portal', 'icon' => 'file-text'],
+        ['label' => 'Email & SMS notifications', 'path' => 'investor-notifications', 'permission' => 'notifications.view', 'icon' => 'mail'],
+    ]],
+    ['label' => 'Sales & Enquiries', 'icon' => 'contact', 'items' => [
+        ['label' => 'Sales pipeline', 'path' => 'sales', 'permission' => 'sales.view', 'icon' => 'contact'],
+        ['label' => 'New enquiry', 'path' => 'sales/new', 'permission' => 'sales.manage', 'icon' => 'plus'],
+        ['label' => 'Referral agents', 'path' => 'sales/agents', 'permission' => 'agents.view', 'icon' => 'users'],
+        ['label' => 'Messaging connections', 'path' => 'sales/connections', 'permission' => 'messaging.view', 'icon' => 'message-circle'],
+    ]],
     ['label' => 'Reservations & Guests', 'icon' => 'calendar-days', 'items' => [
         ['label' => 'Reservations', 'path' => 'reservations', 'icon' => 'calendar', 'permission' => 'reservations.view'],
         ['label' => 'Quotations', 'path' => 'quotations', 'icon' => 'file-text', 'permission' => 'reservations.view'],
@@ -21,6 +38,7 @@ $groups = [
         ['label' => 'Maintenance', 'path' => 'maintenance', 'icon' => 'wrench', 'permission' => 'maintenance.view'],
     ]],
     ['label' => 'Finance', 'icon' => 'wallet', 'items' => [
+        ['label' => 'Unit accounting & rent', 'path' => 'accounting/units', 'icon' => 'receipt', 'permission' => 'finance.view'],
         ['label' => 'Invoices', 'path' => 'invoices', 'icon' => 'file-text', 'permission' => 'finance.view'],
         ['label' => 'Guest Payments', 'path' => 'payments/guests', 'icon' => 'wallet', 'permission' => 'finance.view'],
         ['label' => 'Partner Owner Payments', 'path' => 'payments/partners', 'icon' => 'hand-coins', 'permission' => 'finance.view'],
@@ -46,9 +64,26 @@ $groups = [
     ]],
 ];
 
+$investorNavigation = $user !== null && $user->can('investor.portal') && ! $user->can('investors.view')
+    && \Illuminate\Support\Facades\DB::table('investors')->where('tenant_id', app('currentTenant')->id)->where('user_id', auth()->id())->where('active', true)->exists();
+if ($investorNavigation) {
+    $groups = [['label' => 'Investor workspace', 'icon' => 'house', 'items' => [
+        ['label' => 'Dashboard', 'path' => 'investor-portal', 'permission' => 'investor.portal', 'icon' => 'house'],
+        ['label' => 'Properties', 'path' => 'investor-portal/properties', 'permission' => 'investor.portal', 'icon' => 'building-2'],
+        ['label' => 'Reports', 'path' => 'investor-portal/reports', 'permission' => 'investor.portal', 'icon' => 'file-text'],
+        ['label' => 'Statements', 'path' => 'investor-portal/statements', 'permission' => 'investor.portal', 'icon' => 'file-text'],
+        ['label' => 'Payouts', 'path' => 'investor-portal/payouts', 'permission' => 'investor.portal', 'icon' => 'wallet'],
+        ['label' => 'Agreements', 'path' => 'investor-portal/agreements', 'permission' => 'investor.portal', 'icon' => 'handshake'],
+        ['label' => 'Settings', 'path' => 'investor-portal/settings', 'permission' => 'investor.portal', 'icon' => 'settings'],
+    ]]];
+}
+
 // Test the more specific path first so the Housekeeping parent does not
 // highlight when the cleaner entry page is open.
 $isActive = static function (string $path) use ($currentPath): bool {
+    if ($path === 'investor-portal') {
+        return $currentPath === $path;
+    }
     if ($path === 'housekeeping') {
         return $currentPath === 'housekeeping' || (
             str_starts_with($currentPath, 'housekeeping/')
@@ -82,25 +117,36 @@ $canAccess = static function (array $item) use ($user): bool {
 .hs-subnav .hs-nav-link { padding: 9px 10px; font-size: 13px; gap: 10px; }
 .hs-subnav .hs-nav-link svg { width: 16px; height: 16px; }
 .hs-sidebar .hs-nav-group .hs-nav-link { display: flex; align-items: center; }
+.hs-nav-group > summary::after { content: '\203A'; margin-left:auto; font-size:24px; line-height:1; transition:transform .15s; }
+.hs-nav-group[open] > summary::after { transform:rotate(90deg); }
+.hs-group-chevron { display:none; }
+.hs-sidebar :is(a,button,summary):focus-visible { outline:3px solid #ffbd8b; outline-offset:2px; }
 @media print { .hs-sidebar { display: none !important; } }
 </style>
-<aside class="hs-sidebar haven-sidebar-scroll">
+<aside id="company-navigation" class="hs-sidebar haven-sidebar-scroll" aria-label="Company navigation">
+    <button type="button" class="btn btn-outline-light hs-menu-toggle hs-menu-close m-3">Close menu</button>
     <div class="hs-brand">
         <div class="hs-brand-wordmark" aria-label="Haven Suites, BNBs and STR Homes">
+            @if($investorNavigation)
+            <span class="hs-brand-name">{{ app('currentTenant')->name }}</span>
+            <span class="hs-brand-tagline">INVESTOR PORTAL</span>
+            @else
             <span class="hs-brand-name">HAVEN <span>SUITES</span></span>
             <span class="hs-brand-tagline">BNBs AND STR HOMES</span>
+            @endif
         </div>
     </div>
     <div class="hs-menu-heading">MAIN MENU</div>
     <nav class="hs-nav" aria-label="Main navigation">
-        <?php if ($user !== null && $user->can('dashboard.view')): ?>
+        <a href="{{ url('/') }}" class="hs-nav-link">My companies</a>
+        <?php if (!$investorNavigation && $user !== null && $user->can('dashboard.view')): ?>
             <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>">
                 <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
             </a><?php endif; ?>
         <?php endif; ?>
         <?php foreach ($groups as $group): ?>
             <?php
-                $visible = array_values(array_filter($group['items'], $canAccess));
+                $visible = array_values(array_filter($group['items'], static fn ($item) => $canAccess($item) && haven_can_access(site_url($item['path']), 'GET')));
                 if (!$visible) continue;
                 $groupActive = false;
                 foreach ($visible as $item) {
@@ -124,6 +170,18 @@ $canAccess = static function (array $item) use ($user): bool {
                 </div>
             </details>
         <?php endforeach; ?>
+        @if(auth()->user()?->inGroup('superadmin','admin'))
+        <details class="hs-nav-group" @if(str_starts_with($currentPath,'company/')) open @endif>
+            <summary>Company account</summary>
+            <div class="hs-subnav">
+                @foreach(['company/settings'=>'Company settings','company/team'=>'Team invitations','company/subscription'=>'Subscription'] as $path=>$label)
+                    @if(haven_can_access(site_url($path),'GET'))
+                    <a class="hs-nav-link {{ $currentPath===$path?'active':'' }}" href="{{ site_url($path) }}" @if($currentPath===$path) aria-current="page" @endif>{{ $label }}</a>
+                    @endif
+                @endforeach
+            </div>
+        </details>
+        @endif
     </nav>
     <div class="hs-sidebar-footer"><div class="mb-2"><?= esc(app("currentTenant")->name) ?></div><form method="post" action="<?= url("/logout") ?>"><?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline-light mb-3">Sign out</button></form>
         <strong>HAVEN SUITES</strong>

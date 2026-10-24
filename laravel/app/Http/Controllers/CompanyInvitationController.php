@@ -111,6 +111,7 @@ class CompanyInvitationController extends Controller
         abort_unless(strtolower($request->user()->email) === strtolower($invitation->email), 403, 'Sign in using the invited email address.');
         $tenant = $invitation->tenant;
         abort_unless($tenant->active, 403);
+        abort_unless($tenant->modules['team'] ?? true, 403, 'Team management is not enabled for this company.');
         $original = config('database.connections.tenant');
         config(['database.connections.tenant.database' => $tenant->database_name]);
         DB::purge('tenant');
@@ -119,6 +120,12 @@ class CompanyInvitationController extends Controller
                 Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
                 $locked = CompanyInvitation::whereKey($invitation->id)->lockForUpdate()->firstOrFail();
                 abort_if($locked->accepted_at || $locked->revoked_at || $locked->expires_at->isPast(), 410);
+                if ($locked->investor_id) {
+                    abort_unless($tenant->modules['investors'] ?? true, 403);
+                    $profile = DB::table('investors')->where('tenant_id', $tenant->id)->where('id', $locked->investor_id)->where('active', true)->where('email', strtolower($request->user()->email))->firstOrFail();
+                    abort_unless($request->user()->hasVerifiedEmail() && $locked->role === 'owner', 403);
+                    DB::table('investors')->where('id', $profile->id)->update(['user_id' => $request->user()->id, 'updated_at' => now()]);
+                }
                 $membership->attach($tenant, $request->user(), $locked->role);
                 $locked->update(['accepted_at' => now()]);
             });
@@ -127,7 +134,7 @@ class CompanyInvitationController extends Controller
             config(['database.connections.tenant' => $original]);
         }
 
-        return redirect('/t/'.$tenant->slug.'/home')->with('success', 'You have joined '.$tenant->name.'.');
+        return redirect('/t/'.$tenant->slug.($invitation->investor_id ? '/investor-portal' : '/home'))->with('success', 'You have joined '.$tenant->name.'.');
     }
 
     private function invitation(string $token): CompanyInvitation

@@ -1,59 +1,69 @@
 <?php
+
 namespace App\Http\Controllers\Haven;
 
+use App\Services\OwnerRemittanceCalculator;
+use App\Services\UnitAccounting;
 use DateTimeImmutable;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use RuntimeException;
 
 class InvestorReports extends BaseController
 {
     private function cents($value): int
     {
-        $value = trim((string)($value ?? '0'));
-        if (!preg_match('/^-?\d{1,12}(?:\.\d{1,2})?$/', $value)) {
+        $value = trim((string) ($value ?? '0'));
+        if (! preg_match('/^-?\d{1,12}(?:\.\d{1,2})?$/', $value)) {
             throw new RuntimeException('Invalid accounting amount.');
         }
         $negative = str_starts_with($value, '-');
         $parts = explode('.', ltrim($value, '-'), 2);
-        $result = (int)$parts[0] * 100 + (int)str_pad($parts[1] ?? '', 2, '0');
+        $result = (int) $parts[0] * 100 + (int) str_pad($parts[1] ?? '', 2, '0');
+
         return $negative ? -$result : $result;
     }
 
     private function money(int $cents): string
     {
-        return ($cents < 0 ? '-' : '') . sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
+        return ($cents < 0 ? '-' : '').sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
     }
 
     public function index()
     {
         $user = haven_auth()->user();
-        if (!$user || !$user->can('finance.view')) {
+        if (! $user || ! $user->can('finance.view')) {
             return haven_service('response')->setStatusCode(403)->setContent('Permission denied.');
         }
         $db = db_connect();
+        $unitAccounting = new UnitAccounting;
         $units = $db->table('units u')
             ->select('u.id, u.unit_number, p.name AS property_name')
             ->join('properties p', 'p.id = u.property_id', 'left')
             ->orderBy('p.name')->orderBy('u.unit_number')->get()->getResultArray();
 
-        $unitId = max(0, (int)$this->request->getGet('unit_id'));
-        $fromMonth = trim((string)($this->request->getGet('from_month') ?: date('Y-m')));
-        $toMonth = trim((string)($this->request->getGet('to_month') ?: $fromMonth));
+        $unitId = max(0, (int) $this->request->getGet('unit_id'));
+        $fromMonth = trim((string) ($this->request->getGet('from_month') ?: date('Y-m')));
+        $toMonth = trim((string) ($this->request->getGet('to_month') ?: $fromMonth));
         $validMonth = static function (string $month): bool {
             $date = DateTimeImmutable::createFromFormat('!Y-m', $month);
+
             return $date !== false && $date->format('Y-m') === $month;
         };
-        if (!$validMonth($fromMonth) || !$validMonth($toMonth) || $toMonth < $fromMonth) {
+        if (! $validMonth($fromMonth) || ! $validMonth($toMonth) || $toMonth < $fromMonth) {
             return haven_service('response')->setStatusCode(400)->setContent('Invalid reporting period.');
         }
-        $start = $fromMonth . '-01';
-        $end = (new DateTimeImmutable($toMonth . '-01'))->modify('+1 month')->format('Y-m-d');
+        $start = $fromMonth.'-01';
+        $end = (new DateTimeImmutable($toMonth.'-01'))->modify('+1 month')->format('Y-m-d');
         if ((new DateTimeImmutable($start))->diff(new DateTimeImmutable($end))->m
             + 12 * (new DateTimeImmutable($start))->diff(new DateTimeImmutable($end))->y > 24) {
             return haven_service('response')->setStatusCode(400)->setContent('Select a period of up to 24 months.');
         }
         $selected = null;
         foreach ($units as $unit) {
-            if ((int)$unit['id'] === $unitId) $selected = $unit;
+            if ((int) $unit['id'] === $unitId) {
+                $selected = $unit;
+            }
         }
         $months = [];
         for ($cursor = new DateTimeImmutable($start); $cursor->format('Y-m-d') < $end; $cursor = $cursor->modify('+1 month')) {
@@ -78,12 +88,16 @@ class InvestorReports extends BaseController
             foreach ($reservations as $r) {
                 $arrival = new DateTimeImmutable($r['check_in']);
                 $departure = new DateTimeImmutable($r['check_out']);
-                $nights = (int)$arrival->diff($departure)->days;
-                if ($nights <= 0) { $issues[] = 'Reservation #' . $r['id'] . ' has invalid dates.'; continue; }
+                $nights = (int) $arrival->diff($departure)->days;
+                if ($nights <= 0) {
+                    $issues[] = 'Reservation #'.$r['id'].' has invalid dates.';
+
+                    continue;
+                }
                 $total = $this->cents($r['total_amount']);
                 $nightly = $this->cents($r['nightly_rate']);
                 if ($total < 0 || $nightly < 0 || $total !== $nightly * $nights) {
-                    $issues[] = 'Reservation #' . $r['id'] . ' total differs from nightly rate × nights; allocated using total amount.';
+                    $issues[] = 'Reservation #'.$r['id'].' total differs from nightly rate × nights; allocated using total amount.';
                 }
                 // Exact integer-cent allocation: every night receives its fair share; remainder assigned to earliest nights.
                 $base = intdiv($total, $nights);
@@ -91,12 +105,16 @@ class InvestorReports extends BaseController
                 $byMonth = [];
                 for ($i = 0, $night = $arrival; $night < $departure; $night = $night->modify('+1 day'), $i++) {
                     $day = $night->format('Y-m-d');
-                    if ($day < $start || $day >= $end || $day >= $today) continue;
+                    if ($day < $start || $day >= $end || $day >= $today) {
+                        continue;
+                    }
                     $key = $night->format('Y-m');
                     $amount = $base + ($i < $remainder ? 1 : 0);
                     $months[$key]['revenue'] += $amount;
                     $months[$key]['nights']++;
-                    if (!isset($byMonth[$key])) $byMonth[$key] = ['nights' => 0, 'revenue' => 0];
+                    if (! isset($byMonth[$key])) {
+                        $byMonth[$key] = ['nights' => 0, 'revenue' => 0];
+                    }
                     $byMonth[$key]['nights']++;
                     $byMonth[$key]['revenue'] += $amount;
                     $matches = [];
@@ -105,16 +123,22 @@ class InvestorReports extends BaseController
                             $matches[] = $agreement;
                         }
                     }
+                    if ($unitAccounting->mode($unitId, $day) === 'leased') {
+                        continue;
+                    }
+                    $matches = $unitAccounting->matchingAgreements($unitId, $day, $matches);
                     if (count($matches) !== 1) {
-                        $issues[] = 'Reservation #' . $r['id'] . ': ' . (count($matches) ? 'overlapping' : 'missing') . ' management agreement on ' . $day . '.';
+                        $issues[] = 'Reservation #'.$r['id'].': '.(count($matches) ? 'overlapping' : 'missing').' management agreement on '.$day.'.';
+
                         continue;
                     }
-                    $rate = (string)$matches[0]['commission_rate'];
-                    if (!preg_match('/^\d{1,3}(?:\.\d{1,2})?$/', $rate) || (float)$rate > 100) {
-                        $issues[] = 'Invalid management fee rate on ' . $day . '.';
+                    $rate = (string) $matches[0]['commission_rate'];
+                    if (! preg_match('/^\d{1,3}(?:\.\d{1,2})?$/', $rate) || (float) $rate > 100) {
+                        $issues[] = 'Invalid management fee rate on '.$day.'.';
+
                         continue;
                     }
-                    $basisPoints = (int)round((float)$rate * 100);
+                    $basisPoints = (int) round((float) $rate * 100);
                     $months[$key]['fee'] += intdiv($amount * $basisPoints + 5000, 10000);
                 }
                 foreach ($byMonth as $key => $part) {
@@ -148,10 +172,22 @@ class InvestorReports extends BaseController
             }
         }
         $totals = ['revenue' => 0, 'nights' => 0, 'expenses' => 0, 'fee' => 0, 'remitted' => 0, 'net' => 0, 'remaining' => 0];
-        foreach ($months as &$row) {
+        foreach ($months as $reportMonth => &$row) {
+            if ($selected) {
+                $owner = (new OwnerRemittanceCalculator)->calculate($unitId, $reportMonth);
+                $row['revenue'] = $this->cents($owner['collected']) + $this->cents($owner['rental_income'] ?? '0');
+                $row['fee'] = $this->cents($owner['management_fee']);
+                $row['expenses'] = $this->cents($owner['expenses']);
+                $row['remitted'] = $this->cents($owner['paid']);
+                foreach ($owner['issues'] as $issue) {
+                    $issues[] = $issue;
+                }
+            }
             $row['net'] = $row['revenue'] - $row['expenses'] - $row['fee'];
             $row['remaining'] = $row['net'] - $row['remitted'];
-            foreach ($totals as $key => $_) $totals[$key] += $row[$key];
+            foreach ($totals as $key => $_) {
+                $totals[$key] += $row[$key];
+            }
         }
         unset($row);
         $pdfRequested = $this->request->getGet('pdf') === '1';
@@ -164,27 +200,27 @@ class InvestorReports extends BaseController
             'expenses' => $expenses, 'remittances' => $remittances,
             'issues' => array_values(array_unique($issues)),
         ];
-        if (!$pdfRequested) {
+        if (! $pdfRequested) {
             return haven_view($viewName, $data);
         }
-        if (!$selected) {
+        if (! $selected) {
             return haven_service('response')->setStatusCode(400)->setContent('Select a managed apartment first.');
         }
-        if (!class_exists(\Dompdf\Dompdf::class)) {
+        if (! class_exists(Dompdf::class)) {
             return haven_service('response')->setStatusCode(503)->setContent(
                 'PDF library not installed. In the project directory run: composer require dompdf/dompdf'
             );
         }
         // The PDF view uses embedded local branding; no external image requests.
-        $logoPath = (public_path() . DIRECTORY_SEPARATOR) . 'assets/img/haven-suites-logo.png';
+        $logoPath = (public_path().DIRECTORY_SEPARATOR).'assets/img/haven-suites-logo.png';
         $data['logoDataUri'] = is_file($logoPath)
-            ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath)) : '';
-        $options = new \Dompdf\Options();
+            ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath)) : '';
+        $options = new Options;
         $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
-        $options->set('chroot', (public_path() . DIRECTORY_SEPARATOR));
-        $dompdf = new \Dompdf\Dompdf($options);
+        $options->set('chroot', (public_path().DIRECTORY_SEPARATOR));
+        $dompdf = new Dompdf($options);
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->loadHtml(haven_view($viewName, $data), 'UTF-8');
         $dompdf->render();
@@ -192,10 +228,11 @@ class InvestorReports extends BaseController
         $canvas = $dompdf->getCanvas();
         $font = $dompdf->getFontMetrics()->getFont('Helvetica', 'normal');
         $canvas->page_text(495, 813, 'Page {PAGE_NUM} of {PAGE_COUNT}', $font, 8, [0.4, 0.46, 0.56]);
-        $filename = 'Haven-Suites-Investor-' . $unitId . '-' . $fromMonth . '-to-' . $toMonth . '.pdf';
+        $filename = 'Haven-Suites-Investor-'.$unitId.'-'.$fromMonth.'-to-'.$toMonth.'.pdf';
+
         return $this->response
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"')
             ->header('Cache-Control', 'private, no-store, max-age=0')
             ->setContent($dompdf->output());
     }

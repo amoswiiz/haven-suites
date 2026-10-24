@@ -5,8 +5,9 @@
 <?php
 $unitList = $units ?? [];
 
-$value = static function ($field, $default = '') {
-    return old($field, $default);
+$leadDefaults = isset($salesLead) ? ['guest_name' => $salesLead->name, 'guest_phone' => $salesLead->phone, 'guest_email' => $salesLead->email, 'check_in' => $salesLead->check_in, 'check_out' => $salesLead->check_out, 'adults' => $salesLead->guests, 'notes' => 'Sales enquiry #'.$salesLead->id] : [];
+$value = static function ($field, $default = '') use ($leadDefaults) {
+    return old($field, $leadDefaults[$field] ?? $default);
 };
 
 $selectedUnit = (string) $value('unit_id');
@@ -16,6 +17,9 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
 ?>
 
 <div style="max-width:1100px">
+    @if(isset($salesLead))
+        <div class="alert alert-info">Guest details copied from enquiry #{{ $salesLead->id }}. After saving, return to <a href="{{ route('sales.show',[app('currentTenant')->slug,$salesLead->id]) }}">the enquiry</a> to link the reservation and verify the deposit.</div>
+    @endif
 
     <div class="mb-4">
         <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a href="<?= site_url('reservations') ?>"

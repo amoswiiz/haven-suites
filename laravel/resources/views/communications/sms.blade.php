@@ -1,0 +1,19 @@
+@extends('saas.layout')
+@section('title','Compose SMS')
+@section('content')
+<h1>Compose SMS</h1><p class="muted">Send a personal message now. Messages on this page are sent only when you press Send SMS now.</p>
+<div class="split"><section class="card" style="flex:1;min-width:0"><h2>New message</h2><p><span class="pill">{{ $ready ? 'Ready for manual sending' : 'Sending unavailable' }}</span> &middot; Sender: <strong>{{ $sender ?: 'Not configured' }}</strong></p>
+@if(auth()->user()->can('messaging.manage'))
+<form method="post" action="{{ route('communications.sms.send',app('currentTenant')->slug) }}" id="sms-compose">@csrf<input type="hidden" name="send_token" value="{{ \Illuminate\Support\Str::uuid() }}">
+<label for="sms-phone">Recipient phone number</label><input id="sms-phone" name="phone" type="tel" autocomplete="tel" placeholder="+254720602805" value="{{ old('phone') }}" pattern="\+[1-9][0-9]{7,14}" required aria-describedby="phone-help"><small id="phone-help">Include the country code, for example +254720602805.</small>
+<label for="sms-body">Your message</label><textarea id="sms-body" name="body" rows="7" maxlength="1600" required aria-describedby="sms-count sms-cost">{{ old('body') }}</textarea><p id="sms-count" class="muted" role="status" aria-live="polite">0 / 1,600 characters</p><p id="sms-cost" class="muted">Messages use your SMS credits. Long messages and special characters may use multiple SMS units.</p>
+<div class="actions"><button type="submit" @disabled(!$ready)>Send SMS now</button></div></form>
+@else<p>You can view message history. Sending requires communication management permission.</p>@endif
+</section><aside class="card" style="flex:0 1 300px"><h2>Before you send</h2><p>Check the recipient and your message. The exact text you enter will be sent using the sender shown here.</p><p><strong>Submitted</strong> means RoyceTalk accepted the message. <strong>Delivered</strong> means the provider confirmed delivery.</p><p>Uncertain messages are not automatically resent.</p></aside></div>
+<section class="card"><h2>Manual SMS history</h2><p class="muted">Messages sent by your company's staff. Delivery updates appear when status checks run.</p><div class="table-wrap"><table><thead><tr><th>Created / Staff</th><th>Recipient / Sender</th><th>Message</th><th>Status</th></tr></thead><tbody>
+@forelse($messages as $message)<tr><td>{{ date('d M Y H:i',strtotime($message->created_at)) }}<br>{{ $message->staff_name }}</td><td>{{ $message->phone }}<br><small>{{ $message->sender_id }}</small></td><td style="white-space:pre-wrap;overflow-wrap:anywhere;min-width:180px;max-width:450px">{{ $message->body }}</td><td><span class="pill">{{ ucfirst($message->status) }}</span>@if($message->provider_status)<br><small>Provider: {{ $message->provider_status }}</small>@endif @if($message->provider_reference)<br><small>Ref: {{ $message->provider_reference }}</small>@endif @if($message->last_error)<p>{{ $message->last_error }}</p>@endif</td></tr>@empty<tr><td colspan="4">No manual SMS sent yet.</td></tr>@endforelse
+</tbody></table></div>{{ $messages->links() }}</section>
+<script>
+(()=>{const form=document.querySelector('#sms-compose');if(!form)return;const body=document.querySelector('#sms-body');const counter=document.querySelector('#sms-count');const update=()=>{counter.textContent=Array.from(body.value).length+' / 1,600 characters'};body.addEventListener('input',update);update();form.addEventListener('submit',event=>{if(!confirm('Send this SMS now to '+document.querySelector('#sms-phone').value+'?')){event.preventDefault();return}form.querySelector('button[type=submit]').disabled=true;form.querySelector('button[type=submit]').textContent='Sending…'})})();
+</script>
+@endsection

@@ -126,6 +126,7 @@ _modules/*
 /phpunit.xml
 
 # Private runtime files and local browser profiles
+/writable/*.log
 /writable/private/
 /writable/screenshots/
 /writable/chrome-*/

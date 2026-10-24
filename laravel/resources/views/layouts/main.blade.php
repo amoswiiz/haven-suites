@@ -7,7 +7,7 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?= base_url('assets/css/dashboard.css') ?>" rel="stylesheet">
-    <link href="<?= base_url('assets/css/haven-brand.css') ?>?v=3" rel="stylesheet">
+    <link href="<?= base_url('assets/css/haven-brand.css') ?>?v=4" rel="stylesheet">
 
     <style>
         @media (min-width: 992px) {
@@ -32,9 +32,11 @@
 </head>
 <body>
 @include('layouts/sidebar')
-<main class="hs-main">
+<a class="hs-skip-link" href="#main-content">Skip to content</a>
+<main class="hs-main" id="main-content" tabindex="-1">
     <header class="hs-topbar hs-branded-topbar">
         <div>
+            <button type="button" class="btn btn-outline-primary hs-menu-toggle" aria-controls="company-navigation" aria-expanded="false">Menu</button>
             <h5 class="mb-1"><?= esc($pageTitle ?? 'Dashboard') ?></h5>
             <div class="text-muted small">BNBs and STR Homes · Management System</div>
         </div>
@@ -44,7 +46,7 @@
             <?php if ($currentStaff !== null): ?>
                 <span class="hs-topbar-staff">
                     <i data-lucide="user-round" aria-hidden="true"></i>
-                    <span><?= esc($currentStaff->username ?: 'Staff') ?></span>
+                    <span><?= esc(app('currentTenant')->name) ?> &middot; <?= esc(ucwords(implode(', ', auth()->user()->roles()))) ?></span>
                 </span>
             <?php endif; ?>
         </div>
@@ -53,7 +55,7 @@
         <?php if (auth()->user()?->inGroup('superadmin','admin')): ?>
         <nav class="d-flex flex-wrap gap-3 mb-3" aria-label="Company administration">
             <a href="<?= route('company.settings',app('currentTenant')->slug) ?>">Company settings</a>
-            <a href="<?= route('company.team',app('currentTenant')->slug) ?>">Team invitations</a>
+            <?php if (haven_can_access(site_url('company/team'), 'GET')): ?><a href="<?= route('company.team',app('currentTenant')->slug) ?>">Team invitations</a><?php endif; ?>
             <a href="<?= route('company.subscription',app('currentTenant')->slug) ?>">Subscription</a>
             <?php if (app('currentTenant')->plan!=='legacy' && !app('currentTenant')->onboarding_completed_at): ?>
             <a href="<?= route('onboarding.property',app('currentTenant')->slug) ?>">Finish setup</a>
@@ -72,14 +74,31 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<!-- Download lucide.min.js into public/assets/js before installing this layout. -->
-<script src="<?= base_url('assets/js/lucide.min.js') ?>"></script>
 <script>
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
-    } else {
-        console.error('Lucide did not load. Check /assets/js/lucide.min.js (Network tab).');
     }
+    const menuToggle = document.querySelector('.hs-topbar .hs-menu-toggle');
+    const navigation = document.getElementById('company-navigation');
+    const mobileMenu = window.matchMedia('(max-width: 900px)');
+    function updateMenu(open) {
+        menuToggle.setAttribute('aria-expanded', String(open));
+        navigation.classList.toggle('hs-mobile-open', open);
+        navigation.inert = mobileMenu.matches && !open;
+    }
+    menuToggle.addEventListener('click', () => updateMenu(menuToggle.getAttribute('aria-expanded') !== 'true'));
+    document.querySelector('.hs-menu-close').addEventListener('click', () => {
+        updateMenu(false);
+        menuToggle.focus();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && menuToggle.getAttribute('aria-expanded') === 'true') {
+            updateMenu(false);
+            menuToggle.focus();
+        }
+    });
+    mobileMenu.addEventListener('change', () => updateMenu(false));
+    updateMenu(false);
 </script>
 @yield('scripts')
 </body>

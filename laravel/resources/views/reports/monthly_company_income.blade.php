@@ -4,8 +4,8 @@
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <div>
-        <h3 class="fw-bold mb-1">Monthly Company Income</h3>
-        <p class="text-muted mb-0">Management commissions follow guest payment dates. Partner markup follows checkout dates for completed stays.</p>
+        <h3 class="fw-bold mb-1">Company accounting</h3>
+        <p class="text-muted mb-0">Operating results use earned stay income and incurred costs. Collection-based management fees and completed partner markup are detailed below.</p>
     </div>
     <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('dashboard') ?>">Back to dashboard</a><?php endif; ?>
 </div>
@@ -23,6 +23,8 @@
         </div>
     </div>
 </form><?php endif; ?>
+@include('accounting.summary',['operatingReport'=>$operatingReport])
+<h4>Collection-based fees and partner markup</h4>
 
 <div class="row g-3 mb-4">
     <?php foreach ([

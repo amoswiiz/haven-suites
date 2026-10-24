@@ -12,19 +12,20 @@
 <?php if ($report): ?>
 <h5><?= esc(($selected['property_name'] ?? '') . ' — ' . $selected['unit_number']) ?> | <?= esc($month) ?></h5>
 <p><?php if (haven_can_access(site_url('owner-remittances/export') . '?month=' . rawurlencode($month) . '&unit_id=' . (int)$unitId, 'GET')): ?><a class="btn btn-outline-secondary btn-sm" href="<?= site_url('owner-remittances/export') . '?month=' . rawurlencode($month) . '&unit_id=' . (int)$unitId ?>">Download CSV statement</a><?php endif; ?></p>
-<table class="table table-bordered" style="max-width:720px"><tbody>
+<?php if (empty($report['accounting_policy'])): ?><p class="text-muted">This previously approved statement retains its original accounting policy. Reopen and approve a correction to restate it.</p><?php else: ?><p class="text-muted">Managed operating costs are funded by the company and do not reduce owner entitlement. Leased landlords receive fixed rent; pay it through the Rent expense, not as a second owner remittance.</p><?php endif; ?><table class="table table-bordered" style="max-width:720px"><tbody>
 <tr><th>Opening balance (carried forward)</th><td class="text-end">KES <?= esc($report['opening_balance']) ?></td></tr>
 <tr><th>Guest collections received</th><td class="text-end">KES <?= esc($report['collected']) ?></td></tr>
 <tr><th>Haven Suites management fee</th><td class="text-end">KES <?= esc($report['management_fee']) ?></td></tr>
-<tr><th>Unit expenses incurred</th><td class="text-end">KES <?= esc($report['expenses']) ?></td></tr>
+<tr><th>Fixed rent owed to landlord</th><td class="text-end">KES <?= esc($report['rental_income'] ?? '0.00') ?></td></tr><tr><th>Owner-deductible expenses</th><td class="text-end">KES <?= esc($report['expenses']) ?></td></tr>
 <tr class="table-light"><th>Owner entitlement</th><th class="text-end">KES <?= esc($report['entitlement']) ?></th></tr>
 <tr><th>Previous deficit recovered this month</th><td class="text-end">KES <?= esc($report['deficit_recovered']) ?></td></tr>
 <tr><th>Remaining deficit to recover</th><td class="text-end">KES <?= esc($report['deficit_to_recover']) ?></td></tr>
 <tr><th>Remitted against this month</th><td class="text-end">KES <?= esc($report['paid']) ?></td></tr>
 <tr class="table-light"><th>Closing owner balance</th><th class="text-end">KES <?= esc($report['closing_balance']) ?></th></tr>
 </tbody></table>
+<?php if (($report['arrangement'] ?? '') === 'leased'): ?><p><a class="btn btn-outline-primary" href="<?= esc(site_url('expenses').'?unit_id='.(int)$unitId.'&month='.rawurlencode($month), 'attr') ?>">View / Pay monthly rent expense</a></p><?php endif; ?>
 <?php foreach ($report['issues'] as $issue): ?><div class="alert alert-warning"><?= esc($issue) ?></div><?php endforeach ?>
-<?php if ($canManage && !$report['issues'] && (float)$report['outstanding'] > 0): ?>
+<?php if ($canManage && ($report['arrangement'] ?? 'managed') !== 'leased' && !$report['issues'] && (float)$report['outstanding'] > 0): ?>
 <h5>Record owner remittance</h5>
 <?php if (haven_can_access(site_url('owner-remittances'), 'POST')): ?><form method="post" action="<?= site_url('owner-remittances') ?>" class="row g-2 mb-4">
 <?= csrf_field() ?>

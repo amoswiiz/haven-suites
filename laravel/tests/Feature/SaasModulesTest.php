@@ -119,6 +119,26 @@ class SaasModulesTest extends TestCase
         }
     }
 
+    public function test_investor_invitation_links_verified_owner_to_private_portal(): void
+    {
+        $owner = User::factory()->create();
+        $tenant = $this->company($owner);
+        $invitee = User::factory()->create();
+        $investorId = DB::table('investors')->insertGetId(['tenant_id' => $tenant->id, 'name' => $invitee->name, 'email' => $invitee->email, 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $token = bin2hex(random_bytes(32));
+        CompanyInvitation::factory()->create(['tenant_id' => $tenant->id, 'investor_id' => $investorId, 'invited_by' => $owner->id, 'email' => $invitee->email, 'token_hash' => hash('sha256', $token), 'role' => 'owner']);
+        $this->actingAs($owner)->post('/invitations/'.$token)->assertForbidden();
+        $invitee->email_verified_at = null;
+        $invitee->save();
+        $this->actingAs($invitee)->post('/invitations/'.$token)->assertForbidden();
+        $invitee->email_verified_at = now();
+        $invitee->save();
+        $this->actingAs($invitee)->post('/invitations/'.$token)->assertRedirect('/t/'.$tenant->slug.'/investor-portal');
+        $this->assertDatabaseHas('investors', ['id' => $investorId, 'user_id' => $invitee->id]);
+        $this->get('/t/'.$tenant->slug.'/investor-portal')->assertOk()->assertSee($invitee->name);
+        $this->post('/invitations/'.$token)->assertStatus(410);
+    }
+
     public function test_team_invitations_are_emailed_without_exposing_tokens_in_storage(): void
     {
         Notification::fake();

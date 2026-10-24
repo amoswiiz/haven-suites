@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers\Haven;
 
-use App\Models\Haven\UnitModel;
+use App\Models\Haven\HousekeepingModel;
+use App\Models\Haven\MaintenanceModel;
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\StaffModel;
-use App\Models\Haven\MaintenanceModel;
-use App\Models\Haven\HousekeepingModel;
+use App\Models\Haven\UnitModel;
+use App\Services\UnitAccounting;
 
 class Dashboard extends BaseController
 {
@@ -14,11 +15,11 @@ class Dashboard extends BaseController
     {
         $today = date('Y-m-d');
 
-        $unitModel = new UnitModel();
-        $reservationModel = new ReservationModel();
-        $staffModel = new StaffModel();
-        $maintenanceModel = new MaintenanceModel();
-        $housekeepingModel = new HousekeepingModel();
+        $unitModel = new UnitModel;
+        $reservationModel = new ReservationModel;
+        $staffModel = new StaffModel;
+        $maintenanceModel = new MaintenanceModel;
+        $housekeepingModel = new HousekeepingModel;
 
         $data = [
             'totalUnits' => $unitModel->countAllResults(),
@@ -43,7 +44,7 @@ class Dashboard extends BaseController
                     'open',
                     'assigned',
                     'in_progress',
-                    'on_hold'
+                    'on_hold',
                 ])
                 ->countAllResults(),
 
@@ -51,7 +52,7 @@ class Dashboard extends BaseController
                 ->whereIn('status', [
                     'pending',
                     'assigned',
-                    'in_progress'
+                    'in_progress',
                 ])
                 ->countAllResults(),
 
@@ -65,43 +66,66 @@ class Dashboard extends BaseController
                 ->whereIn('status', [
                     'confirmed',
                     'checked_in',
-                    'checked_out'
+                    'checked_out',
                 ])
                 ->countAllResults(),
 
             'todayCleaning' => $housekeepingModel
-                ->where('scheduled_at >=', $today . ' 00:00:00')
-                ->where('scheduled_at <', date('Y-m-d', strtotime('+1 day')) . ' 00:00:00')
+                ->where('scheduled_at >=', $today.' 00:00:00')
+                ->where('scheduled_at <', date('Y-m-d', strtotime('+1 day')).' 00:00:00')
                 ->whereNotIn('status', ['cancelled'])
                 ->countAllResults(),
 
             'upcomingCheckins' => $reservationModel
                 ->select(
-                    'reservations.*, units.unit_number, ' .
+                    'reservations.*, units.unit_number, '.
                     'properties.name AS property_name'
                 )
                 ->join('units', 'units.id = reservations.unit_id')
                 ->join('properties', 'properties.id = units.property_id')
                 ->where('reservations.check_in >=', $today)
                 ->whereIn('reservations.status', [
-                    'confirmed', 'checked_in'
+                    'confirmed', 'checked_in',
                 ])
                 ->orderBy('reservations.check_in', 'ASC')
                 ->findAll(5),
 
             'recentMaintenance' => $maintenanceModel
                 ->select(
-                    'maintenance.*, units.unit_number, ' .
+                    'maintenance.*, units.unit_number, '.
                     'properties.name AS property_name'
                 )
                 ->join('units', 'units.id = maintenance.unit_id')
                 ->join('properties', 'properties.id = units.property_id')
                 ->whereIn('maintenance.status', [
-                    'open', 'assigned', 'in_progress', 'on_hold'
+                    'open', 'assigned', 'in_progress', 'on_hold',
                 ])
                 ->orderBy('maintenance.id', 'DESC')
                 ->findAll(5),
         ];
+
+        $data['pageTitle'] = 'Dashboard';
+        $data['departureTasks'] = $reservationModel
+            ->select('reservations.*, units.unit_number, properties.name AS property_name')
+            ->join('units', 'units.id = reservations.unit_id', 'left')
+            ->join('properties', 'properties.id = units.property_id', 'left')
+            ->where('reservations.check_out', $today)
+            ->whereIn('reservations.status', ['confirmed', 'checked_in', 'checked_out'])
+            ->orderBy('reservations.id', 'ASC')->findAll(5);
+        $data['cleaningTasks'] = $housekeepingModel
+            ->select('housekeeping.*, units.unit_number, properties.name AS property_name, staff.full_name AS assigned_name')
+            ->join('units', 'units.id = housekeeping.unit_id')
+            ->join('properties', 'properties.id = units.property_id')
+            ->join('staff', 'staff.id = housekeeping.assigned_staff_id', 'left')
+            ->whereIn('housekeeping.status', ['pending', 'assigned', 'in_progress'])
+            ->orderBy('housekeeping.scheduled_at', 'ASC')->findAll(5);
+        $data['upcomingDepartures'] = $reservationModel
+            ->select('reservations.*, units.unit_number, properties.name AS property_name')
+            ->join('units', 'units.id = reservations.unit_id', 'left')
+            ->join('properties', 'properties.id = units.property_id', 'left')
+            ->where('reservations.check_out >', $today)
+            ->whereIn('reservations.status', ['confirmed', 'checked_in'])
+            ->orderBy('reservations.check_out', 'ASC')->findAll(5);
 
         // Financial reports and filters are restricted to finance viewers.
         $user = haven_auth()->user();
@@ -113,8 +137,8 @@ class Dashboard extends BaseController
             $requestedMonth = (string) $this->request->getGet('month');
             $month = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $requestedMonth)
                 ? $requestedMonth : date('Y-m');
-            $monthStart = $month . '-01';
-            $nextMonth = date('Y-m-d', strtotime($monthStart . ' +1 month'));
+            $monthStart = $month.'-01';
+            $nextMonth = date('Y-m-d', strtotime($monthStart.' +1 month'));
             $unitId = max(0, (int) $this->request->getGet('unit_id'));
             $units = $db->table('units u')
                 ->select('u.id, u.unit_number, u.property_id, p.name AS property_name')
@@ -122,13 +146,16 @@ class Dashboard extends BaseController
                 ->orderBy('p.name')->orderBy('u.unit_number')
                 ->get()->getResultArray();
             $validUnitIds = array_map('intval', array_column($units, 'id'));
-            if ($unitId && !in_array($unitId, $validUnitIds, true)) {
+            if ($unitId && ! in_array($unitId, $validUnitIds, true)) {
                 $unitId = 0;
             }
 
             // Every report is filtered using the unit linked to the accounting entry.
             $applyUnitFilter = static function ($builder, string $alias) use ($unitId) {
-                if ($unitId) $builder->where($alias . '.id', $unitId);
+                if ($unitId) {
+                    $builder->where($alias.'.id', $unitId);
+                }
+
                 return $builder;
             };
             $collections = static function ($start, $end) use ($db, $applyUnitFilter): float {
@@ -136,12 +163,14 @@ class Dashboard extends BaseController
                     ->join('reservations r', 'r.id = gp.reservation_id')
                     ->join('units u', 'u.id = r.unit_id');
                 $applyUnitFilter($q, 'u');
+
                 return (float) (($q->where('gp.payment_date >=', $start)->where('gp.payment_date <', $end)->get()->getRowArray())['total'] ?? 0);
             };
             $expenses = static function ($start, $end) use ($db, $applyUnitFilter): float {
                 $q = $db->table('unit_expenses e')->select('COALESCE(SUM(e.amount), 0) AS total', false)
                     ->join('units u', 'u.id = e.unit_id');
                 $applyUnitFilter($q, 'u');
+
                 return (float) (($q->where('e.expense_date >=', $start)->where('e.expense_date <', $end)->get()->getRowArray())['total'] ?? 0);
             };
             $remittanceQuery = $db->table('owner_remittances o')
@@ -174,17 +203,18 @@ class Dashboard extends BaseController
             // apartment-unit filter, which cannot represent partner apartments.
             $incomeCents = static function ($value): int {
                 $value = trim((string) ($value ?? '0'));
-                if (!preg_match('/^-?\\d{1,12}(?:\\.\\d{1,2})?$/', $value)) {
+                if (! preg_match('/^-?\\d{1,12}(?:\\.\\d{1,2})?$/', $value)) {
                     throw new \RuntimeException('Invalid monetary amount in accounting records.');
                 }
                 $negative = str_starts_with($value, '-');
                 $parts = explode('.', ltrim($value, '-'), 2);
                 $cents = ((int) $parts[0] * 100) + (int) str_pad($parts[1] ?? '', 2, '0');
+
                 return $negative ? -$cents : $cents;
             };
             $incomeMoney = static function (int $cents): string {
                 return ($cents < 0 ? '-' : '')
-                    . sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
+                    .sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
             };
 
             $incomePayments = $db->table('guest_payments gp')
@@ -201,8 +231,8 @@ class Dashboard extends BaseController
                 ->select('id, unit_id, commission_rate, effective_from, effective_to')
                 ->where('effective_from <', $nextMonth)
                 ->groupStart()
-                    ->where('effective_to', null)
-                    ->orWhere('effective_to >=', $monthStart)
+                ->where('effective_to', null)
+                ->orWhere('effective_to >=', $monthStart)
                 ->groupEnd()
                 ->get()->getResultArray();
 
@@ -213,7 +243,11 @@ class Dashboard extends BaseController
 
             $managedIncomeCents = 0;
             $incomeIssues = 0;
+            $unitAccounting = new UnitAccounting;
             foreach ($incomePayments as $payment) {
+                if ($unitAccounting->mode((int) $payment['unit_id'], $payment['payment_date']) === 'leased') {
+                    continue;
+                }
                 $matches = [];
                 foreach ($agreementsByUnit[(int) $payment['unit_id']] ?? [] as $agreement) {
                     if ($agreement['effective_from'] <= $payment['payment_date']
@@ -222,14 +256,17 @@ class Dashboard extends BaseController
                         $matches[] = $agreement;
                     }
                 }
+                $matches = $unitAccounting->matchingAgreements((int) $payment['unit_id'], $payment['payment_date'], $matches);
                 if (count($matches) !== 1) {
                     $incomeIssues++;
+
                     continue;
                 }
                 $rate = (string) $matches[0]['commission_rate'];
-                if (!preg_match('/^\\d{1,3}(?:\\.\\d{1,2})?$/', $rate)
+                if (! preg_match('/^\\d{1,3}(?:\\.\\d{1,2})?$/', $rate)
                     || (float) $rate > 100) {
                     $incomeIssues++;
+
                     continue;
                 }
                 $amount = $incomeCents($payment['amount']);
@@ -251,12 +288,14 @@ class Dashboard extends BaseController
             foreach ($incomePartners as $partner) {
                 if ($partner['owner_net_amount'] === null) {
                     $incomeIssues++;
+
                     continue;
                 }
                 $gross = $incomeCents($partner['total_amount']);
                 $owner = $incomeCents($partner['owner_net_amount']);
                 if ($gross < 0 || $owner < 0 || $owner > $gross) {
                     $incomeIssues++;
+
                     continue;
                 }
                 $partnerIncomeCents += $gross - $owner;
@@ -269,13 +308,14 @@ class Dashboard extends BaseController
                 'issues' => $incomeIssues,
             ];
 
+            $data['operatingReport'] = (new UnitAccounting)->report($month, $unitId ?: null);
             $data['financeMonth'] = $month;
             $data['financeFilters'] = ['month' => $month, 'unit_id' => $unitId];
             $data['financeUnits'] = $units;
             $data['financeTrend'] = [];
             for ($i = 5; $i >= 0; $i--) {
-                $start = date('Y-m-01', strtotime($monthStart . ' -' . $i . ' months'));
-                $end = date('Y-m-d', strtotime($start . ' +1 month'));
+                $start = date('Y-m-01', strtotime($monthStart.' -'.$i.' months'));
+                $end = date('Y-m-d', strtotime($start.' +1 month'));
                 $data['financeTrend'][] = [
                     'label' => date('M y', strtotime($start)),
                     'collections' => $collections($start, $end),
@@ -301,8 +341,8 @@ class Dashboard extends BaseController
                 foreach ($stays as $stay) {
                     $from = max($stay['check_in'], $monthStart);
                     $to = min($stay['check_out'], $nextMonth);
-                    for ($day = $from; $day < $to; $day = date('Y-m-d', strtotime($day . ' +1 day'))) {
-                        $occupied[(int) $stay['unit_id'] . ':' . $day] = true;
+                    for ($day = $from; $day < $to; $day = date('Y-m-d', strtotime($day.' +1 day'))) {
+                        $occupied[(int) $stay['unit_id'].':'.$day] = true;
                     }
                 }
             }

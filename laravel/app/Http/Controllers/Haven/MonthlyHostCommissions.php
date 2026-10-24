@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Services\UnitAccounting;
 use Symfony\Component\HttpFoundation\Response as ResponseInterface;
 
 class MonthlyHostCommissions extends BaseController
@@ -9,6 +10,7 @@ class MonthlyHostCommissions extends BaseController
     private function cents($value): int
     {
         $parts = explode('.', (string) $value, 2);
+
         return ((int) $parts[0] * 100) + (int) str_pad(substr($parts[1] ?? '', 0, 2), 2, '0');
     }
 
@@ -20,15 +22,15 @@ class MonthlyHostCommissions extends BaseController
     public function index(): string|ResponseInterface
     {
         $user = haven_auth()->user();
-        if ($user === null || !$user->can('finance.view')) {
+        if ($user === null || ! $user->can('finance.view')) {
             return haven_service('response')->setStatusCode(403)->setContent('Permission denied.');
         }
 
         $month = trim((string) ($this->request->getGet('month') ?: date('Y-m')));
         $date = \DateTimeImmutable::createFromFormat('!Y-m', $month);
-        if (!$date || $date->format('Y-m') !== $month) {
+        if (! $date || $date->format('Y-m') !== $month) {
             $month = date('Y-m');
-            $date = new \DateTimeImmutable($month . '-01');
+            $date = new \DateTimeImmutable($month.'-01');
         }
         $from = $date->format('Y-m-d');
         $until = $date->modify('+1 month')->format('Y-m-d');
@@ -73,7 +75,11 @@ class MonthlyHostCommissions extends BaseController
         $totalCollections = 0;
         $totalCommission = 0;
         $unmatchedCollections = 0;
+        $unitAccounting = new UnitAccounting;
         foreach ($payments as $payment) {
+            if ($unitAccounting->mode((int) $payment['unit_id'], $payment['payment_date']) === 'leased') {
+                continue;
+            }
             $amount = $this->cents($payment['amount']);
             $totalCollections += $amount;
             $matching = [];
@@ -83,17 +89,22 @@ class MonthlyHostCommissions extends BaseController
                     $matching[] = $agreement;
                 }
             }
+            $matching = $unitAccounting->matchingAgreements((int) $payment['unit_id'], $payment['payment_date'], $matching);
             if (count($matching) !== 1) {
                 $unmatchedCollections += $amount;
                 $issue = [
                     'payment_id' => $payment['id'],
                     'payment_date' => $payment['payment_date'],
                     'reservation_id' => $payment['reservation_id'],
-                    'unit' => trim(($payment['property_name'] ?? '') . ' / ' . $payment['unit_number'], ' /'),
+                    'unit' => trim(($payment['property_name'] ?? '').' / '.$payment['unit_number'], ' /'),
                     'amount' => $this->money($amount),
                 ];
-                if (count($matching) === 0) $unmatched[] = $issue;
-                else $ambiguous[] = $issue;
+                if (count($matching) === 0) {
+                    $unmatched[] = $issue;
+                } else {
+                    $ambiguous[] = $issue;
+                }
+
                 continue;
             }
             $agreement = $matching[0];
@@ -101,9 +112,9 @@ class MonthlyHostCommissions extends BaseController
             $rateHundredths = (int) round(((float) $agreement['commission_rate']) * 100);
             $commission = intdiv($amount * $rateHundredths + 5000, 10000);
             $key = (int) $agreement['id'];
-            if (!isset($rows[$key])) {
+            if (! isset($rows[$key])) {
                 $rows[$key] = [
-                    'unit' => trim(($payment['property_name'] ?? '') . ' / ' . $payment['unit_number'], ' /'),
+                    'unit' => trim(($payment['property_name'] ?? '').' / '.$payment['unit_number'], ' /'),
                     'host_name' => $agreement['host_name'],
                     'commission_rate' => $agreement['commission_rate'],
                     'collections_cents' => 0,

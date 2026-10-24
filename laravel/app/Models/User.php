@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CompanyModules;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -44,6 +45,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function can($abilities, $arguments = []): bool
     {
         foreach ((array) $abilities as $ability) {
+            $module = match (explode('.', $ability)[0]) {
+                'investors', 'investor' => 'investors', 'notifications' => 'notifications',
+                'sales' => 'sales', 'agents' => 'agents', 'messaging' => 'messaging',
+                'reservations' => 'reservations', 'units', 'properties', 'availability' => 'properties',
+                'housekeeping' => 'housekeeping', 'maintenance' => 'maintenance',
+                'finance' => 'finance', 'reports' => 'reports', 'staff' => 'team', default => null,
+            };
+            if ($module !== null && ! CompanyModules::enabled($module)) {
+                return false;
+            }
             $allowed = false;
             foreach ($this->roles() as $role) {
                 foreach (config('haven.roles.'.$role, []) as $permission) {

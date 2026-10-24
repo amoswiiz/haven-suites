@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SubscriptionPayment;
 use App\Models\Tenant;
+use App\Support\CompanyModules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,9 +13,27 @@ use Illuminate\View\View;
 
 class PlatformController extends Controller
 {
+    public function modules(int $id, Request $request): RedirectResponse
+    {
+        $data = $request->validate(['modules' => 'nullable|array', 'modules.*' => ['string', Rule::in(array_keys(CompanyModules::LABELS))], 'reason' => 'required|string|max:500']);
+        DB::transaction(function () use ($id, $data): void {
+            $tenant = Tenant::whereKey($id)->lockForUpdate()->firstOrFail();
+            $before = $tenant->modules;
+            $modules = [];
+            foreach (CompanyModules::LABELS as $key => $label) {
+                $modules[$key] = in_array($key, $data['modules'] ?? [], true);
+            }
+            $tenant->modules = $modules;
+            $tenant->save();
+            DB::table('platform_audit_events')->insert(['tenant_id' => $id, 'actor_id' => auth()->id(), 'action' => 'company.modules.updated', 'details' => json_encode(['before' => $before, 'after' => $modules, 'reason' => $data['reason']]), 'created_at' => now(), 'updated_at' => now()]);
+        });
+
+        return back()->with('success', 'Company modules updated. Existing records have been preserved.');
+    }
+
     public function index(): View
     {
-        return view('saas.platform', ['companies' => Tenant::withCount('users')->latest()->paginate(20), 'payments' => SubscriptionPayment::with('tenant')->where('provider', 'manual')->where('status', 'pending')->latest()->limit(50)->get()]);
+        return view('saas.platform', ['companies' => Tenant::withCount('users')->latest()->paginate(20), 'moduleEvents' => DB::table('platform_audit_events')->leftJoin('users', 'users.id', '=', 'platform_audit_events.actor_id')->where('action', 'company.modules.updated')->select('platform_audit_events.*', 'users.name as actor_name')->latest('platform_audit_events.id')->limit(100)->get(), 'payments' => SubscriptionPayment::with('tenant')->where('provider', 'manual')->where('status', 'pending')->latest()->limit(50)->get()]);
     }
 
     public function update(int $id, Request $request): RedirectResponse

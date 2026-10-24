@@ -2,6 +2,12 @@
 
 return [
 
+    'roycetalk' => [
+        'manual_live' => env('MANUAL_SMS_LIVE', false),
+        'api_key' => env('ROYCETALK_API_KEY'),
+        'sender_id' => env('ROYCETALK_SENDER_ID'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Services\UnitAccounting;
 use Symfony\Component\HttpFoundation\Response as ResponseInterface;
 
 class MonthlyCompanyIncome extends BaseController
@@ -9,32 +10,33 @@ class MonthlyCompanyIncome extends BaseController
     private function cents($value): int
     {
         $value = trim((string) ($value ?? '0'));
-        if (!preg_match('/^-?\d{1,12}(?:\.\d{1,2})?$/', $value)) {
+        if (! preg_match('/^-?\d{1,12}(?:\.\d{1,2})?$/', $value)) {
             throw new \RuntimeException('Invalid monetary amount in accounting records.');
         }
         $negative = str_starts_with($value, '-');
         $parts = explode('.', ltrim($value, '-'), 2);
         $result = ((int) $parts[0] * 100) + (int) str_pad($parts[1] ?? '', 2, '0');
+
         return $negative ? -$result : $result;
     }
 
     private function money(int $cents): string
     {
-        return ($cents < 0 ? '-' : '') . sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
+        return ($cents < 0 ? '-' : '').sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
     }
 
     public function index(): string|ResponseInterface
     {
         $user = haven_auth()->user();
-        if ($user === null || !$user->can('finance.view')) {
+        if ($user === null || ! $user->can('finance.view')) {
             return haven_service('response')->setStatusCode(403)->setContent('Permission denied.');
         }
 
         $month = trim((string) ($this->request->getGet('month') ?: date('Y-m')));
         $date = \DateTimeImmutable::createFromFormat('!Y-m', $month);
-        if (!$date || $date->format('Y-m') !== $month) {
+        if (! $date || $date->format('Y-m') !== $month) {
             $month = date('Y-m');
-            $date = new \DateTimeImmutable($month . '-01');
+            $date = new \DateTimeImmutable($month.'-01');
         }
         $from = $date->format('Y-m-d');
         $until = $date->modify('+1 month')->format('Y-m-d');
@@ -67,7 +69,11 @@ class MonthlyCompanyIncome extends BaseController
         $issues = [];
         $managementCents = 0;
         $unmatchedCents = 0;
+        $unitAccounting = new UnitAccounting;
         foreach ($payments as $payment) {
+            if ($unitAccounting->mode((int) $payment['unit_id'], $payment['payment_date']) === 'leased') {
+                continue;
+            }
             $amount = $this->cents($payment['amount']);
             $matches = [];
             foreach ($agreementsByUnit[(int) $payment['unit_id']] ?? [] as $agreement) {
@@ -76,25 +82,28 @@ class MonthlyCompanyIncome extends BaseController
                     $matches[] = $agreement;
                 }
             }
+            $matches = $unitAccounting->matchingAgreements((int) $payment['unit_id'], $payment['payment_date'], $matches);
             if (count($matches) !== 1) {
                 $unmatchedCents += $amount;
-                $issues[] = 'Payment #' . (int) $payment['id'] . ' (' . $payment['payment_date']
-                    . '): ' . (count($matches) === 0 ? 'missing' : 'overlapping') . ' management agreement.';
+                $issues[] = 'Payment #'.(int) $payment['id'].' ('.$payment['payment_date']
+                    .'): '.(count($matches) === 0 ? 'missing' : 'overlapping').' management agreement.';
+
                 continue;
             }
             $agreement = $matches[0];
             $rate = (string) $agreement['commission_rate'];
-            if (!preg_match('/^\d{1,3}(?:\.\d{1,2})?$/', $rate) || (float) $rate > 100) {
+            if (! preg_match('/^\d{1,3}(?:\.\d{1,2})?$/', $rate) || (float) $rate > 100) {
                 $unmatchedCents += $amount;
-                $issues[] = 'Payment #' . (int) $payment['id'] . ': invalid management commission rate.';
+                $issues[] = 'Payment #'.(int) $payment['id'].': invalid management commission rate.';
+
                 continue;
             }
             $basisPoints = (int) round((float) $rate * 100);
             $commission = intdiv($amount * $basisPoints + 5000, 10000);
             $key = (int) $agreement['id'];
-            if (!isset($managedRows[$key])) {
+            if (! isset($managedRows[$key])) {
                 $managedRows[$key] = [
-                    'unit' => trim(($payment['property_name'] ?? '') . ' / ' . $payment['unit_number'], ' /'),
+                    'unit' => trim(($payment['property_name'] ?? '').' / '.$payment['unit_number'], ' /'),
                     'host' => $agreement['host_name'],
                     'rate' => $rate,
                     'collections_cents' => 0,
@@ -117,7 +126,7 @@ class MonthlyCompanyIncome extends BaseController
         // This is booking-based income, not a guest-payment/cash receipt report.
         $partners = $db->table('reservations r')
             ->select('r.id, r.guest_name, r.check_in, r.check_out, r.total_amount, r.owner_net_amount, '
-                . 'pa.apartment_name, pa.building_name, pa.owner_name')
+                .'pa.apartment_name, pa.building_name, pa.owner_name')
             ->join('partner_apartments pa', 'pa.id = r.partner_apartment_id', 'left')
             ->where('r.booking_type', 'partner')
             ->where('r.status', 'checked_out')
@@ -133,13 +142,15 @@ class MonthlyCompanyIncome extends BaseController
         $partnerOwnerCents = 0;
         foreach ($partners as $partner) {
             if ($partner['owner_net_amount'] === null) {
-                $issues[] = 'Partner reservation #' . (int) $partner['id'] . ': missing owner payout.';
+                $issues[] = 'Partner reservation #'.(int) $partner['id'].': missing owner payout.';
+
                 continue;
             }
             $gross = $this->cents($partner['total_amount']);
             $owner = $this->cents($partner['owner_net_amount']);
             if ($gross < 0 || $owner < 0 || $owner > $gross) {
-                $issues[] = 'Partner reservation #' . (int) $partner['id'] . ': invalid guest or owner amount.';
+                $issues[] = 'Partner reservation #'.(int) $partner['id'].': invalid guest or owner amount.';
+
                 continue;
             }
             $markup = $gross - $owner;
@@ -148,7 +159,7 @@ class MonthlyCompanyIncome extends BaseController
             $partnerMarkupCents += $markup;
             $partnerRows[] = [
                 'id' => (int) $partner['id'],
-                'apartment' => $partner['apartment_name'] ?: ('Partner apartment #' . (int) $partner['id']),
+                'apartment' => $partner['apartment_name'] ?: ('Partner apartment #'.(int) $partner['id']),
                 'owner' => $partner['owner_name'] ?? '',
                 'guest' => $partner['guest_name'],
                 'check_in' => $partner['check_in'],
@@ -160,6 +171,7 @@ class MonthlyCompanyIncome extends BaseController
         }
 
         return haven_view('reports/monthly_company_income', [
+            'operatingReport' => (new UnitAccounting)->report($month),
             'pageTitle' => 'Monthly Company Income',
             'month' => $month,
             'managedRows' => array_values($managedRows),
