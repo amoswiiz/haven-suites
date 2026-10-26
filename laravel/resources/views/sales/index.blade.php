@@ -43,7 +43,7 @@
 <label for="move-next-action">Next action</label><input id="move-next-action" name="next_action" maxlength="255" required>
 <label for="move-follow-up">Follow-up date and time ({{ config('app.timezone') }})</label><input id="move-follow-up" type="datetime-local" name="follow_up_at">
 <div id="sales-lost-fields"><label for="move-lost-reason">Lost / postponed reason</label><input id="move-lost-reason" name="lost_reason" maxlength="255"></div>
-<p class="muted">Quotation sent and Awaiting deposit require a valid quotation.</p>
+<p class="muted">Invoice issued and Awaiting deposit require a linked booking with an issued invoice.</p>
 </div>
 <p id="sales-won-message" hidden>To mark this enquiry as Won, open its details to link the reservation and verify the deposit.</p>
 <div class="actions"><button type="submit" id="sales-save-move">Save move</button><a class="button" id="sales-confirm-booking" hidden>Open booking confirmation</a><button type="button" class="secondary" id="sales-cancel-move">Cancel</button></div>

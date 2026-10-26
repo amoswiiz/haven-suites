@@ -1,23 +1,15 @@
 @extends('layouts/main')
 @section('content')
 <?php
-// Self-contained customer profile enhancement. Existing Customers controller
-// can continue passing only $customer and $kyc.
-$db = db_connect();
 $customerId = (int) $customer['id'];
-$reservations = $db->table('reservations')
-    ->select('id, check_in, check_out, status, total_amount, guest_name')
-    ->where('customer_id', $customerId)
-    ->orderBy('id', 'DESC')->get()->getResultArray();
-$reservationIds = array_map(static fn($r) => (int) $r['id'], $reservations);
-$invoices = [];
-if ($reservationIds) {
-    $invoices = $db->table('invoices')
-        ->select('id, invoice_number, reservation_id, status, total_amount, issue_date')
-        ->whereIn('reservation_id', $reservationIds)
-        ->where('status !=', 'void')
-        ->orderBy('id', 'DESC')->get()->getResultArray();
-}
+$invoicesByBooking = collect($invoices)->groupBy('reservation_id');
+$bookingsById = collect($reservations)->keyBy('id');
+$apartmentLabel = static function (array $booking): string {
+    if (($booking['booking_type'] ?? 'managed') === 'partner') {
+        return trim(($booking['partner_building'] ?? '').' / '.($booking['partner_name'] ?? ''), ' /') ?: 'Partner apartment';
+    }
+    return trim(($booking['property_name'] ?? '').' / '.($booking['unit_number'] ?? ''), ' /') ?: 'Apartment not assigned';
+};
 $canViewFinance = haven_auth()->user()?->can('finance.view') ?? false;
 $canViewKyc = $canViewFinance;
 ?>
@@ -38,13 +30,21 @@ $canViewKyc = $canViewFinance;
 <div class="hs-panel mb-4">
   <h5 class="mb-3">Reservations</h5>
   <div class="table-responsive"><table class="table table-hover align-middle">
-    <thead><tr><th>Booking</th><th>Check-in</th><th>Check-out</th><th>Status</th><th class="text-end">Total (KES)</th></tr></thead>
+    <thead><tr><th>Booking / Apartment</th><th>Check-in</th><th>Check-out</th><th>Status</th><th class="text-end">Total (KES)</th><th>Booking invoice</th></tr></thead>
     <tbody>
     <?php foreach ($reservations as $booking): ?>
-      <tr><td>#<?= (int) $booking['id'] ?></td><td><?= esc($booking['check_in']) ?></td><td><?= esc($booking['check_out']) ?></td>
-      <td><?= esc(ucfirst((string) $booking['status'])) ?></td><td class="text-end"><?= number_format((float) $booking['total_amount'], 2) ?></td></tr>
+      <tr><td><?php if (haven_can_access(site_url('reservations/'.$booking['id']), 'GET')): ?><a href="<?= site_url('reservations/'.$booking['id']) ?>">#<?= (int) $booking['id'] ?></a><?php else: ?>#<?= (int) $booking['id'] ?><?php endif; ?><br><strong><?= esc($apartmentLabel($booking)) ?></strong></td><td><?= esc($booking['check_in']) ?></td><td><?= esc($booking['check_out']) ?></td>
+      <td><?= esc(ucfirst((string) $booking['status'])) ?></td><td class="text-end"><?= number_format((float) $booking['total_amount'], 2) ?></td><td>
+      <?php $bookingInvoices = $invoicesByBooking->get($booking['id'], collect()); ?>
+      <?php foreach ($bookingInvoices as $bookingInvoice): ?>
+        <?php if ($canViewFinance && haven_can_access(site_url('invoices/'.$bookingInvoice['id']), 'GET')): ?><a class="d-block" href="<?= site_url('invoices/'.$bookingInvoice['id']) ?>"><?= esc($bookingInvoice['invoice_number'] ?: 'Draft #'.$bookingInvoice['id']) ?></a><?php endif; ?>
+      <?php endforeach; ?>
+      <?php if ($bookingInvoices->isEmpty()): ?>
+        <?php if ($booking['status'] !== 'cancelled' && haven_can_access(site_url('invoices/create'), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('invoices/create?reservation_id='.$booking['id']) ?>">Create invoice</a><?php else: ?><span class="text-muted">No invoice</span><?php endif; ?>
+      <?php endif; ?>
+      </td></tr>
     <?php endforeach; ?>
-    <?php if (!$reservations): ?><tr><td colspan="5" class="text-center text-muted py-4">No linked reservations yet.</td></tr><?php endif; ?>
+    <?php if (!$reservations): ?><tr><td colspan="6" class="text-center text-muted py-4">No linked reservations yet.</td></tr><?php endif; ?>
     </tbody></table></div>
 </div>
 <?php if ($canViewFinance): ?>
@@ -55,14 +55,14 @@ $canViewKyc = $canViewFinance;
     <tbody>
     <?php foreach ($invoices as $invoice): ?>
       <tr><td><?= esc($invoice['invoice_number'] ?: 'Draft #' . $invoice['id']) ?></td>
-      <td>#<?= (int) $invoice['reservation_id'] ?></td><td><?= esc($invoice['issue_date'] ?: '—') ?></td>
+      <td>#<?= (int) $invoice['reservation_id'] ?><br><small><?= esc($apartmentLabel($bookingsById->get($invoice['reservation_id'], []))) ?></small></td><td><?= esc($invoice['issue_date'] ?: '—') ?></td>
       <td><?= esc(ucfirst((string) $invoice['status'])) ?></td>
       <td class="text-end"><?= number_format((float) $invoice['total_amount'], 2) ?></td>
       <td class="text-end"><?php if (haven_can_access(site_url('invoices/' . (int) $invoice['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('invoices/' . (int) $invoice['id']) ?>">View Invoice</a><?php endif; ?></td></tr>
     <?php endforeach; ?>
     <?php if (!$invoices): ?><tr><td colspan="6" class="text-center text-muted py-4">No invoices linked to this customer's reservations.</td></tr><?php endif; ?>
     </tbody></table></div>
-  <p class="text-muted small mb-0">Standalone invoices are not shown because the current invoices table has no customer ID link.</p>
+  <p class="text-muted small mb-0">This section shows invoices linked to this customer's bookings.</p>
 </div>
 <?php endif; ?>
 <div class="hs-panel mb-4">

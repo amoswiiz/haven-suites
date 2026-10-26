@@ -38,6 +38,7 @@
 </style>
 @endsection
 @section('content')
+@if(auth()->user()->inGroup('admin','superadmin') && haven_can_access(site_url('invoices/settings'),'GET'))<div class="text-end mb-3"><a class="btn btn-outline-secondary btn-sm" href="{{ site_url('invoices/settings') }}">Invoice settings</a></div>@endif
 <div class="hs-invoices-page">
 <?php
 $today = date('Y-m-d');

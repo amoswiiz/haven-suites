@@ -14,7 +14,7 @@ $nights = $start->diff($end)->days;
 $total = (float) ($r['total_amount'] ?? 0);
 $bookingPaid = (float) ($r['amount_paid'] ?? 0);
 $recordedPayments = array_sum(array_map(static fn($p) => (float) ($p['amount'] ?? 0), $payments ?? []));
-$bookingBalance = max(0, $total - $bookingPaid);
+$bookingBalance = max(0, $total - $recordedPayments);
 $isPartner = ($r['booking_type'] ?? 'managed') === 'partner';
 $apartment = $isPartner ? ($r['partner_name'] ?: 'Partner Apartment') : trim(($r['property_name'] ?? 'Building') . ' — ' . ($r['unit_number'] ?? ''));
 $statusLabels = ['pending'=>'Pending','confirmed'=>'Confirmed','checked_in'=>'Checked In','checked_out'=>'Checked Out','cancelled'=>'Cancelled'];
@@ -23,6 +23,7 @@ $status = (string) ($r['status'] ?? 'pending');
 <div class="hs-booking">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <?php if (haven_can_access(site_url('reservations'), 'GET')): ?><a class="hs-link text-decoration-none" href="<?= site_url('reservations') ?>">&larr; All Reservations</a><?php endif; ?>
+    @if (auth()->user()->can('finance.manage'))<a class="btn btn-primary" href="#reservation-payment">Record payment</a>@endif
     <?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices') ?>">Invoices</a><?php endif; ?>
   </div>
   <?php if (haven_session()->getFlashdata('success')): ?><div class="alert alert-success"><?= esc(haven_session()->getFlashdata('success')) ?></div><?php endif; ?>
@@ -33,7 +34,7 @@ $status = (string) ($r['status'] ?? 'pending');
   </div>
   <div class="row g-3 mb-4">
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Booking Total</div><strong>KES <?= number_format($total,2) ?></strong></div></div>
-    <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Paid (Booking Record)</div><strong>KES <?= number_format($bookingPaid,2) ?></strong></div></div>
+    <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Recorded payments</div><strong>KES <?= number_format($recordedPayments,2) ?></strong></div></div>
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Booking Balance</div><strong>KES <?= number_format($bookingBalance,2) ?></strong></div></div>
   </div>
   <div class="row g-3 mb-4">
@@ -56,12 +57,13 @@ $status = (string) ($r['status'] ?? 'pending');
     </div></div>
   </div>
   <?php if (!empty($r['notes'])): ?><div class="hs-card mb-4"><h5>Booking Notes</h5><div class="hs-pre"><?= esc($r['notes']) ?></div></div><?php endif; ?>
+  @include('reservations.payment')
   <div class="hs-card mb-4"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5 class="mb-2">Recorded Guest Payments</h5><span class="text-muted small">Total recorded: KES <?= number_format($recordedPayments,2) ?></span></div>
     <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Payment #</th><th>Date</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th></tr></thead><tbody>
       <?php foreach (($payments ?? []) as $p): ?><tr><td>#<?= (int) $p['id'] ?></td><td><?= esc($p['payment_date'] ?? '—') ?></td><td><?= esc($p['payment_method'] ?? '—') ?></td><td><?= esc(($p['reference'] ?? '') ?: '—') ?></td><td class="text-end text-nowrap">KES <?= number_format((float) ($p['amount'] ?? 0),2) ?></td></tr><?php endforeach; ?>
       <?php if (empty($payments)): ?><tr><td colspan="5" class="text-muted text-center py-3">No guest payments recorded for this reservation.</td></tr><?php endif; ?>
     </tbody></table></div>
-    <div class="small text-muted">Booking paid amount and recorded guest payments are displayed separately because they may not be synchronized.</div>
+    <div class="small text-muted">Payments above reflect the guest payment register. Invoice allocations are available on each invoice.</div>
   </div>
   <div class="hs-card mb-4"><h5>Related Invoices</h5>
     <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Invoice</th><th>Status</th><th>Issue Date</th><th class="text-end">Total</th><th>Action</th></tr></thead><tbody>

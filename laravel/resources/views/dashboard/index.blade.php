@@ -45,7 +45,7 @@
         <div class="hs-operation-grid">
             @foreach ([
                 ["Today's check-ins", $todayCheckins, 'reservations?activity=checkins', 'Arriving today', 'View arrivals'],
-                ["Today's check-outs", $todayCheckouts, 'reservations?activity=checkouts', 'Departing today, including completed', 'View departures'],
+                ["Today's check-outs", $remainingCheckouts, 'reservations?activity=checkouts_pending', $completedCheckouts.' completed / '.$todayCheckouts.' total today', 'View remaining departures'],
                 ['Pending cleanings', $pendingCleaning, 'housekeeping?activity=pending', 'All dates / Pending, assigned or in progress', 'View cleaning tasks'],
                 ['Open maintenance', $openMaintenance, 'maintenance?activity=open', 'All dates / Unresolved issues', 'View maintenance'],
             ] as [$label, $count, $path, $scope, $action])
@@ -65,13 +65,14 @@
         <div class="hs-task-grid">
             @if (haven_can_access(site_url('reservations'), 'GET'))
             <article class="hs-work-panel">
-                <div class="hs-section-head"><h3>Today's departures</h3><a href="{{ site_url('reservations?activity=checkouts') }}">View all departures &rarr;</a></div>
+                <div class="hs-section-head"><h3>Departures remaining today</h3><a href="{{ site_url('reservations?activity=checkouts_pending') }}">View remaining departures &rarr;</a></div>
                 @forelse ($departureTasks as $booking)
-                    <div class="hs-task"><strong>{{ $booking['guest_name'] }}</strong><p>{{ $booking['property_name'] ?? 'Partner apartment' }} / {{ $booking['unit_number'] ?? 'External unit' }}</p>
+                    <div class="hs-task"><strong>{{ $booking['guest_name'] }}</strong><p>{{ $booking['property_name'] ?? $booking['partner_name'] ?? 'Partner apartment' }} / {{ $booking['unit_number'] ?? 'External unit' }}</p>
                         <span class="hs-status {{ $booking['status'] === 'checked_out' ? 'clear' : 'attention' }}">{{ ucwords(str_replace('_', ' ', $booking['status'])) }}</span><br>
                         @if (haven_can_access(site_url('reservations/'.$booking['id']), 'GET'))<a href="{{ site_url('reservations/'.$booking['id']) }}">View booking &rarr;</a>@endif
                     </div>
-                @empty <p class="hs-empty">No departures today.</p> @endforelse
+                @empty <p class="hs-empty">No departures remaining today.</p> @endforelse
+                <details class="mt-3"><summary>Completed check-outs today: {{ $completedCheckouts }}</summary><p class="mt-2">Completed departures are excluded from the attention queue.</p><a href="{{ site_url('reservations?activity=checkouts_completed') }}">View completed departures &rarr;</a></details>
             </article>
             @endif
             @if (haven_can_access(site_url('housekeeping'), 'GET'))
@@ -87,7 +88,7 @@
             @endif
             @if (haven_can_access(site_url('maintenance'), 'GET'))
             <article class="hs-work-panel">
-                <div class="hs-section-head"><h3>Maintenance queue</h3><a href="{{ site_url('maintenance?activity=open') }}">View all issues &rarr;</a></div>
+                <div class="hs-section-head"><h3>Maintenance queue</h3><a href="{{ site_url('maintenance?activity=open') }}">View all issues &rarr;</a></div><p>Urgent issues first, then high, medium and low. Oldest reports first within each priority.</p>
                 @forelse ($recentMaintenance as $task)
                     <div class="hs-task"><strong>{{ $task['title'] }}</strong><p>{{ $task['property_name'] }} / {{ $task['unit_number'] }}</p><span class="hs-status attention">{{ ucfirst($task['priority']) }} priority / {{ ucwords(str_replace('_', ' ', $task['status'])) }}</span><br>
                         @if (haven_can_access(site_url('maintenance/edit/'.$task['id']), 'GET'))<a href="{{ site_url('maintenance/edit/'.$task['id']) }}">Manage issue &rarr;</a>@endif
@@ -104,7 +105,7 @@
             @foreach ([['Arrivals from today', $upcomingCheckins, 'check_in'], ['Departures after today', $upcomingDepartures, 'check_out']] as [$heading, $bookings, $dateField])
             <article class="hs-work-panel"><h3>{{ $heading }}</h3>
                 @forelse ($bookings as $booking)
-                <div class="hs-task"><strong>{{ $booking['guest_name'] }}</strong><p>{{ $booking['property_name'] ?? 'Partner apartment' }} / {{ $booking['unit_number'] ?? 'External unit' }} &middot; {{ date('d M Y', strtotime($booking[$dateField])) }}</p>
+                <div class="hs-task"><strong>{{ $booking['guest_name'] }}</strong><p>{{ $booking['property_name'] ?? $booking['partner_name'] ?? 'Partner apartment' }} / {{ $booking['unit_number'] ?? 'External unit' }} &middot; {{ date('d M Y', strtotime($booking[$dateField])) }}</p>
                     @if (haven_can_access(site_url('reservations/'.$booking['id']), 'GET'))<a href="{{ site_url('reservations/'.$booking['id']) }}">View booking &rarr;</a>@endif
                 </div>
                 @empty <p class="hs-empty">No upcoming {{ $dateField === 'check_in' ? 'arrivals' : 'departures' }}.</p> @endforelse
@@ -135,10 +136,16 @@
             </div><p class="mb-0 mt-3">Filters affect reporting below. Company income always covers the whole company; outstanding balances always cover all dates.</p>
         </form>
         @include('accounting.summary',['operatingReport'=>$operatingReport])
+        @if($companyIncomeSummary['issues'])<div class="alert alert-warning" role="status"><strong>Collection-based income is provisional.</strong> {{ $companyIncomeSummary['issues'] }} record(s) are excluded until their accounting details are reviewed.</div>@endif
+        @if($financialSummary['cancelled_count'] || $financialSummary['credits'])<div class="alert alert-warning" role="status"><strong>Guest balances need reconciliation.</strong>
+        @if($financialSummary['cancelled_count'])<p>{{ $financialSummary['cancelled_count'] }} cancelled booking(s) retain {{ app('currentTenant')->currency }} {{ number_format($financialSummary['cancelled_balance'],2) }} in positive balances. These are excluded from guest outstanding pending review of cancellation charges and adjustments. No debt has been written off.</p>@endif
+        @if($financialSummary['credits'])<p>{{ app('currentTenant')->currency }} {{ number_format($financialSummary['credits'],2) }} in recorded overpayments or credits needs review. These amounts are not automatically treated as refunds or offset against other guests.</p>@endif
+        @if(haven_can_access(site_url('payments/guests'),'GET'))<a href="{{ site_url('payments/guests') }}">Review guest payment records &rarr;</a>@endif
+        </div>@endif
         <p class="hs-scope">Showing {{ $monthLabel }} &middot; {{ $unitLabel }}</p>
         <div class="hs-finance-grid">
             @foreach ([['Collection fees + partner markup', $companyIncomeSummary['total'], 'Company-wide / '.$monthLabel, 'reports/monthly-company-income?month='.$financeMonth], ['Guest collections', $financialSummary['collections'], $unitLabel.' / '.$monthLabel, 'payments/guests'], ['Unit expenses', $financialSummary['expenses'], $unitLabel.' / '.$monthLabel, 'expenses'], ['Guest outstanding', $financialSummary['outstanding'], $unitLabel.' / All time', 'payments/guests']] as [$label, $value, $scope, $path])
-            <article class="hs-finance-card"><h3>{{ $label }}</h3><strong>KES {{ number_format((float) $value, 2) }}</strong><span class="hs-scope">{{ $scope }}</span>
+            <article class="hs-finance-card"><h3>{{ $label }}</h3>@if($label==='Collection fees + partner markup' && $companyIncomeSummary['issues'])<span class="hs-status attention">Provisional</span>@endif @if($label==='Guest outstanding' && ($financialSummary['cancelled_count'] || $financialSummary['credits']))<span class="hs-status attention">Needs reconciliation</span>@endif<strong>KES {{ number_format((float) $value, 2) }}</strong><span class="hs-scope">{{ $scope }}</span>
                 @if (haven_can_access(site_url($path), 'GET'))<a href="{{ site_url($path) }}">Open {{ strtolower($label) }} report &rarr;</a>@endif
             </article>
             @endforeach

@@ -64,6 +64,44 @@ $groups = [
     ]],
 ];
 
+$byLabel = array_column($groups, null, 'label');
+$groups = [];
+foreach (['Reservations & Guests' => 'Bookings & Guests', 'Operations' => 'Operations', 'Sales & Enquiries' => 'Sales', 'Properties' => 'Properties & Owners', 'Finance' => 'Finance', 'Communications' => 'Messages', 'Reports' => 'Reports', 'Team & Settings' => 'Settings'] as $old => $label) {
+    $group = $byLabel[$old];
+    $group['label'] = $label;
+    if ($label === 'Bookings & Guests') {
+        $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => $item['path'] !== 'quotations'));
+    }
+    if ($label === 'Sales') {
+        $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => !in_array($item['path'], ['sales/new', 'sales/connections'], true)));
+        $group['items'][] = $byLabel['Reservations & Guests']['items'][1];
+    }
+    if ($label === 'Properties & Owners') {
+        foreach ($byLabel['Investors & Owners']['items'] as $item) {
+            if ($item['path'] !== 'investor-notifications') $group['items'][] = $item;
+        }
+    }
+    if ($label === 'Settings') {
+        $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => $item['path'] !== 'owner-statement-closing'));
+        foreach (['invoices/settings' => 'Invoice settings', 'company/settings' => 'Company settings', 'company/team' => 'Team & access', 'company/subscription' => 'Subscription'] as $path => $name) {
+            $group['items'][] = ['label' => $name, 'path' => $path, 'access' => 'company_admin', 'icon' => 'settings'];
+        }
+    }
+    if ($label === 'Finance') $group['items'][] = $byLabel['Team & Settings']['items'][1];
+    $groups[] = $group;
+}
+$renamed = ['reservations' => 'Bookings', 'availability' => 'Availability calendar', 'customers' => 'Guest directory', 'staff/kyc' => 'Guest verification', 'units' => 'Apartments', 'host-agreements' => 'Management agreements', 'investors' => 'Owners & investors', 'communications/sms' => 'SMS messages & history', 'investor-notifications' => 'Email & SMS notifications', 'accounting/units' => 'Apartment accounting & rent', 'owner-remittances' => 'Owner & partner payouts', 'expenses' => 'Expenses', 'payments/cleaners' => 'Cleaner payments', 'owner-statement-closing' => 'Close accounting month'];
+$secondary = ['payments/partners', 'payments/partners/owners', 'payments/hosts', 'payments/cleaners/balances', 'payments/cleaners/statements'];
+foreach ($groups as &$group) {
+    foreach ($group['items'] as &$item) {
+        $item['keywords'] = $item['label'];
+        $item['label'] = $renamed[$item['path']] ?? $item['label'];
+        $item['secondary'] = in_array($item['path'], $secondary, true);
+    }
+    unset($item);
+}
+unset($group);
+
 $investorNavigation = $user !== null && $user->can('investor.portal') && ! $user->can('investors.view')
     && \Illuminate\Support\Facades\DB::table('investors')->where('tenant_id', app('currentTenant')->id)->where('user_id', auth()->id())->where('active', true)->exists();
 if ($investorNavigation) {
@@ -78,23 +116,11 @@ if ($investorNavigation) {
     ]]];
 }
 
-// Test the more specific path first so the Housekeeping parent does not
-// highlight when the cleaner entry page is open.
-$isActive = static function (string $path) use ($currentPath): bool {
-    if ($path === 'investor-portal') {
-        return $currentPath === $path;
-    }
-    if ($path === 'housekeeping') {
-        return $currentPath === 'housekeeping' || (
-            str_starts_with($currentPath, 'housekeeping/')
-            && !str_starts_with($currentPath, 'housekeeping/my-cleanings/')
-        );
-    }
-    return $currentPath === $path || str_starts_with($currentPath, $path . '/');
-};
-
 $canAccess = static function (array $item) use ($user): bool {
     if ($user === null) return false;
+    if (($item['access'] ?? '') === 'company_admin') {
+        return $user->inGroup('admin', 'superadmin');
+    }
     if (($item['access'] ?? '') === 'cleaner_module') {
         // Navigation visibility only. Controllers and routes still enforce access.
         return $user->inGroup('cleaner')
@@ -104,6 +130,21 @@ $canAccess = static function (array $item) use ($user): bool {
     }
     return $user->can($item['permission']);
 };
+$activePath = null;
+foreach ($groups as $group) {
+    foreach ($group['items'] as $item) {
+        $path = $item['path'];
+        if ($canAccess($item) && haven_can_access(site_url($path), 'GET') && ($currentPath === $path || str_starts_with($currentPath, $path.'/')) && strlen($path) > strlen($activePath ?? '')) $activePath = $path;
+    }
+}
+$activePath = match ($activePath) {
+    'payments/partners', 'payments/partners/owners', 'payments/hosts' => 'owner-remittances',
+    'payments/cleaners/balances', 'payments/cleaners/statements' => 'payments/cleaners',
+    default => $activePath,
+};
+if (str_starts_with($currentPath, 'receipts/')) $activePath = 'invoices';
+if ($currentPath === 'dashboard') $activePath = 'dashboard';
+$isActive = static fn (string $path): bool => $activePath === $path;
 ?>
 <style>
 .hs-nav-group { margin: 3px 9px; }
@@ -120,7 +161,7 @@ $canAccess = static function (array $item) use ($user): bool {
 .hs-nav-group > summary::after { content: '\203A'; margin-left:auto; font-size:24px; line-height:1; transition:transform .15s; }
 .hs-nav-group[open] > summary::after { transform:rotate(90deg); }
 .hs-group-chevron { display:none; }
-.hs-sidebar :is(a,button,summary):focus-visible { outline:3px solid #ffbd8b; outline-offset:2px; }
+.hs-sidebar [hidden]{display:none!important}.hs-sidebar .hs-nav-link,.hs-sidebar summary{min-height:44px}.hs-sidebar #menu-search-status:empty{display:none}.hs-sidebar :is(a,button,summary):focus-visible { outline:3px solid #ffbd8b; outline-offset:2px; }
 @media print { .hs-sidebar { display: none !important; } }
 </style>
 <aside id="company-navigation" class="hs-sidebar haven-sidebar-scroll" aria-label="Company navigation">
@@ -136,11 +177,20 @@ $canAccess = static function (array $item) use ($user): bool {
             @endif
         </div>
     </div>
-    <div class="hs-menu-heading">MAIN MENU</div>
-    <nav class="hs-nav" aria-label="Main navigation">
-        <a href="{{ url('/') }}" class="hs-nav-link">My companies</a>
+    <div class="px-3 mb-3"><a class="hs-nav-link" href="{{ url('/') }}" aria-label="Switch company">{{ app('currentTenant')->name }} <span class="small">&middot; Switch company</span></a><label for="menu-search" class="form-label mt-2">Find a page</label><input id="menu-search" type="search" class="form-control" placeholder="Booking, rent, receipt" autocomplete="off" aria-controls="sidebar-links"><p id="menu-search-status" class="small mt-2" role="status" aria-live="polite"></p></div><div class="hs-menu-heading">MAIN MENU</div>
+    @if(!$investorNavigation)
+    @php($createActions = ['reservations/create' => 'New booking', 'sales/new' => 'New enquiry', 'quotations/create' => 'New quotation', 'invoices/create' => 'New invoice', 'communications/sms' => 'Send SMS'])
+    @php($createActions = array_filter($createActions, static fn (string $path): bool => haven_can_access(site_url($path), 'GET'), ARRAY_FILTER_USE_KEY))
+    @if($createActions)
+    <details class="mx-3 mb-3"><summary class="p-2">+ Create</summary>
+        @foreach($createActions as $path => $label)<a class="hs-nav-link" href="{{ site_url($path) }}">{{ $label }}</a>@endforeach
+    </details>
+    @endif
+    @endif
+    <nav id="sidebar-links" class="hs-nav" aria-label="Main navigation">
+
         <?php if (!$investorNavigation && $user !== null && $user->can('dashboard.view')): ?>
-            <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>">
+            <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" data-menu-item data-keywords="home overview today" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>" <?= $isActive('dashboard') ? 'aria-current="page"' : '' ?>>
                 <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
             </a><?php endif; ?>
         <?php endif; ?>
@@ -154,7 +204,7 @@ $canAccess = static function (array $item) use ($user): bool {
                 }
                 if ($group['label'] === 'Finance' && $isActive('receipts')) $groupActive = true;
             ?>
-            <details class="hs-nav-group" <?= $groupActive ? 'open' : '' ?>>
+            <details class="hs-nav-group" data-group="<?= esc($group['label'], 'attr') ?>" <?= $groupActive ? 'open' : '' ?>>
                 <summary aria-label="<?= esc($group['label'], 'attr') ?> submenu">
                     <i data-lucide="<?= esc($group['icon'], 'attr') ?>"></i>
                     <span><?= esc($group['label']) ?></span>
@@ -162,7 +212,7 @@ $canAccess = static function (array $item) use ($user): bool {
                 </summary>
                 <div class="hs-subnav">
                     <?php foreach ($visible as $item): ?>
-                        <?php if (haven_can_access(site_url($item['path']), 'GET')): ?><a href="<?= site_url($item['path']) ?>" class="hs-nav-link <?= $isActive($item['path']) ? 'active' : '' ?>" <?= $isActive($item['path']) ? 'aria-current="page"' : '' ?>>
+                        <?php if (haven_can_access(site_url($item['path']), 'GET')): ?><a data-menu-item data-secondary="<?= !empty($item['secondary']) ? 'true' : 'false' ?>" <?= !empty($item['secondary']) ? 'hidden' : '' ?> data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" href="<?= site_url($item['path']) ?>" class="hs-nav-link <?= $isActive($item['path']) ? 'active' : '' ?>" <?= $isActive($item['path']) ? 'aria-current="page"' : '' ?>>
                             <i data-lucide="<?= esc($item['icon'], 'attr') ?>"></i>
                             <span><?= esc($item['label']) ?></span>
                         </a><?php endif; ?>
@@ -170,18 +220,6 @@ $canAccess = static function (array $item) use ($user): bool {
                 </div>
             </details>
         <?php endforeach; ?>
-        @if(auth()->user()?->inGroup('superadmin','admin'))
-        <details class="hs-nav-group" @if(str_starts_with($currentPath,'company/')) open @endif>
-            <summary>Company account</summary>
-            <div class="hs-subnav">
-                @foreach(['company/settings'=>'Company settings','company/team'=>'Team invitations','company/subscription'=>'Subscription'] as $path=>$label)
-                    @if(haven_can_access(site_url($path),'GET'))
-                    <a class="hs-nav-link {{ $currentPath===$path?'active':'' }}" href="{{ site_url($path) }}" @if($currentPath===$path) aria-current="page" @endif>{{ $label }}</a>
-                    @endif
-                @endforeach
-            </div>
-        </details>
-        @endif
     </nav>
     <div class="hs-sidebar-footer"><div class="mb-2"><?= esc(app("currentTenant")->name) ?></div><form method="post" action="<?= url("/logout") ?>"><?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline-light mb-3">Sign out</button></form>
         <strong>HAVEN SUITES</strong>
@@ -190,12 +228,21 @@ $canAccess = static function (array $item) use ($user): bool {
 </aside>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const groups = Array.from(document.querySelectorAll('.hs-sidebar .hs-nav-group'));
-    groups.forEach(function (group) {
-        group.addEventListener('toggle', function () {
-            if (!group.open) return;
-            groups.forEach(function (other) { if (other !== group) other.open = false; });
-        });
-    });
+ const nav=document.getElementById('company-navigation'), search=document.getElementById('menu-search');
+ const groups=Array.from(nav.querySelectorAll('.hs-nav-group')), links=Array.from(nav.querySelectorAll('[data-menu-item]'));
+ const key=@json('haven.navigation.'.app('currentTenant')->id.'.'.auth()->id());
+ let state={};try{state=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
+ let filtering=false;
+ groups.forEach(g=>{const name=g.dataset.group;if(state[name]!==undefined && !g.querySelector('[aria-current="page"]'))g.open=state[name];g.addEventListener('toggle',()=>{if(filtering)return;state[name]=g.open;try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}})});
+ const synonyms={booking:'reservation bookings',receipt:'invoices payments',rent:'accounting',kyc:'verification',remittance:'payouts',sms:'messages',cleaning:'housekeeping cleaner'};
+ let snapshot=null;
+ search.addEventListener('input',()=>{const query=search.value.trim().toLowerCase();filtering=!!query;if(query&&!snapshot)snapshot=groups.map(g=>g.open);let count=0;
+ links.forEach(a=>{const text=(a.textContent+' '+a.dataset.keywords).toLowerCase();const match=query.split(/\s+/).every(word=>[word,...(synonyms[word]||'').split(' ')].filter(Boolean).some(term=>text.includes(term)));a.hidden=query?!match:a.dataset.secondary==='true';if(query&&match)count++});
+ groups.forEach((g,i)=>{g.hidden=!!query&&!Array.from(g.querySelectorAll('[data-menu-item]')).some(a=>!a.hidden);if(query)g.open=!g.hidden;else if(snapshot)g.open=snapshot[i]});
+ document.getElementById('menu-search-status').textContent=query?(count?count+' matching pages':'No matching pages. Try booking, payment or cleaning.') : '';if(!query){snapshot=null;filtering=false}
+ });
+ search.addEventListener('keydown',e=>{if(e.key==='Escape'){search.value='';search.dispatchEvent(new Event('input'));e.stopPropagation()}});
+ let position=0;try{position=Number(sessionStorage.getItem(key+'.scroll')||0)}catch(e){}nav.scrollTop=position;
+ nav.addEventListener('scroll',()=>{try{sessionStorage.setItem(key+'.scroll',String(nav.scrollTop))}catch(e){}},{passive:true});
 });
 </script>

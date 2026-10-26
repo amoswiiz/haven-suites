@@ -110,14 +110,21 @@ $oldCleaner = (string) (old('assigned_staff_id') ?? '');
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label" for="hs-booking">Booking / Reservation Number (optional)</label>
-                    <input class="form-control" id="hs-booking" name="reservation_id" type="number" min="1" step="1" value="<?= esc(old('reservation_id') ?? '', 'attr') ?>" placeholder="e.g. 104">
-                    <div class="form-text">Only use a reservation number that belongs to the selected apartment.</div>
+                    <label class="form-label" for="hs-booking-search">Find a booking (optional)</label>
+                    <input class="form-control mb-2" id="hs-booking-search" type="search" placeholder="Search guest, apartment or stay date" aria-controls="hs-booking" autocomplete="off">
+                    <label class="form-label" for="hs-booking">Booking being cleaned</label>
+                    <select class="form-select" id="hs-booking" name="reservation_id">
+                        <option value="">No linked booking / general cleaning</option>
+                        @foreach($cleaningBookings as $booking)
+                        <option value="{{ $booking->id }}" data-unit="{{ $booking->unit_id }}" @selected((string) old('reservation_id') === (string) $booking->id)>{{ $booking->property_name }} / {{ $booking->unit_number }} | {{ $booking->guest_name }} | {{ date('d M Y',strtotime($booking->check_in)) }} to {{ date('d M Y',strtotime($booking->check_out)) }} | {{ ucwords(str_replace('_',' ',$booking->status)) }}</option>
+                        @endforeach
+                    </select>
+                    <div class="form-text" id="hs-booking-hint" role="status">Select an apartment to see its active bookings and checkouts from the last 30 days. No booking number is needed.</div>
                 </div>
                 <div class="col-12">
                     <label class="form-label" for="hs-repeat">Reason for Additional Cleaning</label>
-                    <textarea class="form-control" id="hs-repeat" name="repeat_reason" rows="2" maxlength="1000" placeholder="Required when recording another cleaning for the same apartment on the same day without a booking number."><?= esc(old('repeat_reason') ?? '') ?></textarea>
-                    <div class="form-text">Multiple cleanings on the same day are allowed. For the second or subsequent cleaning, provide a booking number or a reason.</div>
+                    <textarea class="form-control" id="hs-repeat" name="repeat_reason" rows="2" maxlength="1000" placeholder="Explain additional cleaning when no booking is selected."><?= esc(old('repeat_reason') ?? '') ?></textarea>
+                    <div class="form-text">Multiple cleanings on the same day are allowed. For another cleaning, select the booking or provide a reason.</div>
                 </div>
                 <div class="col-12">
                     <label class="form-label" for="hs-notes">Cleaning Notes (optional)</label>
@@ -148,6 +155,21 @@ $oldCleaner = (string) (old('assigned_staff_id') ?? '');
 document.addEventListener('DOMContentLoaded', function () {
     const rates = <?= json_encode($rateMap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const unit = document.getElementById('hs-unit');
+    const booking = document.getElementById('hs-booking');
+    const bookingSearch = document.getElementById('hs-booking-search');
+    const bookingOptions = Array.from(booking.options).slice(1).map(option => option.cloneNode(true));
+    function refreshBookings() {
+        const selected = booking.value;
+        const query = bookingSearch.value.trim().toLowerCase();
+        const matches = bookingOptions.filter(option => option.dataset.unit === unit.value && (!query || option.textContent.toLowerCase().includes(query) || option.value === selected));
+        while (booking.options.length > 1) booking.remove(1);
+        matches.forEach(option => booking.add(option.cloneNode(true)));
+        booking.value = matches.some(option => option.value === selected) ? selected : '';
+        booking.disabled = !unit.value;
+        bookingSearch.disabled = !unit.value;
+        document.getElementById('hs-booking-hint').textContent = !unit.value ? 'Select an apartment to see its bookings.' : matches.length ? matches.length + ' matching booking(s). Choose the guest and dates; no booking number is needed.' : 'No matching bookings. Clear the search, or leave unlinked for general cleaning.';
+    }
+    bookingSearch.addEventListener('input', refreshBookings);
     const bedroomsSelect = document.getElementById('hs-bedrooms');
     const bedroomHint = document.getElementById('hs-bedroom-hint');
     const amount = document.getElementById('hs-fee-amount');
@@ -192,9 +214,10 @@ document.addEventListener('DOMContentLoaded', function () {
         bedroomsSelect.dataset.oldValue = '';
         refreshFee();
     }
-    unit.addEventListener('change', refresh);
+    unit.addEventListener('change', () => { bookingSearch.value = ''; refresh(); refreshBookings(); });
     bedroomsSelect.addEventListener('change', refreshFee);
     refresh();
+    refreshBookings();
 });
 </script>
 @endsection

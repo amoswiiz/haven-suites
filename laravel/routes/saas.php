@@ -73,6 +73,7 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
     Route::post('{id}/details', [SalesController::class, 'details'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.details');
     Route::post('{id}/messages', [SalesController::class, 'message'])->whereNumber('id')->middleware(['permission:sales.manage', 'permission:messaging.manage'])->name('sales.message');
     Route::post('{id}/quotes', [SalesController::class, 'quote'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.quote');
+    Route::post('{id}/booking', [SalesController::class, 'linkBooking'])->whereNumber('id')->middleware(['permission:sales.manage', 'permission:reservations.manage'])->name('sales.booking');
     Route::get('{id}/quotes/{quote}', [SalesController::class, 'quotation'])->whereNumber(['id', 'quote'])->middleware('permission:sales.view')->name('sales.quotation');
     Route::post('{id}/win', [SalesController::class, 'win'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.win');
 });

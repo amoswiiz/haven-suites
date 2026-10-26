@@ -1,0 +1,1 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{{ $invoice['invoice_number'] }}</title><style>body{margin:0}.invoice-document{font-family:"DejaVu Sans",sans-serif}.no-print{display:none!important}</style></head><body>@include('invoices.document')</body></html>

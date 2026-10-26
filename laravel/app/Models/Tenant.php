@@ -15,7 +15,7 @@ class Tenant extends Model
 
     protected function casts(): array
     {
-        return ['modules' => 'array', 'active' => 'boolean', 'onboarding_completed_at' => 'datetime', 'trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime'];
+        return ['invoice_preferences' => 'array', 'modules' => 'array', 'active' => 'boolean', 'onboarding_completed_at' => 'datetime', 'trial_ends_at' => 'datetime', 'subscription_ends_at' => 'datetime'];
     }
 
     public function users()

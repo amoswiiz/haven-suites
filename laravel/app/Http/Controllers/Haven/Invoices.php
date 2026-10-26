@@ -2,6 +2,12 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Support\InvoiceDefaults;
+use App\Support\Migration\PageNotFoundException;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+use Illuminate\Http\Response;
+
 class Invoices extends BaseController
 {
     public function index()
@@ -26,6 +32,7 @@ class Invoices extends BaseController
             }
         }
         unset($row);
+
         return haven_view('invoices/index', ['invoices' => $rows, 'summary' => $summary]);
     }
 
@@ -36,14 +43,21 @@ class Invoices extends BaseController
             ->select('id, guest_name, guest_email, guest_phone, check_in, check_out, total_amount, status')
             ->where('status !=', 'cancelled')
             ->orderBy('id', 'DESC')->get()->getResultArray();
-        return haven_view('invoices/create', ['reservations' => $reservations]);
+        $selectedReservation = max(0, (int) $this->request->getGet('reservation_id'));
+        if ($selectedReservation && ! in_array($selectedReservation, array_map('intval', array_column($reservations, 'id')), true)) {
+            throw PageNotFoundException::forPageNotFound('Reservation unavailable');
+        }
+
+        $settings = InvoiceDefaults::settings($db->table('invoice_settings')->where('id', 1)->get()->getRowArray() ?? []);
+
+        return haven_view('invoices/create', ['reservations' => $reservations, 'selectedReservation' => $selectedReservation, 'settings' => $settings, 'invoiceDefaults' => InvoiceDefaults::forCompany($settings)]);
     }
 
     public function store()
     {
         $request = $this->request;
         $type = (string) $request->getPost('invoice_type');
-        if (!in_array($type, ['reservation', 'standalone'], true)) {
+        if (! in_array($type, ['reservation', 'standalone'], true)) {
             return redirect()->back()->withInput()->with('error', 'Select a valid invoice type.');
         }
 
@@ -58,20 +72,20 @@ class Invoices extends BaseController
             $reservationId = filter_var($request->getPost('reservation_id'), FILTER_VALIDATE_INT);
             $reservation = $reservationId ? $db->table('reservations')->where('id', $reservationId)
                 ->where('status !=', 'cancelled')->get()->getRowArray() : null;
-            if (!$reservation) {
+            if (! $reservation) {
                 return redirect()->back()->withInput()->with('error', 'Select an existing non-cancelled reservation.');
             }
             $existingInvoice = $db->table('invoices')->select('id')
                 ->where('reservation_id', $reservationId)->where('status !=', 'void')
                 ->orderBy('id', 'DESC')->get()->getRowArray();
             if ($existingInvoice) {
-                return redirect()->to(site_url('invoices/' . $existingInvoice['id']))
+                return redirect()->to(site_url('invoices/'.$existingInvoice['id']))
                     ->with('success', 'This reservation already has an invoice.');
             }
             $customerName = trim((string) $reservation['guest_name']);
             $customerEmail = trim((string) ($reservation['guest_email'] ?? ''));
             $customerPhone = trim((string) ($reservation['guest_phone'] ?? ''));
-            if (!empty($reservation['customer_id'])) {
+            if (! empty($reservation['customer_id'])) {
                 $submittedKyc = $db->table('customer_kyc')->select('id')
                     ->where('reservation_id', $reservationId)
                     ->where('customer_id', $reservation['customer_id'])
@@ -95,7 +109,7 @@ class Invoices extends BaseController
             }
             // Use a single accommodation line to preserve the booking total exactly,
             // including any reservation-level adjustments already in that total.
-            $items[] = ['description' => 'Accommodation — booking #' . $reservationId . ' (' . $reservation['check_in'] . ' to ' . $reservation['check_out'] . ', ' . $nights . ' nights)',
+            $items[] = ['description' => 'Accommodation — booking #'.$reservationId.' ('.$reservation['check_in'].' to '.$reservation['check_out'].', '.$nights.' nights)',
                 'quantity' => 1, 'unit_price' => $total, 'line_total' => $total];
         } else {
             if ($customerName === '') {
@@ -104,7 +118,7 @@ class Invoices extends BaseController
             $descriptions = $request->getPost('item_description');
             $quantities = $request->getPost('item_quantity');
             $prices = $request->getPost('item_price');
-            if (!is_array($descriptions) || !is_array($quantities) || !is_array($prices)
+            if (! is_array($descriptions) || ! is_array($quantities) || ! is_array($prices)
                 || count($descriptions) !== count($quantities) || count($descriptions) !== count($prices)
                 || count($descriptions) < 1 || count($descriptions) > 30) {
                 return redirect()->back()->withInput()->with('error', 'Provide between 1 and 30 valid invoice items.');
@@ -113,7 +127,7 @@ class Invoices extends BaseController
                 $description = trim((string) $description);
                 $quantity = $quantities[$index];
                 $price = $prices[$index];
-                if ($description === '' || strlen($description) > 1000 || !is_numeric($quantity) || !is_numeric($price)
+                if ($description === '' || strlen($description) > 1000 || ! is_numeric($quantity) || ! is_numeric($price)
                     || (float) $quantity <= 0 || (float) $price < 0 || (float) $quantity > 100000 || (float) $price > 100000000) {
                     return redirect()->back()->withInput()->with('error', 'Each item needs a description, positive quantity and nonnegative price.');
                 }
@@ -124,14 +138,28 @@ class Invoices extends BaseController
             }
         }
 
-        if ($customerEmail !== '' && !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+        if ($type === 'reservation') {
+            $customerName = trim((string) ($request->getPost('customer_name') ?? $customerName));
+            $customerEmail = trim((string) ($request->getPost('customer_email') ?? $customerEmail));
+            $customerPhone = trim((string) ($request->getPost('customer_phone') ?? $customerPhone));
+        }
+        $address = trim((string) $request->getPost('customer_address'));
+        $settings = InvoiceDefaults::settings($db->table('invoice_settings')->where('id', 1)->get()->getRowArray() ?? []);
+        $defaults = InvoiceDefaults::forCompany($settings);
+        $terms = request()->exists('terms') ? trim((string) $request->getPost('terms')) : $defaults['terms'];
+        $notes = request()->exists('notes') ? trim((string) $request->getPost('notes')) : $defaults['notes'];
+        if ($customerName === '' || mb_strlen($customerName) > 180 || mb_strlen($customerEmail) > 180 || mb_strlen($customerPhone) > 60
+            || mb_strlen($address) > 1000 || mb_strlen($terms) > 5000 || mb_strlen($notes) > 5000) {
+            return redirect()->back()->withInput()->with('error', 'Enter a customer name and keep billing details within the displayed limits.');
+        }
+        if ($customerEmail !== '' && ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
             return redirect()->back()->withInput()->with('error', 'Enter a valid customer email or leave it blank.');
         }
         $issueDate = (string) $request->getPost('issue_date');
         $dueDate = (string) $request->getPost('due_date');
         foreach ([$issueDate, $dueDate] as $date) {
             $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-            if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+            if (! $parsed || $parsed->format('Y-m-d') !== $date) {
                 return redirect()->back()->withInput()->with('error', 'Enter valid invoice and due dates.');
             }
         }
@@ -149,12 +177,13 @@ class Invoices extends BaseController
                 'invoice_number' => null, 'invoice_type' => $type, 'reservation_id' => $reservationId,
                 'customer_name' => $customerName, 'customer_email' => $customerEmail ?: null,
                 'customer_phone' => $customerPhone ?: null, 'issue_date' => $issueDate, 'due_date' => $dueDate,
+                'customer_address' => $address ?: null, 'terms' => $terms,
                 'currency' => 'KES', 'status' => 'draft', 'subtotal' => $subtotal,
                 'discount_amount' => 0, 'tax_amount' => 0, 'total_amount' => $subtotal,
-                'notes' => trim((string) $request->getPost('notes')) ?: null,
+                'notes' => $notes ?: null,
                 'created_by' => haven_auth()->id(), 'created_at' => $now, 'updated_at' => $now,
             ]);
-            if (!$saved) {
+            if (! $saved) {
                 throw new \RuntimeException('Could not save invoice.');
             }
             $invoiceId = $db->insertID();
@@ -163,7 +192,7 @@ class Invoices extends BaseController
                 $item['sort_order'] = $order;
                 $item['created_at'] = $now;
                 $item['updated_at'] = $now;
-                if (!$db->table('invoice_items')->insert($item)) {
+                if (! $db->table('invoice_items')->insert($item)) {
                     throw new \RuntimeException('Could not save invoice item.');
                 }
             }
@@ -173,12 +202,13 @@ class Invoices extends BaseController
             $db->transCommit();
         } catch (\Throwable $e) {
             $db->transRollback();
-            log_message('error', 'Invoice draft creation failed: ' . $e->getMessage());
+            log_message('error', 'Invoice draft creation failed: '.$e->getMessage());
+
             return redirect()->back()->withInput()->with('error', 'Invoice could not be saved. Check the application log.');
         }
-        return redirect()->to(site_url('invoices'))->with('success', 'Invoice draft #' . $invoiceId . ' saved. No invoice number or payment has been issued.');
-    }
 
+        return redirect()->to(site_url('invoices'))->with('success', 'Invoice draft #'.$invoiceId.' saved. No invoice number or payment has been issued.');
+    }
 
     /**
      * Create an invoice draft directly from a submitted KYC record.
@@ -190,7 +220,7 @@ class Invoices extends BaseController
         $db = db_connect();
         $kyc = $db->table('customer_kyc')->where('id', $kycId)
             ->where('submitted_at IS NOT NULL', null, false)->get()->getRowArray();
-        if (!$kyc || empty($kyc['reservation_id']) || empty($kyc['customer_id'])) {
+        if (! $kyc || empty($kyc['reservation_id']) || empty($kyc['customer_id'])) {
             return redirect()->to(site_url('staff/kyc'))->with('error', 'A submitted, reservation-linked KYC record is required.');
         }
 
@@ -199,7 +229,7 @@ class Invoices extends BaseController
         try {
             // Lock the reservation so simultaneous clicks cannot both create a draft.
             $reservation = $db->query('SELECT * FROM reservations WHERE id = ? FOR UPDATE', [$reservationId])->getRowArray();
-            if (!$reservation || $reservation['status'] === 'cancelled') {
+            if (! $reservation || $reservation['status'] === 'cancelled') {
                 throw new \RuntimeException('The linked reservation is unavailable or cancelled.');
             }
             if ((int) ($reservation['customer_id'] ?? 0) !== (int) $kyc['customer_id']) {
@@ -211,12 +241,13 @@ class Invoices extends BaseController
                 ->where('status !=', 'void')->orderBy('id', 'DESC')->get()->getRowArray();
             if ($existing) {
                 $db->transCommit();
-                return redirect()->to(site_url('invoices/' . $existing['id']))
+
+                return redirect()->to(site_url('invoices/'.$existing['id']))
                     ->with('success', 'This reservation already has an invoice. Opened the existing invoice.');
             }
 
             $customer = $db->table('customers')->where('id', $kyc['customer_id'])->get()->getRowArray();
-            if (!$customer || trim((string) $customer['full_name']) === '') {
+            if (! $customer || trim((string) $customer['full_name']) === '') {
                 throw new \RuntimeException('Customer details are missing.');
             }
             $checkIn = new \DateTimeImmutable($reservation['check_in']);
@@ -227,7 +258,7 @@ class Invoices extends BaseController
                 throw new \RuntimeException('Reservation dates or invoice total are invalid.');
             }
             $email = trim((string) ($customer['email'] ?? ''));
-            if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new \RuntimeException('Customer email is invalid.');
             }
 
@@ -247,19 +278,20 @@ class Invoices extends BaseController
                 'discount_amount' => 0,
                 'tax_amount' => 0,
                 'total_amount' => $total,
-                'notes' => 'Prepared from submitted KYC #' . $kycId,
+                'notes' => InvoiceDefaults::forCompany()['notes'] ?: null,
+                'terms' => InvoiceDefaults::forCompany($db->table('invoice_settings')->where('id', 1)->get()->getRowArray() ?? [])['terms'],
                 'created_by' => haven_auth()->id(),
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
-            if (!$saved) {
+            if (! $saved) {
                 throw new \RuntimeException('Could not save invoice draft.');
             }
             $invoiceId = (int) $db->insertID();
             $itemSaved = $db->table('invoice_items')->insert([
                 'invoice_id' => $invoiceId,
-                'description' => 'Accommodation — booking #' . $reservationId . ' ('
-                    . $reservation['check_in'] . ' to ' . $reservation['check_out'] . ', ' . $nights . ' nights)',
+                'description' => 'Accommodation — booking #'.$reservationId.' ('
+                    .$reservation['check_in'].' to '.$reservation['check_out'].', '.$nights.' nights)',
                 'quantity' => 1,
                 'unit_price' => $total,
                 'line_total' => $total,
@@ -267,29 +299,60 @@ class Invoices extends BaseController
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
-            if (!$itemSaved || $db->transStatus() === false) {
+            if (! $itemSaved || $db->transStatus() === false) {
                 throw new \RuntimeException('Could not save invoice line item.');
             }
             $db->transCommit();
-            return redirect()->to(site_url('invoices/' . $invoiceId))
-                ->with('success', 'Draft invoice created from KYC #' . $kycId . '. Review before issuing.');
+
+            return redirect()->to(site_url('invoices/'.$invoiceId))
+                ->with('success', 'Draft invoice created from KYC #'.$kycId.'. Review before issuing.');
         } catch (\Throwable $e) {
             $db->transRollback();
-            log_message('error', 'KYC invoice creation failed: ' . $e->getMessage());
-            return redirect()->to(site_url('staff/kyc/' . $kycId))
-                ->with('error', 'Invoice not created: ' . $e->getMessage());
+            log_message('error', 'KYC invoice creation failed: '.$e->getMessage());
+
+            return redirect()->to(site_url('staff/kyc/'.$kycId))
+                ->with('error', 'Invoice not created: '.$e->getMessage());
         }
     }
 
     public function show(int $id)
     {
+        return haven_view('invoices/show', $this->documentData($id));
+    }
+
+    public function pdf(int $id): Response
+    {
+        $data = $this->documentData($id);
+        abort_unless($data['invoice']['status'] === 'issued', 404);
+        $path = public_path('assets/images/haven-suites-logo.png');
+        $data['logoDataUri'] = app('currentTenant')->slug === 'haven' && is_file($path) ? 'data:image/png;base64,'.base64_encode(file_get_contents($path)) : '';
+        $options = new Options;
+        $options->set('isRemoteEnabled', false);
+        $options->set('isPhpEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('defaultMediaType', 'print');
+        $pdf = new Dompdf($options);
+        $pdf->setPaper('A4');
+        $pdf->loadHtml(view('invoices.pdf', $data)->render(), 'UTF-8');
+        $pdf->render();
+        if ($pdf->getCanvas()->get_page_count() > 1) {
+            $font = $pdf->getFontMetrics()->getFont('Helvetica', 'normal');
+            $pdf->getCanvas()->page_text(490, 815, '{PAGE_NUM} / {PAGE_COUNT}', $font, 8, [0.4, 0.46, 0.56]);
+        }
+        $filename = preg_replace('/[^A-Za-z0-9_-]/', '-', $data['invoice']['invoice_number']).'.pdf';
+
+        return response($pdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.$filename.'"', 'Cache-Control' => 'private, no-store']);
+    }
+
+    private function documentData(int $id): array
+    {
         $db = db_connect();
         $invoice = $db->table('invoices')->where('id', $id)->get()->getRowArray();
-        if (!$invoice) {
-            throw \App\Support\Migration\PageNotFoundException::forPageNotFound('Invoice not found.');
+        if (! $invoice) {
+            throw PageNotFoundException::forPageNotFound('Invoice not found.');
         }
         $items = $db->table('invoice_items')->where('invoice_id', $id)->orderBy('sort_order', 'ASC')->orderBy('id', 'ASC')->get()->getResultArray();
-        $settings = $db->table('invoice_settings')->where('id', 1)->get()->getRowArray() ?? [];
+        $settings = InvoiceDefaults::settings($db->table('invoice_settings')->where('id', 1)->get()->getRowArray() ?? []);
         $allocated = $db->table('invoice_payment_allocations')->selectSum('amount', 'total')->where('invoice_id', $id)->get()->getRowArray();
         $paid = (float) ($allocated['total'] ?? 0);
         // Each allocation is a separate receipt, including deposits and partial payments.
@@ -304,11 +367,15 @@ class Invoices extends BaseController
             ->select('id, full_name, primary_phone, email')
             ->orderBy('full_name', 'ASC')->get()->getResultArray();
         $linkedCustomer = null;
-        if (!empty($invoice['customer_id'])) {
+        if (! empty($invoice['customer_id'])) {
             $linkedCustomer = $db->table('customers')
                 ->where('id', (int) $invoice['customer_id'])->get()->getRowArray();
         }
-        return haven_view('invoices/show', [
+
+        $bookingSummary = ! empty($invoice['reservation_id']) ? $db->table('reservations r')->select('r.check_in, r.check_out, u.unit_number, p.name AS property_name, pa.apartment_name AS partner_name')->join('units u', 'u.id = r.unit_id', 'left')->join('properties p', 'p.id = u.property_id', 'left')->join('partner_apartments pa', 'pa.id = r.partner_apartment_id', 'left')->where('r.id', $invoice['reservation_id'])->get()->getRowArray() : null;
+
+        return [
+            'bookingSummary' => $bookingSummary,
             'customers' => $customers,
             'linkedCustomer' => $linkedCustomer,
             'invoice' => $invoice,
@@ -318,7 +385,7 @@ class Invoices extends BaseController
             'paymentHistory' => $paymentHistory,
             'balance' => max(0, round((float) $invoice['total_amount'] - $paid, 2)),
             'canManage' => haven_auth()->user()?->can('finance.manage') ?? false,
-        ]);
+        ];
     }
 
     public function issue(int $id)
@@ -328,15 +395,15 @@ class Invoices extends BaseController
         try {
             // Serialize numbering across concurrent requests by locking the settings row.
             $settings = $db->query('SELECT id, invoice_prefix, next_sequence FROM invoice_settings WHERE id = 1 FOR UPDATE')->getRowArray();
-            if (!$settings) {
+            if (! $settings) {
                 throw new \RuntimeException('Invoice settings are missing.');
             }
             $invoice = $db->query('SELECT id, status, invoice_number, total_amount, discount_amount, tax_amount, issue_date, due_date FROM invoices WHERE id = ? FOR UPDATE', [$id])->getRowArray();
-            if (!$invoice || $invoice['status'] !== 'draft' || $invoice['invoice_number'] !== null) {
+            if (! $invoice || $invoice['status'] !== 'draft' || $invoice['invoice_number'] !== null) {
                 throw new \RuntimeException('Only unnumbered draft invoices can be issued.');
             }
             $items = $db->table('invoice_items')->where('invoice_id', $id)->get()->getResultArray();
-            if (!$items || (float) $invoice['total_amount'] <= 0) {
+            if (! $items || (float) $invoice['total_amount'] <= 0) {
                 throw new \RuntimeException('An invoice must have items and a positive total before issuing.');
             }
             $sum = 0;
@@ -353,28 +420,30 @@ class Invoices extends BaseController
                 throw new \RuntimeException('Invoice numbering settings are invalid.');
             }
             $date = date('Y-m-d');
-            $number = $prefix . '-' . date('Y') . '-' . str_pad((string) $sequence, 6, '0', STR_PAD_LEFT);
+            $number = $prefix.'-'.date('Y').'-'.str_pad((string) $sequence, 6, '0', STR_PAD_LEFT);
             if (strlen($number) > 40) {
                 throw new \RuntimeException('Invoice number exceeds the allowed length.');
             }
-            if (!$db->table('invoices')->where('id', $id)->where('status', 'draft')->update([
+            if (! $db->table('invoices')->where('id', $id)->where('status', 'draft')->update([
                 'invoice_number' => $number, 'status' => 'issued', 'issue_date' => $date,
                 'issued_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
             ])) {
                 throw new \RuntimeException('Could not issue invoice.');
             }
-            if (!$db->table('invoice_settings')->where('id', 1)->update(['next_sequence' => $sequence + 1, 'updated_at' => date('Y-m-d H:i:s')])) {
+            if (! $db->table('invoice_settings')->where('id', 1)->update(['next_sequence' => $sequence + 1, 'updated_at' => date('Y-m-d H:i:s')])) {
                 throw new \RuntimeException('Could not advance invoice sequence.');
             }
             if ($db->transStatus() === false) {
                 throw new \RuntimeException('Invoice transaction failed.');
             }
             $db->transCommit();
-            return redirect()->to(site_url('invoices/' . $id))->with('success', 'Invoice ' . $number . ' issued successfully.');
+
+            return redirect()->to(site_url('invoices/'.$id))->with('success', 'Invoice '.$number.' issued successfully.');
         } catch (\Throwable $e) {
             $db->transRollback();
-            log_message('error', 'Invoice issue failed: ' . $e->getMessage());
-            return redirect()->to(site_url('invoices/' . $id))->with('error', 'Invoice could not be issued: ' . $e->getMessage());
+            log_message('error', 'Invoice issue failed: '.$e->getMessage());
+
+            return redirect()->to(site_url('invoices/'.$id))->with('error', 'Invoice could not be issued: '.$e->getMessage());
         }
     }
 
@@ -385,42 +454,42 @@ class Invoices extends BaseController
      */
     public function linkCustomer(int $id)
     {
-        if (!(haven_auth()->user()?->can('finance.manage') ?? false)) {
-            return redirect()->to(site_url('invoices/' . $id))
+        if (! (haven_auth()->user()?->can('finance.manage') ?? false)) {
+            return redirect()->to(site_url('invoices/'.$id))
                 ->with('error', 'You do not have permission to link customers.');
         }
 
         $customerId = filter_var($this->request->getPost('customer_id'), FILTER_VALIDATE_INT);
         if ($customerId === false || $customerId < 1) {
-            return redirect()->to(site_url('invoices/' . $id))
+            return redirect()->to(site_url('invoices/'.$id))
                 ->with('error', 'Please select a valid existing customer.');
         }
 
         $db = db_connect();
         $invoice = $db->table('invoices')->select('id, status, customer_id')
             ->where('id', $id)->get()->getRowArray();
-        if (!$invoice) {
-            throw \App\Support\Migration\PageNotFoundException::forPageNotFound('Invoice not found.');
+        if (! $invoice) {
+            throw PageNotFoundException::forPageNotFound('Invoice not found.');
         }
         if ($invoice['status'] === 'void') {
-            return redirect()->to(site_url('invoices/' . $id))
+            return redirect()->to(site_url('invoices/'.$id))
                 ->with('error', 'Void invoices cannot be linked to customers.');
         }
         $customer = $db->table('customers')->select('id, full_name')
             ->where('id', $customerId)->get()->getRowArray();
-        if (!$customer) {
-            return redirect()->to(site_url('invoices/' . $id))
+        if (! $customer) {
+            return redirect()->to(site_url('invoices/'.$id))
                 ->with('error', 'The selected customer no longer exists.');
         }
-        if (!$db->table('invoices')->where('id', $id)->update([
+        if (! $db->table('invoices')->where('id', $id)->update([
             'customer_id' => $customerId,
             'updated_at' => date('Y-m-d H:i:s'),
         ])) {
-            return redirect()->to(site_url('invoices/' . $id))
+            return redirect()->to(site_url('invoices/'.$id))
                 ->with('error', 'Could not link this customer.');
         }
-        return redirect()->to(site_url('invoices/' . $id))
-            ->with('success', 'Invoice linked to customer ' . $customer['full_name'] . '. Billing details remain unchanged.');
-    }
 
+        return redirect()->to(site_url('invoices/'.$id))
+            ->with('success', 'Invoice linked to customer '.$customer['full_name'].'. Billing details remain unchanged.');
+    }
 }

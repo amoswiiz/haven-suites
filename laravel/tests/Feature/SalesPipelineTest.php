@@ -39,15 +39,16 @@ class SalesPipelineTest extends TestCase
         $this->get($url)->assertOk()->assertSee('draggable="true"', false)->assertSee('id="sales-move-dialog"', false)->assertSee('data-version="1"', false);
         $this->get($url.'?view=list')->assertOk()->assertDontSee('id="sales-move-dialog"', false);
         $this->assertSame('254712345678', $lead->phone_normalized);
-        $this->get($url.'/'.$lead->id)->assertOk()->assertSee('Pipeline Guest');
+        $this->get($url.'/'.$lead->id)->assertOk()->assertSee('Pipeline Guest')->assertSee('Booking invoice')->assertDontSee('Prepare quotation');
         $this->post($url, $this->payload($user))->assertSessionHasErrors('duplicate');
         $this->assertSame(1, DB::table('sales_leads')->count());
         $this->post($url, [...$this->payload($user), 'duplicate_acknowledged' => 1])->assertSessionHasNoErrors();
         $this->assertSame(2, DB::table('sales_leads')->count());
-        $this->post($url.'/'.$lead->id.'/quotes', ['amount' => 12000, 'valid_until' => date('Y-m-d'), 'description' => 'Three nights, beach apartment. Subject to availability.'])->assertSessionHasNoErrors();
+        $this->post($url.'/'.$lead->id.'/quotes', ['amount' => 12000, 'valid_until' => date('Y-m-d'), 'description' => 'Three nights, beach apartment.'])->assertSessionHasErrors('quotation');
+        DB::table('sales_quotes')->insert(['tenant_id' => $tenant->id, 'lead_id' => $lead->id, 'amount' => 12000, 'valid_until' => date('Y-m-d'), 'description' => 'Historical quote', 'snapshot' => json_encode(['guest' => $lead->name, 'check_in' => $lead->check_in, 'check_out' => $lead->check_out, 'guests' => $lead->guests, 'currency' => 'KES']), 'created_by' => $user->id, 'created_at' => now(), 'updated_at' => now()]);
         $quote = DB::table('sales_quotes')->first();
         $this->get($url.'/'.$lead->id.'/quotes/'.$quote->id)->assertOk()->assertSee('12,000.00')->assertSee('Pipeline Guest');
-        $this->post($url.'/'.$lead->id, ['stage' => 'quotation_sent', 'assigned_to' => $user->id, 'next_action' => 'Follow up on quote', 'follow_up_at' => now()->addDay(), 'version' => 1])->assertSessionHasNoErrors();
+        $this->post($url.'/'.$lead->id, ['stage' => 'options_shared', 'assigned_to' => $user->id, 'next_action' => 'Prepare booking invoice', 'follow_up_at' => now()->addDay(), 'version' => 1])->assertSessionHasNoErrors();
         $this->post($url.'/'.$lead->id.'/messages', ['channel' => 'whatsapp', 'direction' => 'inbound', 'body' => 'Guest prefers the beach unit', 'external_id' => '254712345678', 'consent' => 1])->assertSessionHasNoErrors();
         $this->get($url.'/'.$lead->id)->assertOk()->assertSee('Guest prefers the beach unit');
         $this->post($url.'/'.$lead->id.'/details', ['name' => 'Pipeline Guest', 'phone' => '0712345678', 'guests' => 3, 'location' => 'Nyali', 'version' => 2])->assertSessionHasNoErrors();
@@ -66,6 +67,7 @@ class SalesPipelineTest extends TestCase
         $this->actingAs($outsider);
         $this->get('/t/'.$other->slug.'/sales/'.$id)->assertNotFound();
         $this->post('/t/'.$other->slug.'/sales/'.$id.'/notes', ['body' => 'Intrusion'])->assertNotFound();
+        $this->post('/t/'.$other->slug.'/sales/'.$id.'/booking', ['reservation_id' => 1, 'version' => 1])->assertNotFound();
         $this->post('/t/'.$other->slug.'/sales/'.$id.'/messages', ['body' => 'Intrusion', 'channel' => 'whatsapp', 'direction' => 'inbound'])->assertNotFound();
         $this->get('/t/'.$other->slug.'/sales')->assertOk()->assertDontSee('Pipeline Guest');
         $this->post('/t/'.$other->slug.'/sales', [...$this->payload($outsider), 'assigned_to' => $user->id])->assertSessionHasErrors('assigned_to');
@@ -99,7 +101,7 @@ class SalesPipelineTest extends TestCase
         $this->actingAs($user)->post('/t/'.$tenant->slug.'/sales', $this->payload($user));
         $id = DB::table('sales_leads')->value('id');
         $url = '/t/'.$tenant->slug.'/sales/'.$id;
-        $data = ['stage' => 'quotation_sent', 'assigned_to' => $user->id, 'next_action' => 'Follow up', 'follow_up_at' => now()->addDay(), 'version' => 1];
+        $data = ['stage' => 'invoice_issued', 'assigned_to' => $user->id, 'next_action' => 'Follow up', 'follow_up_at' => now()->addDay(), 'version' => 1];
         $this->post($url, $data)->assertSessionHasErrors('stage');
         $this->post($url, [...$data, 'stage' => 'won'])->assertSessionHasErrors('stage');
         $this->post($url, [...$data, 'stage' => 'lost'])->assertSessionHasErrors('lost_reason');
@@ -117,6 +119,7 @@ class SalesPipelineTest extends TestCase
         $this->get('/t/'.$tenant->slug.'/sales/'.$id)->assertOk();
         $this->get('/t/'.$tenant->slug.'/invoices')->assertForbidden();
         $this->post('/t/'.$tenant->slug.'/sales/'.$id.'/win', ['reservation_id' => 1, 'required_deposit' => 100])->assertForbidden();
+        $this->post('/t/'.$tenant->slug.'/sales/'.$id.'/booking', ['reservation_id' => 1, 'version' => 1])->assertForbidden();
         $this->get('/t/'.$tenant->slug.'/sales/connections')->assertOk()->assertSee('Disconnected');
     }
 
@@ -146,5 +149,21 @@ class SalesPipelineTest extends TestCase
         $url = '/t/'.$tenant->slug.'/sales';
         $this->actingAs($user)->get($url)->assertOk()->assertDontSee('sales-pipeline.js')->assertDontSee('id="sales-move-dialog"', false);
         $this->post($url.'/1', ['stage' => 'qualifying'])->assertForbidden();
+    }
+
+    public function test_legacy_quotation_stage_migrates_without_claiming_an_invoice_was_issued(): void
+    {
+        [$tenant, $user] = $this->member();
+        $this->actingAs($user)->post('/t/'.$tenant->slug.'/sales', $this->payload($user));
+        $lead = DB::table('sales_leads')->first();
+        DB::table('sales_leads')->where('id', $lead->id)->update(['stage' => 'quotation_sent']);
+        DB::table('sales_quotes')->insert(['tenant_id' => $tenant->id, 'lead_id' => $lead->id, 'amount' => 12000, 'valid_until' => date('Y-m-d'), 'description' => 'Keep historical document', 'snapshot' => '{}', 'created_by' => $user->id, 'created_at' => now(), 'updated_at' => now()]);
+        $migration = require database_path('migrations/2026_10_24_212232_replace_sales_quotation_stage_with_invoice_flow.php');
+        $migration->up();
+        $this->assertDatabaseHas('sales_leads', ['id' => $lead->id, 'stage' => 'options_shared', 'version' => 2]);
+        $this->assertDatabaseCount('sales_quotes', 1);
+        $this->assertDatabaseHas('sales_activities', ['lead_id' => $lead->id, 'type' => 'workflow_migration']);
+        $migration->up();
+        $this->assertSame(1, DB::table('sales_activities')->where('type', 'workflow_migration')->count());
     }
 }

@@ -1,0 +1,14 @@
+@extends('layouts.main')
+@section('styles')
+<style>.quotation-sheet{max-width:1000px;margin:auto;background:white;padding:32px;border:1px solid #dfe5ef;border-top:4px solid #e98d50;border-radius:12px;color:#243247}.quotation-sheet h1{color:#294780}.quotation-sheet th{background:#eef2f8}.quotation-sheet .preserve-lines{white-space:pre-wrap;overflow-wrap:anywhere}@media print{.hs-sidebar,.hs-topbar,.no-print,.hs-skip-link{display:none!important}.hs-main,.hs-content{margin:0!important;padding:0!important}.quotation-sheet{border:0;padding:0;max-width:none}@page{size:A4;margin:15mm}}</style>
+@endsection
+@section('content')
+<div class="d-flex justify-content-between flex-wrap gap-2 mb-3 no-print"><a href="{{ site_url('quotations') }}">&larr; Quotations</a><button class="btn btn-outline-primary" type="button" onclick="window.print()">Print / Save PDF</button></div>
+<article class="quotation-sheet">
+<div class="row mb-4"><div class="col-sm-7"><h2 class="h4">{{ $snapshot['business_name'] }}</h2>@foreach(['business_address','business_email','business_phone','business_website'] as $field)@if(!empty($snapshot['business'][$field]))<div>{{ $snapshot['business'][$field] }}</div>@endif @endforeach</div><div class="col-sm-5 text-sm-end"><h1 class="h3">QUOTATION</h1><strong>{{ $quotation->number }}</strong><div>Date: {{ $quotation->issue_date }}</div><div>Valid until: {{ $quotation->valid_until }}</div>@if($quotation->valid_until < date('Y-m-d'))<span class="badge bg-secondary">Expired</span>@endif</div></div>
+<h2 class="h6 text-muted">Prepared for</h2><strong>{{ $snapshot['customer_name'] }}</strong>@foreach(['customer_email','customer_phone','customer_address'] as $field)@if(!empty($snapshot[$field]))<div class="preserve-lines">{{ $snapshot[$field] }}</div>@endif @endforeach
+<div class="table-responsive mt-4"><table class="table"><thead><tr><th>Description</th><th class="text-end">Quantity</th><th class="text-end">Unit price</th><th class="text-end">Amount</th></tr></thead><tbody>@foreach($snapshot['items'] as $item)<tr><td class="preserve-lines">{{ $item['description'] }}</td><td class="text-end">{{ number_format($item['quantity'],2) }}</td><td class="text-end text-nowrap">{{ $quotation->currency }} {{ number_format($item['price'],2) }}</td><td class="text-end text-nowrap">{{ $quotation->currency }} {{ number_format($item['total_minor']/100,2) }}</td></tr>@endforeach</tbody></table></div><p class="text-end fw-bold fs-5">Total: {{ $quotation->currency }} {{ number_format($quotation->total_minor/100,2) }}</p>
+@foreach(['notes'=>'Notes','terms'=>'Terms and conditions'] as $field=>$label)@if(!empty($snapshot[$field]))<h2 class="h6 mt-4">{{ $label }}</h2><p class="preserve-lines">{{ $snapshot[$field] }}</p>@endif @endforeach
+<p class="text-muted small mt-4">This quotation is a proposal, not a confirmed reservation, invoice or proof of payment.</p>
+</article>
+@endsection

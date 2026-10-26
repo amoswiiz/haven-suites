@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\CompanyModules;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -105,7 +106,39 @@ class SalesController extends Controller
             $this->table('sales_messages')->where('lead_id', $id)->whereNull('read_at')->update(['read_at' => now()]);
         }
 
-        return view('sales.show', ['lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
+        $invoices = $lead->reservation_id && auth()->user()->can('finance.view')
+            ? DB::connection('tenant')->table('invoices')->where('reservation_id', $lead->reservation_id)->where('status', '!=', 'void')->latest('id')->get() : collect();
+
+        $eligibleInvoices = collect();
+        $searchData = request()->validate(['invoice_search' => 'nullable|string|max:150']);
+        $invoiceSearch = trim($searchData['invoice_search'] ?? '');
+        if (! $lead->reservation_id && auth()->user()->can('finance.view') && auth()->user()->can('sales.manage') && auth()->user()->can('reservations.manage')) {
+            $linkedBookings = $this->table('sales_leads')->whereNotNull('reservation_id')->where('id', '!=', $id)->pluck('reservation_id')->all();
+            $query = DB::connection('tenant')->table('invoices as i')
+                ->join('reservations as r', 'r.id', '=', 'i.reservation_id')
+                ->leftJoin('units as u', 'u.id', '=', 'r.unit_id')
+                ->leftJoin('properties as p', 'p.id', '=', 'u.property_id')
+                ->where('i.status', '!=', 'void')->where('r.status', '!=', 'cancelled')
+                ->whereRaw('LOWER(TRIM(r.guest_name)) = ?', [mb_strtolower(trim($lead->name))])
+                ->whereNotIn('r.id', $linkedBookings);
+            if ($lead->check_in) {
+                $query->where('r.check_in', $lead->check_in);
+            }
+            if ($lead->check_out) {
+                $query->where('r.check_out', $lead->check_out);
+            }
+            if ($invoiceSearch !== '') {
+                $query->where(function ($query) use ($invoiceSearch): void {
+                    $query->where('i.invoice_number', 'like', '%'.$invoiceSearch.'%')
+                        ->orWhere('i.customer_name', 'like', '%'.$invoiceSearch.'%')
+                        ->orWhere('r.guest_phone', 'like', '%'.$invoiceSearch.'%')
+                        ->orWhere('u.unit_number', 'like', '%'.$invoiceSearch.'%');
+                });
+            }
+            $eligibleInvoices = $query->select('i.id', 'i.invoice_number', 'i.customer_name', 'i.issue_date', 'i.total_amount', 'i.currency', 'i.status', 'r.id as reservation_id', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('i.id')->limit(50)->get();
+        }
+
+        return view('sales.show', ['eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse
@@ -115,8 +148,11 @@ class SalesController extends Controller
         if ($data['stage'] === 'won') {
             throw ValidationException::withMessages(['stage' => 'Use Confirm booking below to verify payment and link a reservation.']);
         }
-        if (in_array($data['stage'], ['quotation_sent', 'awaiting_deposit'], true) && ! $this->table('sales_quotes')->where('lead_id', $id)->where('valid_until', '>=', date('Y-m-d'))->exists()) {
-            throw ValidationException::withMessages(['stage' => 'Create a valid quotation before moving to this stage.']);
+        if (in_array($data['stage'], ['invoice_issued', 'awaiting_deposit'], true)) {
+            $booking = $lead->reservation_id && CompanyModules::enabled('finance') ? DB::connection('tenant')->table('reservations')->where('id', $lead->reservation_id)->where('status', '!=', 'cancelled')->first() : null;
+            if (! $booking || ! DB::connection('tenant')->table('invoices')->where('reservation_id', $booking->id)->whereIn('status', ['issued', 'partially_paid', 'paid', 'overdue'])->whereNotNull('invoice_number')->exists()) {
+                throw ValidationException::withMessages(['stage' => 'Link the booking and issue its invoice before moving to this stage. No quotation is required.']);
+            }
         }
         $version = $data['version'];
         unset($data['version']);
@@ -187,14 +223,42 @@ class SalesController extends Controller
 
     public function quote(string $tenant, int $id, Request $request): RedirectResponse
     {
-        $lead = $this->lead($id);
-        $data = $request->validate(['amount' => 'required|numeric|min:0.01|max:999999999.99', 'valid_until' => 'required|date_format:Y-m-d|after_or_equal:today', 'description' => 'required|string|max:5000']);
-        DB::transaction(function () use ($id, $lead, $data): void {
-            DB::table('sales_quotes')->insert([...$data, 'tenant_id' => app('currentTenant')->id, 'lead_id' => $id, 'snapshot' => json_encode(['guest' => $lead->name, 'check_in' => $lead->check_in, 'check_out' => $lead->check_out, 'guests' => $lead->guests, 'currency' => app('currentTenant')->currency]), 'created_by' => auth()->id(), 'created_at' => now(), 'updated_at' => now()]);
-            $this->activity($id, 'quotation', 'Quotation prepared for '.app('currentTenant')->currency.' '.$data['amount'].'. Valid until '.$data['valid_until'].'.');
-        });
+        $this->lead($id);
 
-        return back()->with('success', 'Quotation prepared. Print or save it and share it with the guest, then update the pipeline stage. No apartment has been reserved.');
+        return back()->withErrors(['quotation' => 'Booking quotations are retired. Use the booking invoice instead.']);
+    }
+
+    public function linkBooking(string $tenant, int $id, Request $request): RedirectResponse
+    {
+        $lead = $this->lead($id);
+        $data = $request->validate(['reservation_id' => 'required_without:invoice_id|nullable|integer|min:1', 'invoice_id' => 'nullable|integer|min:1', 'version' => 'required|integer']);
+        if (! empty($data['invoice_id'])) {
+            abort_unless(auth()->user()->can('finance.view'), 403);
+            $invoice = DB::connection('tenant')->table('invoices')->where('id', $data['invoice_id'])->where('status', '!=', 'void')->whereNotNull('reservation_id')->first();
+            if (! $invoice || (! empty($data['reservation_id']) && (int) $data['reservation_id'] !== (int) $invoice->reservation_id)) {
+                throw ValidationException::withMessages(['invoice_id' => 'Choose an available booking invoice in this company.']);
+            }
+            $data['reservation_id'] = (int) $invoice->reservation_id;
+        }
+        $booking = DB::connection('tenant')->table('reservations')->where('id', $data['reservation_id'])->where('status', '!=', 'cancelled')->first();
+        if (! $booking || mb_strtolower(trim($booking->guest_name)) !== mb_strtolower(trim($lead->name)) || ($lead->check_in && $lead->check_in !== $booking->check_in) || ($lead->check_out && $lead->check_out !== $booking->check_out)) {
+            throw ValidationException::withMessages(['reservation_id' => 'Choose a booking in this company with the same guest and stay dates.']);
+        }
+        if ($lead->stage === 'won' || ($lead->reservation_id && (int) $lead->reservation_id !== (int) $booking->id)) {
+            throw ValidationException::withMessages(['reservation_id' => 'This enquiry already has a booking link.']);
+        }
+        try {
+            DB::transaction(function () use ($id, $data): void {
+                if (! $this->table('sales_leads')->where('id', $id)->where('version', $data['version'])->update(['reservation_id' => $data['reservation_id'], 'version' => $data['version'] + 1, 'updated_at' => now()])) {
+                    throw ValidationException::withMessages(['version' => 'This enquiry changed. Refresh before linking the booking.']);
+                }
+                $this->activity($id, 'booking_linked', 'Linked booking #'.$data['reservation_id'].' for invoicing. No payment or confirmation was recorded.');
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            throw ValidationException::withMessages(['reservation_id' => 'This booking is already linked to another enquiry.']);
+        }
+
+        return back()->with('success', 'Booking linked. Create or open its invoice below.');
     }
 
     public function quotation(string $tenant, int $id, int $quote): View

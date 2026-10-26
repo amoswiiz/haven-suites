@@ -1,5 +1,8 @@
 <?php
+
 namespace App\Http\Controllers\Haven;
+
+use App\Support\Migration\PageNotFoundException;
 
 class Customers extends BaseController
 {
@@ -9,6 +12,7 @@ class Customers extends BaseController
         $customers = $db->table('customers AS c')
             ->select('c.id, c.full_name, c.email, c.primary_phone, c.alternative_contact, c.created_at')
             ->orderBy('c.id', 'DESC')->get()->getResultArray();
+
         return haven_view('customers/index', ['customers' => $customers]);
     }
 
@@ -26,7 +30,7 @@ class Customers extends BaseController
         if ($name === '' || mb_strlen($name) > 180 || $phone === '' || mb_strlen($phone) > 40 || mb_strlen($alternative) > 180) {
             return redirect()->back()->withInput()->with('error', 'Enter a valid full name and primary phone number.');
         }
-        if ($email !== '' && (mb_strlen($email) > 180 || !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+        if ($email !== '' && (mb_strlen($email) > 180 || ! filter_var($email, FILTER_VALIDATE_EMAIL))) {
             return redirect()->back()->withInput()->with('error', 'Enter a valid email or leave it blank.');
         }
         $db = db_connect();
@@ -39,18 +43,19 @@ class Customers extends BaseController
             'created_at' => $now,
             'updated_at' => $now,
         ]);
-        if (!$ok) {
+        if (! $ok) {
             return redirect()->back()->withInput()->with('error', 'Unable to save customer.');
         }
-        return redirect()->to(site_url('customers/' . $db->insertID()))->with('success', 'Customer created successfully.');
+
+        return redirect()->to(site_url('customers/'.$db->insertID()))->with('success', 'Customer created successfully.');
     }
 
     public function show(int $id)
     {
         $db = db_connect();
         $customer = $db->table('customers')->where('id', $id)->get()->getRowArray();
-        if (!$customer) {
-            throw \App\Support\Migration\PageNotFoundException::forPageNotFound('Customer not found');
+        if (! $customer) {
+            throw PageNotFoundException::forPageNotFound('Customer not found');
         }
 
         $kyc = $db->table('customer_kyc')
@@ -58,10 +63,13 @@ class Customers extends BaseController
             ->where('customer_id', $id)
             ->orderBy('id', 'DESC')->get()->getResultArray();
 
-        $reservations = $db->table('reservations')
-            ->select('id, check_in, check_out, guest_name, status, total_amount, booking_type, unit_id, partner_apartment_id')
-            ->where('customer_id', $id)
-            ->orderBy('id', 'DESC')->get()->getResultArray();
+        $reservations = $db->table('reservations r')
+            ->select('r.id, r.check_in, r.check_out, r.guest_name, r.status, r.total_amount, r.booking_type, r.unit_id, r.partner_apartment_id, u.unit_number, p.name AS property_name, pa.apartment_name AS partner_name, pa.building_name AS partner_building')
+            ->join('units u', 'u.id = r.unit_id', 'left')
+            ->join('properties p', 'p.id = u.property_id', 'left')
+            ->join('partner_apartments pa', 'pa.id = r.partner_apartment_id', 'left')
+            ->where('r.customer_id', $id)
+            ->orderBy('r.id', 'DESC')->get()->getResultArray();
 
         // Match invoices using the reservation relationship, not name or phone,
         // so different customers with similar details never share invoices.
@@ -71,6 +79,7 @@ class Customers extends BaseController
             $invoices = $db->table('invoices')
                 ->select('id, invoice_number, reservation_id, invoice_type, customer_name, issue_date, due_date, status, currency, total_amount')
                 ->whereIn('reservation_id', $reservationIds)
+                ->where('status !=', 'void')
                 ->orderBy('id', 'DESC')->get()->getResultArray();
         }
 

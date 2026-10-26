@@ -52,16 +52,10 @@
         </div>
     </header>
     <div class="hs-content">
-        <?php if (auth()->user()?->inGroup('superadmin','admin')): ?>
-        <nav class="d-flex flex-wrap gap-3 mb-3" aria-label="Company administration">
-            <a href="<?= route('company.settings',app('currentTenant')->slug) ?>">Company settings</a>
-            <?php if (haven_can_access(site_url('company/team'), 'GET')): ?><a href="<?= route('company.team',app('currentTenant')->slug) ?>">Team invitations</a><?php endif; ?>
-            <a href="<?= route('company.subscription',app('currentTenant')->slug) ?>">Subscription</a>
-            <?php if (app('currentTenant')->plan!=='legacy' && !app('currentTenant')->onboarding_completed_at): ?>
-            <a href="<?= route('onboarding.property',app('currentTenant')->slug) ?>">Finish setup</a>
-            <?php endif; ?>
-        </nav>
-        <?php endif; ?>
+        @if(auth()->user()?->inGroup('superadmin','admin') && app('currentTenant')->plan !== 'legacy' && !app('currentTenant')->onboarding_completed_at)
+        <p><a href="{{ route('onboarding.property', app('currentTenant')->slug) }}">Finish company setup</a></p>
+        @endif
+        @include('layouts.finance-tabs')
         <?php $sharedErrors = session('errors'); if ($sharedErrors instanceof \Illuminate\Support\ViewErrorBag && $sharedErrors->any()): ?><div class="alert alert-danger" role="alert"><ul class="mb-0"><?php foreach ($sharedErrors->all() as $error): ?><li><?= esc($error) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
         <?php if (haven_session()->getFlashdata('success')): ?>
             <div class="alert alert-success"><?= esc(haven_session()->getFlashdata('success')) ?></div>

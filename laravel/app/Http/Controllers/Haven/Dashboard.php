@@ -7,7 +7,9 @@ use App\Models\Haven\MaintenanceModel;
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\StaffModel;
 use App\Models\Haven\UnitModel;
+use App\Services\OwnerRemittanceCalculator;
 use App\Services\UnitAccounting;
+use Illuminate\Support\Facades\DB;
 
 class Dashboard extends BaseController
 {
@@ -79,38 +81,39 @@ class Dashboard extends BaseController
             'upcomingCheckins' => $reservationModel
                 ->select(
                     'reservations.*, units.unit_number, '.
-                    'properties.name AS property_name'
+                    'properties.name AS property_name, pa.apartment_name AS partner_name'
                 )
-                ->join('units', 'units.id = reservations.unit_id')
-                ->join('properties', 'properties.id = units.property_id')
+                ->join('units', 'units.id = reservations.unit_id', 'left')
+                ->join('properties', 'properties.id = units.property_id', 'left')
+                ->join('partner_apartments pa', 'pa.id = reservations.partner_apartment_id', 'left')
                 ->where('reservations.check_in >=', $today)
                 ->whereIn('reservations.status', [
                     'confirmed', 'checked_in',
                 ])
                 ->orderBy('reservations.check_in', 'ASC')
+                ->orderBy('reservations.id', 'ASC')
                 ->findAll(5),
 
-            'recentMaintenance' => $maintenanceModel
-                ->select(
-                    'maintenance.*, units.unit_number, '.
-                    'properties.name AS property_name'
-                )
-                ->join('units', 'units.id = maintenance.unit_id')
-                ->join('properties', 'properties.id = units.property_id')
-                ->whereIn('maintenance.status', [
-                    'open', 'assigned', 'in_progress', 'on_hold',
-                ])
-                ->orderBy('maintenance.id', 'DESC')
-                ->findAll(5),
+            'recentMaintenance' => DB::connection('tenant')->table('maintenance as m')
+                ->leftJoin('units as u', 'u.id', '=', 'm.unit_id')
+                ->leftJoin('properties as p', 'p.id', '=', 'u.property_id')
+                ->select('m.*', 'u.unit_number', 'p.name as property_name')
+                ->whereIn('m.status', ['open', 'assigned', 'in_progress', 'on_hold'])
+                ->orderByRaw("CASE m.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END")
+                ->orderBy('m.reported_at')->orderBy('m.id')->limit(5)->get()
+                ->map(fn (object $row): array => (array) $row)->all(),
         ];
 
         $data['pageTitle'] = 'Dashboard';
+        $data['completedCheckouts'] = $reservationModel->where('check_out', $today)->where('status', 'checked_out')->countAllResults();
+        $data['remainingCheckouts'] = $data['todayCheckouts'] - $data['completedCheckouts'];
         $data['departureTasks'] = $reservationModel
-            ->select('reservations.*, units.unit_number, properties.name AS property_name')
+            ->select('reservations.*, units.unit_number, properties.name AS property_name, pa.apartment_name AS partner_name')
             ->join('units', 'units.id = reservations.unit_id', 'left')
             ->join('properties', 'properties.id = units.property_id', 'left')
+            ->join('partner_apartments pa', 'pa.id = reservations.partner_apartment_id', 'left')
             ->where('reservations.check_out', $today)
-            ->whereIn('reservations.status', ['confirmed', 'checked_in', 'checked_out'])
+            ->whereIn('reservations.status', ['confirmed', 'checked_in'])
             ->orderBy('reservations.id', 'ASC')->findAll(5);
         $data['cleaningTasks'] = $housekeepingModel
             ->select('housekeeping.*, units.unit_number, properties.name AS property_name, staff.full_name AS assigned_name')
@@ -181,22 +184,38 @@ class Dashboard extends BaseController
 
             // Outstanding is an all-time balance for reservations in the selected units.
             $balanceQuery = $db->table('booking_financials bf')
-                ->select('bf.reservation_id, bf.guest_total, COALESCE(SUM(gp.amount), 0) AS paid', false)
+                ->select('bf.reservation_id, bf.guest_total, r.status, COALESCE(SUM(gp.amount), 0) AS paid', false)
                 ->join('reservations r', 'r.id = bf.reservation_id')
-                ->join('units u', 'u.id = r.unit_id')
+                ->join('units u', 'u.id = r.unit_id', 'left')
                 ->join('guest_payments gp', 'gp.reservation_id = bf.reservation_id', 'left')
-                ->groupBy('bf.reservation_id, bf.guest_total');
+                ->groupBy('bf.reservation_id, bf.guest_total, r.status');
             $applyUnitFilter($balanceQuery, 'u');
-            $outstanding = 0.0;
+            $outstanding = 0;
+            $cancelledBalance = 0;
+            $cancelledCount = 0;
+            $credits = 0;
+            $calculator = new OwnerRemittanceCalculator;
             foreach ($balanceQuery->get()->getResultArray() as $balanceRow) {
-                $outstanding += max(0, (float) $balanceRow['guest_total'] - (float) $balanceRow['paid']);
+                $balance = $calculator->cents($balanceRow['guest_total']) - $calculator->cents($balanceRow['paid']);
+                if ($balance < 0) {
+                    $credits += -$balance;
+                }
+                if ($balanceRow['status'] === 'cancelled' && $balance > 0) {
+                    $cancelledBalance += $balance;
+                    $cancelledCount++;
+                } elseif ($balanceRow['status'] !== 'cancelled') {
+                    $outstanding += max(0, $balance);
+                }
             }
 
             $data['financialSummary'] = [
                 'collections' => $collections($monthStart, $nextMonth),
                 'expenses' => $expenses($monthStart, $nextMonth),
                 'remittances' => (float) ($remittance['total'] ?? 0),
-                'outstanding' => $outstanding,
+                'outstanding' => $outstanding / 100,
+                'cancelled_balance' => $cancelledBalance / 100,
+                'cancelled_count' => $cancelledCount,
+                'credits' => $credits / 100,
             ];
             // Company-wide income uses the same recognition rules as the
             // Monthly Company Income report. It intentionally ignores the

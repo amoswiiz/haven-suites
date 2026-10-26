@@ -58,6 +58,13 @@ class RoleVisibilityTest extends TestCase
     public function test_invoice_payment_permission(string $role, bool $allowed): void
     {
         $this->actingAs($this->member($role));
+        if (! $allowed) {
+            $this->get('/t/roles/invoices/settings')->assertForbidden();
+            $this->post('/t/roles/invoices/settings', ['business_name' => 'Unauthorised change'])->assertForbidden();
+        }
+        if (! in_array($role, ['superadmin', 'admin', 'manager'], true)) {
+            $this->get('/t/roles/invoices/2/pdf')->assertForbidden();
+        }
         $response = $this->get('/t/roles/invoices/2/payments');
         if (! $allowed) {
             $response->assertForbidden();
@@ -82,6 +89,22 @@ class RoleVisibilityTest extends TestCase
             ->assertDontSee('href="http://127.0.0.1:8001/t/roles/customers"', false)
             ->assertDontSee('href="http://127.0.0.1:8001/t/roles/staff/kyc"', false)
             ->assertDontSee('href="http://127.0.0.1:8001/t/roles/invoices"', false);
+    }
+
+    public function test_sidebar_uses_one_active_destination_and_groups_payment_pages(): void
+    {
+        $this->actingAs($this->member('admin'));
+        $response = $this->get('/t/roles/payments/cleaners/balances')->assertOk();
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+        $this->assertSame(1, $xpath->query('//aside//a[@aria-current="page"]')->length);
+        $this->assertSame('http://127.0.0.1:8001/t/roles/payments/cleaners', $xpath->query('//aside//a[@aria-current="page"]')->item(0)->getAttribute('href'));
+        foreach (['sales/connections', 'investor-notifications'] as $path) {
+            $this->assertSame(1, $xpath->query('//aside//nav//a[@href="http://127.0.0.1:8001/t/roles/'.$path.'"]')->length);
+        }
+        $response->assertSee('Find a page')->assertSee('Bookings &amp; Guests', false)->assertSee('Guest verification')->assertSee('Close accounting month')->assertSee('Cleaner payments pages')->assertSee('Statements')->assertSee('Company settings')->assertSee('Team &amp; access', false)->assertSee('Subscription');
+        $this->get('/t/roles/sales/agents')->assertOk()->assertSee('aria-current="page"', false);
     }
 
     public function test_manager_dashboard_renders_actionable_tasks_and_accessible_reporting(): void

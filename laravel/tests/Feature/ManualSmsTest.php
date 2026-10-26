@@ -40,7 +40,7 @@ class ManualSmsTest extends TestCase
         $tenant = $this->company();
         $admin = $this->member($tenant);
         $url = '/t/'.$tenant->slug.'/communications/sms';
-        $this->actingAs($admin)->get($url)->assertOk()->assertSee('Compose SMS')->assertSee('Communications')->assertSee('Ready for manual sending');
+        $this->actingAs($admin)->get($url)->assertOk()->assertSee('Compose SMS')->assertSee('Messages')->assertSee('Ready for manual sending');
         Http::fake(['https://roycetalk.com/api/v1/sms-api/send/' => Http::response(['success' => true, 'data' => ['message_id' => 'manual-test-123']])]);
         $payload = ['phone' => '+254720602805', 'body' => 'Hello Amos, your apartment is ready.', 'send_token' => (string) Str::uuid()];
         $this->post($url, $payload)->assertRedirect($url)->assertSessionHasNoErrors();

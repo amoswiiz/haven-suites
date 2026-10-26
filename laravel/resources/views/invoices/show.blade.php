@@ -12,7 +12,7 @@
  <?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a href="<?= site_url('invoices') ?>" class="text-decoration-none">&larr; All Invoices</a><?php endif; ?>
  <div class="d-flex gap-2 flex-wrap">
   <?php if ($invoice['status'] === 'issued' && $canManage && (float)$balance > 0): ?><a class="btn btn-primary" style="background:#294780;border-color:#294780" href="#record-invoice-payment">+ Record Payment</a><?php endif; ?>
-  <?php if ($invoice['status'] === 'issued'): ?><?php if ($canManage && !empty($invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/payments'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><?php endif; ?><button class="btn btn-outline-primary" onclick="window.print()">Print / Save PDF</button><?php endif; ?>
+  <?php if ($invoice['status'] === 'issued'): ?><?php if ($canManage && !empty($invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/payments'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><?php endif; ?><a class="btn btn-primary" href="{{ site_url('invoices/'.$invoice['id'].'/pdf') }}">Download PDF</a><button class="btn btn-outline-primary" onclick="window.print()">Print</button><?php endif; ?>
   <?php if ($invoice['status'] === 'draft' && $canManage): ?>
    <?php if (haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/issue'), 'POST')): ?><form method="post" action="<?= site_url('invoices/' . (int) $invoice['id'] . '/issue') ?>" onsubmit="return confirm('Issue this invoice? It will receive an official invoice number and cannot be returned to draft.');">
     <?= csrf_field() ?><button class="btn btn-primary" style="background:#294780;border-color:#294780">Issue Invoice</button>
@@ -22,68 +22,7 @@
 </div>
 <?php if (haven_session()->getFlashdata('success')): ?><div class="alert alert-success no-print" style="max-width:1000px;margin:0 auto 16px"><?= esc(haven_session()->getFlashdata('success')) ?></div><?php endif; ?>
 <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger no-print" style="max-width:1000px;margin:0 auto 16px"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
-<div class="hs-invoice-sheet hs-invoice-accent">
- <div class="d-flex justify-content-between flex-wrap gap-3 mb-4">
-  <div>
-   <img src="<?= base_url('assets/images/haven-suites-logo.png') ?>" alt="Haven Suites — BNBs and STR Homes" class="hs-invoice-logo">
-   <?php if (!empty($settings['business_address'])): ?><div class="hs-invoice-meta"><?= esc($settings['business_address']) ?></div><?php endif; ?>
-   <div class="hs-invoice-meta"><?= esc($settings['business_email'] ?? '') ?><?= !empty($settings['business_phone']) ? ' · ' . esc($settings['business_phone']) : '' ?></div>
-   <?php if (!empty($settings['business_website'])): ?><div class="hs-invoice-meta"><?= esc($settings['business_website']) ?></div><?php endif; ?>
-  </div>
-  <div class="text-md-end"><h2 class="hs-invoice-title mb-1">INVOICE</h2><div class="fw-bold"><?= esc($invoice['invoice_number'] ?: 'DRAFT #' . $invoice['id']) ?></div>
-   <div class="hs-invoice-meta">Status: <?= esc(ucfirst($invoice['status'])) ?></div>
-   <div class="hs-invoice-meta">Date: <?= esc($invoice['issue_date'] ?: '—') ?></div><div class="hs-invoice-meta">Due: <?= esc($invoice['due_date'] ?: '—') ?></div>
-  </div>
- </div>
- <div class="row g-3 mb-4">
-  <div class="col-md-7"><div class="text-muted small text-uppercase fw-semibold">Bill to</div><div class="fw-bold"><?= esc($invoice['customer_name']) ?></div>
-   <?php if ($invoice['customer_email']): ?><div><?= esc($invoice['customer_email']) ?></div><?php endif; ?>
-   <?php if ($invoice['customer_phone']): ?><div><?= esc($invoice['customer_phone']) ?></div><?php endif; ?>
-   <?php if ($invoice['customer_address']): ?><div style="white-space:pre-line"><?= esc($invoice['customer_address']) ?></div><?php endif; ?>
-  </div>
-  <div class="col-md-5 text-md-end"><div class="text-muted small text-uppercase fw-semibold">Invoice type</div><div><?= esc(ucfirst($invoice['invoice_type'])) ?></div>
-   <?php if ($invoice['reservation_id']): ?><div>Reservation #<?= (int) $invoice['reservation_id'] ?></div><?php endif; ?>
-  </div>
- </div>
- <div class="table-responsive mb-3"><table class="table align-middle"><thead><tr><th>Description</th><th class="text-end">Qty</th><th class="text-end">Unit price</th><th class="text-end">Amount</th></tr></thead><tbody>
- <?php foreach ($items as $item): ?><tr><td style="white-space:pre-line"><?= esc($item['description']) ?></td><td class="text-end"><?= number_format((float) $item['quantity'], 2) ?></td><td class="text-end text-nowrap">KES <?= number_format((float) $item['unit_price'], 2) ?></td><td class="text-end text-nowrap">KES <?= number_format((float) $item['line_total'], 2) ?></td></tr><?php endforeach; ?>
- </tbody></table></div>
- <div class="row justify-content-end"><div class="col-md-5">
-  <div class="d-flex justify-content-between py-1"><span>Subtotal</span><strong>KES <?= number_format((float) $invoice['subtotal'], 2) ?></strong></div>
-  <?php if ((float)$invoice['discount_amount'] > 0): ?><div class="d-flex justify-content-between py-1"><span>Discount</span><span>- KES <?= number_format((float)$invoice['discount_amount'], 2) ?></span></div><?php endif; ?>
-  <?php if ((float)$invoice['tax_amount'] > 0): ?><div class="d-flex justify-content-between py-1"><span>Tax</span><span>KES <?= number_format((float)$invoice['tax_amount'], 2) ?></span></div><?php endif; ?>
-  <div class="d-flex justify-content-between border-top pt-2"><strong>Total</strong><strong class="hs-invoice-total">KES <?= number_format((float)$invoice['total_amount'], 2) ?></strong></div>
-  <div class="d-flex justify-content-between py-1"><span>Allocated payments</span><span>KES <?= number_format($paid, 2) ?></span></div>
-  <div class="d-flex justify-content-between border-top pt-2"><strong>Balance</strong><strong class="hs-invoice-total">KES <?= number_format($balance, 2) ?></strong></div>
- </div></div>
- <?php if ($invoice['status'] === 'issued'): ?>
- <div class="mt-4 pt-3 border-top">
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-   <h5 class="hs-invoice-title mb-0">Payment History</h5>
-   <?php if ($canManage && !empty($invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/payments'), 'GET')): ?><a class="btn btn-sm btn-outline-primary no-print" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><?php endif; ?>
-  </div>
-  <div class="table-responsive"><table class="table table-sm align-middle">
-   <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th><th class="text-end no-print">Receipt</th></tr></thead>
-   <tbody>
-   <?php foreach (($paymentHistory ?? []) as $payment): ?>
-    <tr>
-     <td><?= esc($payment['payment_date'] ?? '—') ?></td>
-     <td><?= esc($payment['payment_method'] ?? '—') ?></td>
-     <td><?= esc(($payment['reference'] ?? '') ?: '—') ?></td>
-     <td class="text-end text-nowrap"><?= esc($invoice['currency'] ?? 'KES') ?> <?= number_format((float) $payment['amount'], 2) ?></td>
-     <td class="text-end no-print"><?php if (haven_can_access(site_url('receipts/' . (int) $payment['id']), 'GET')): ?><a class="btn btn-sm btn-outline-primary" href="<?= site_url('receipts/' . (int) $payment['id']) ?>">View Receipt</a><?php endif; ?></td>
-    </tr>
-   <?php endforeach; ?>
-   <?php if (empty($paymentHistory)): ?><tr><td colspan="5" class="text-muted text-center py-3">No payments allocated to this invoice yet.</td></tr><?php endif; ?>
-   </tbody>
-  </table></div>
- </div>
- <?php endif; ?>
- <?php if (!empty($invoice['notes'])): ?><div class="mt-4"><strong>Notes</strong><p style="white-space:pre-line"><?= esc($invoice['notes']) ?></p></div><?php endif; ?>
- <?php $terms = $invoice['terms'] ?: ($settings['default_terms'] ?? ''); if ($terms): ?><div class="mt-3"><strong>Terms</strong><p style="white-space:pre-line"><?= esc($terms) ?></p></div><?php endif; ?>
- <?php if (!empty($settings['payment_instructions'])): ?><div class="mt-3"><strong>Payment instructions</strong><p style="white-space:pre-line"><?= esc($settings['payment_instructions']) ?></p></div><?php endif; ?>
- <?php if ($invoice['status'] === 'draft'): ?><div class="mt-4 p-2 border text-center text-muted fw-bold">DRAFT — NOT AN OFFICIAL INVOICE</div><?php endif; ?>
-</div>
+@include('invoices.document')
 
 <?php if (($invoice['status'] ?? '') !== 'void'): ?>
 <section class="hs-customer-panel no-print" aria-labelledby="hs-customer-heading">

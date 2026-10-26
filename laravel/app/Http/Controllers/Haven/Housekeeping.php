@@ -1,117 +1,75 @@
 <?php
 
-
-
 namespace App\Http\Controllers\Haven;
 
-
-
-use App\Models\Haven\HousekeepingModel;
-
-use App\Models\Haven\UnitModel;
-
-use App\Models\Haven\StaffModel;
-
-use App\Models\Haven\ReservationModel;
-
 use App\Models\Haven\CleaningRateModel;
-
+use App\Models\Haven\HousekeepingModel;
+use App\Models\Haven\ReservationModel;
+use App\Models\Haven\StaffModel;
+use App\Models\Haven\UnitModel;
+use App\Services\AccountingPeriodGuard;
+use App\Services\HousekeepingExpenseSync;
 use App\Support\Migration\PageNotFoundException;
-
-
+use Illuminate\Support\Facades\DB;
 
 class Housekeeping extends BaseController
-
 {
-
     /**
-
      * Determine whether the logged-in user is a cleaner.
-
      */
-
     private function isCleaner(): bool
-
     {
 
         $user = haven_auth()->user();
-
-
 
         return $user !== null && $user->inGroup('cleaner');
 
     }
 
-
-
     /**
-
      * Find the staff record linked to the logged-in user.
-
      */
-
     private function currentStaffId(): ?int
-
     {
 
         $user = haven_auth()->user();
 
-
-
-        if (!$user) {
+        if (! $user) {
 
             return null;
 
         }
 
-
-
-        $member = (new StaffModel())
+        $member = (new StaffModel)
 
             ->where('user_id', $user->id)
 
             ->first();
 
-
-
         return $member ? (int) $member['id'] : null;
 
     }
 
-
-
     /**
-
      * Check whether the user can manage housekeeping.
-
      */
-
     private function canManage(): bool
-
     {
 
         $user = haven_auth()->user();
 
-
-
         return $user !== null
 
-            && !$this->isCleaner()
+            && ! $this->isCleaner()
 
             && $user->can('housekeeping.manage');
 
     }
 
-
-
     /**
-
      * Return a 403 response for unauthorized actions.
-
      */
-
     private function forbidden()
-
     {
 
         return haven_service('response')
@@ -122,47 +80,35 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Display housekeeping tasks.
-
      */
-
     public function index()
-
     {
 
         $user = haven_auth()->user();
 
-
-
-        if (!$user || !$user->can('housekeeping.view')) {
+        if (! $user || ! $user->can('housekeeping.view')) {
 
             return $this->forbidden();
 
         }
 
-
-
-        $model = new HousekeepingModel();
-
-
+        $model = new HousekeepingModel;
 
         $model
 
             ->select(
 
-                'housekeeping.*, ' .
+                'housekeeping.*, '.
 
-                'units.unit_number, ' .
+                'units.unit_number, '.
 
-                'units.bedrooms AS unit_bedrooms, ' .
+                'units.bedrooms AS unit_bedrooms, '.
 
-                'properties.name AS property_name, ' .
+                'properties.name AS property_name, '.
 
-                'assigned.full_name AS assigned_staff_name, ' .
+                'assigned.full_name AS assigned_staff_name, '.
 
                 'verifier.full_name AS verified_by_name'
 
@@ -208,13 +154,9 @@ class Housekeeping extends BaseController
 
             );
 
-
-
         if ($this->isCleaner()) {
 
             $staffId = $this->currentStaffId();
-
-
 
             if ($staffId === null) {
 
@@ -232,25 +174,21 @@ class Housekeeping extends BaseController
 
             }
 
-        } elseif (!$this->canManage()) {
+        } elseif (! $this->canManage()) {
 
             return $this->forbidden();
 
         }
 
-
-
         // Validate filters before applying them to the database query.
 
         $month = trim((string) ($this->request->getGet('month') ?? ''));
 
-        if ($month !== '' && (!preg_match('/^**\d**{4}-(0[1-9]|1[0-2])$/', $month))) {
+        if ($month !== '' && (! preg_match('/^**\d**{4}-(0[1-9]|1[0-2])$/', $month))) {
 
             return $this->formError('Please select a valid month.');
 
         }
-
-
 
         $filters = ['month' => $month];
 
@@ -266,7 +204,7 @@ class Housekeeping extends BaseController
 
             }
 
-            if (!is_scalar($raw) || !ctype_digit((string) $raw) || (int) $raw < 1) {
+            if (! is_scalar($raw) || ! ctype_digit((string) $raw) || (int) $raw < 1) {
 
                 return $this->formError('Please select a valid filter.');
 
@@ -276,17 +214,15 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         if ($month !== '') {
 
-            $firstDay = $month . '-01';
+            $firstDay = $month.'-01';
 
             $nextMonth = (new \DateTimeImmutable($firstDay))->modify('+1 month')->format('Y-m-d');
 
-            $model->where('housekeeping.scheduled_at >=', $firstDay . ' 00:00:00');
+            $model->where('housekeeping.scheduled_at >=', $firstDay.' 00:00:00');
 
-            $model->where('housekeeping.scheduled_at <', $nextMonth . ' 00:00:00');
+            $model->where('housekeeping.scheduled_at <', $nextMonth.' 00:00:00');
 
         }
 
@@ -308,15 +244,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         if ($this->request->getGet('activity') === 'pending') {
             $model->whereIn('housekeeping.status', ['pending', 'assigned', 'in_progress']);
         }
 
         $tasks = $model->orderBy('housekeeping.scheduled_at', 'DESC')->findAll();
-
-
 
         return haven_view('housekeeping/index', [
 
@@ -324,7 +256,7 @@ class Housekeeping extends BaseController
 
             'isCleaner' => $this->isCleaner(),
 
-            'cleaningRates' => (new CleaningRateModel())->getRateOptions(),
+            'cleaningRates' => (new CleaningRateModel)->getRateOptions(),
 
             'filters' => $filters,
 
@@ -338,18 +270,15 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Display the task creation form.
-
      */
 
     /** Allow explicitly authorized operational roles to submit cleaning entries. */
     private function canEnterCleaning(): bool
     {
         $user = haven_auth()->user();
+
         return $user !== null && (
             $this->isCleaner()
             || $user->inGroup('superadmin', 'admin', 'manager', 'operations')
@@ -360,7 +289,7 @@ class Housekeeping extends BaseController
     /** Cleaner-only form. Route: GET housekeeping/my-cleanings/new */
     public function cleanerCreate()
     {
-        if (!$this->canEnterCleaning()) {
+        if (! $this->canEnterCleaning()) {
             return $this->forbidden();
         }
         if ($this->isCleaner() && $this->currentStaffId() === null) {
@@ -370,10 +299,21 @@ class Housekeeping extends BaseController
         }
 
         return haven_view('housekeeping/cleaner_entry', [
+            'cleaningBookings' => DB::connection('tenant')->table('reservations as r')
+                ->join('units as u', 'u.id', '=', 'r.unit_id')
+                ->leftJoin('properties as p', 'p.id', '=', 'u.property_id')
+                ->where(function ($query): void {
+                    $query->whereIn('r.status', ['pending', 'confirmed', 'checked_in'])
+                        ->orWhere(function ($query): void {
+                            $query->where('r.status', 'checked_out')->where('r.check_out', '>=', date('Y-m-d', strtotime('-30 days')));
+                        });
+                })
+                ->select('r.id', 'r.unit_id', 'r.guest_name', 'r.check_in', 'r.check_out', 'r.status', 'u.unit_number', 'p.name as property_name')
+                ->orderBy('r.check_out')->get(),
             'units' => $this->getUnits(),
-            'cleaningRates' => (new CleaningRateModel())->getRateOptions(),
+            'cleaningRates' => (new CleaningRateModel)->getRateOptions(),
             'today' => date('Y-m-d'),
-            'canManageCleanerEntry' => !$this->isCleaner(),
+            'canManageCleanerEntry' => ! $this->isCleaner(),
             'cleanerStaff' => $this->getStaff(),
         ]);
     }
@@ -381,7 +321,7 @@ class Housekeeping extends BaseController
     /** Cleaner submits a completed job; price and identity are calculated server-side. */
     public function cleanerStore()
     {
-        if (!$this->canEnterCleaning()) {
+        if (! $this->canEnterCleaning()) {
             return $this->forbidden();
         }
         $staffId = $this->currentStaffId();
@@ -390,13 +330,13 @@ class Housekeeping extends BaseController
                 'Cleaner account is not linked to a staff record. Ask an administrator to link staff.user_id to your login.'
             );
         }
-        if (!$this->isCleaner()) {
+        if (! $this->isCleaner()) {
             $selectedStaff = $this->request->getPost('assigned_staff_id');
-            if (!is_scalar($selectedStaff) || !ctype_digit((string) $selectedStaff) || (int) $selectedStaff < 1) {
+            if (! is_scalar($selectedStaff) || ! ctype_digit((string) $selectedStaff) || (int) $selectedStaff < 1) {
                 return $this->formError('Select the cleaner who performed the cleaning.');
             }
-            $staffRecord = (new StaffModel())->find((int) $selectedStaff);
-            if (!$staffRecord) {
+            $staffRecord = (new StaffModel)->find((int) $selectedStaff);
+            if (! $staffRecord) {
                 return $this->formError('The selected cleaner was not found.');
             }
             $staffId = (int) $selectedStaff;
@@ -412,20 +352,20 @@ class Housekeeping extends BaseController
         $reason = trim((string) $this->request->getPost('repeat_reason'));
         $back = site_url('housekeeping/my-cleanings/new');
 
-        if (!is_scalar($unitRaw) || !ctype_digit((string) $unitRaw) || (int) $unitRaw < 1) {
+        if (! is_scalar($unitRaw) || ! ctype_digit((string) $unitRaw) || (int) $unitRaw < 1) {
             return redirect()->to($back)->withInput()->with('error', 'Select a valid apartment.');
         }
         $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-        if (!$parsed || $parsed->format('Y-m-d') !== $date || $date > date('Y-m-d')) {
+        if (! $parsed || $parsed->format('Y-m-d') !== $date || $date > date('Y-m-d')) {
             return redirect()->to($back)->withInput()->with('error', 'Enter a valid cleaning date, not in the future.');
         }
-        if (!in_array($type, ['checkout', 'pre_checkin', 'routine', 'deep'], true)
+        if (! in_array($type, ['checkout', 'pre_checkin', 'routine', 'deep'], true)
             || mb_strlen($notes) > 5000 || mb_strlen($reason) > 1000) {
             return redirect()->to($back)->withInput()->with('error', 'Check the cleaning type and notes length.');
         }
         if ($bookingRaw !== null && $bookingRaw !== ''
-            && (!is_scalar($bookingRaw) || !ctype_digit((string) $bookingRaw) || $bookingId < 1)) {
-            return redirect()->to($back)->withInput()->with('error', 'Enter a valid booking number.');
+            && (! is_scalar($bookingRaw) || ! ctype_digit((string) $bookingRaw) || $bookingId < 1)) {
+            return redirect()->to($back)->withInput()->with('error', 'Select a valid booking from the list.');
         }
 
         $unitId = (int) $unitRaw;
@@ -433,30 +373,30 @@ class Housekeeping extends BaseController
         $db->transBegin();
         try {
             $this->lockAccountingUnits($db, [$unitId]);
-            $unit = (new UnitModel())->find($unitId);
-            if (!$unit || (int) ($unit['bedrooms'] ?? 0) < 1) {
+            $unit = (new UnitModel)->find($unitId);
+            if (! $unit || (int) ($unit['bedrooms'] ?? 0) < 1) {
                 throw new \RuntimeException('This apartment has no valid bedroom count.');
             }
             // Price the actual bedrooms cleaned, never the unit's full capacity by default.
-            if (!is_scalar($bedroomsRaw) || !ctype_digit((string) $bedroomsRaw)) {
+            if (! is_scalar($bedroomsRaw) || ! ctype_digit((string) $bedroomsRaw)) {
                 throw new \RuntimeException('Select the number of bedrooms actually cleaned.');
             }
             $bedrooms = (int) $bedroomsRaw;
             if ($bedrooms < 1 || $bedrooms > (int) $unit['bedrooms']) {
                 throw new \RuntimeException('Bedrooms cleaned must be between 1 and the apartment bedroom count.');
             }
-            $charge = (new CleaningRateModel())->getRate($bedrooms);
+            $charge = (new CleaningRateModel)->getRate($bedrooms);
             if ($charge === null) {
                 throw new \RuntimeException('No cleaning rate is configured for this apartment.');
             }
             if ($bookingId !== null) {
-                $reservation = (new ReservationModel())->find($bookingId);
-                if (!$reservation || (int) ($reservation['unit_id'] ?? 0) !== $unitId) {
-                    throw new \RuntimeException('Booking number does not belong to the selected apartment.');
+                $reservation = (new ReservationModel)->find($bookingId);
+                if (! $reservation || (int) ($reservation['unit_id'] ?? 0) !== $unitId || $reservation['status'] === 'cancelled') {
+                    throw new \RuntimeException('Select a non-cancelled booking that belongs to this apartment.');
                 }
             }
-            $start = $date . ' 00:00:00';
-            $end = (new \DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d') . ' 00:00:00';
+            $start = $date.' 00:00:00';
+            $end = (new \DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d').' 00:00:00';
             $existing = $db->table('housekeeping')
                 ->where('unit_id', $unitId)
                 ->where('assigned_staff_id', $staffId)
@@ -467,19 +407,19 @@ class Housekeeping extends BaseController
             if ($existing > 0 && $bookingId === null && $reason === '') {
                 throw new \RuntimeException('For a second cleaning of this apartment on the same day, provide a booking number or reason.');
             }
-            $completedAt = $date . ' 12:00:00';
+            $completedAt = $date.' 12:00:00';
             $this->guardCleaningChange($db, null, [
                 'unit_id' => $unitId, 'completed_at' => $completedAt,
             ]);
             $combinedNotes = $notes;
             if ($reason !== '') {
-                $combinedNotes = 'Additional cleaning reason: ' . $reason
-                    . ($notes !== '' ? "\n" . $notes : '');
+                $combinedNotes = 'Additional cleaning reason: '.$reason
+                    .($notes !== '' ? "\n".$notes : '');
             }
             if (mb_strlen($combinedNotes) > 5000) {
                 throw new \RuntimeException('Combined notes exceed 5000 characters.');
             }
-            $model = new HousekeepingModel();
+            $model = new HousekeepingModel;
             $taskId = $model->insert([
                 'unit_id' => $unitId,
                 'reservation_id' => $bookingId,
@@ -495,34 +435,33 @@ class Housekeeping extends BaseController
                 'completed_at' => $completedAt,
                 'verified_at' => null,
             ], true);
-            if (!$taskId) {
+            if (! $taskId) {
                 throw new \RuntimeException(implode(' ', $model->errors()) ?: 'Unable to record cleaning.');
             }
-            (new \App\Services\HousekeepingExpenseSync())->syncTask((int) $taskId);
+            (new HousekeepingExpenseSync)->syncTask((int) $taskId);
             if ($db->transStatus() === false) {
                 throw new \RuntimeException('Unable to save cleaning transaction.');
             }
             $db->transCommit();
+
             return redirect()->to(site_url('housekeeping/my-cleanings/new'))
-                ->with('success', 'Cleaning submitted for management verification. Fee: KES ' . number_format((float) $charge, 2));
+                ->with('success', 'Cleaning submitted for management verification. Fee: KES '.number_format((float) $charge, 2));
         } catch (\Throwable $e) {
             $db->transRollback();
             log_message('error', 'Cleaner submission failed: {error}', ['error' => $e->getMessage()]);
+
             return redirect()->to($back)->withInput()->with('error', $e->getMessage());
         }
     }
 
     public function create()
-
     {
 
-        if (!$this->canManage()) {
+        if (! $this->canManage()) {
 
             return $this->forbidden();
 
         }
-
-
 
         return haven_view('housekeeping/form', [
 
@@ -534,7 +473,7 @@ class Housekeeping extends BaseController
 
             'reservations' => $this->getReservations(),
 
-            'cleaningRates' => (new CleaningRateModel())
+            'cleaningRates' => (new CleaningRateModel)
 
                 ->getRateOptions(),
 
@@ -542,65 +481,44 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Create a new housekeeping task.
-
      */
-
     public function store()
-
     {
 
-        if (!$this->canManage()) {
+        if (! $this->canManage()) {
 
             return $this->forbidden();
 
         }
-
-
 
         return $this->saveTask(null);
 
     }
 
-
-
     /**
-
      * Display the task editing form.
-
      */
-
     public function edit($id)
-
     {
 
-        if (!$this->canManage()) {
+        if (! $this->canManage()) {
 
             return $this->forbidden();
 
         }
 
+        $task = (new HousekeepingModel)->find($id);
 
-
-        $task = (new HousekeepingModel())->find($id);
-
-
-
-        if (!$task) {
+        if (! $task) {
 
             throw PageNotFoundException::forPageNotFound(
-
                 'Housekeeping task not found.'
 
             );
 
         }
-
-
 
         return haven_view('housekeeping/form', [
 
@@ -612,7 +530,7 @@ class Housekeeping extends BaseController
 
             'reservations' => $this->getReservations(),
 
-            'cleaningRates' => (new CleaningRateModel())
+            'cleaningRates' => (new CleaningRateModel)
 
                 ->getRateOptions(),
 
@@ -620,57 +538,37 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Update an existing task.
-
      */
-
     public function update($id)
-
     {
 
-        if (!$this->canManage()) {
+        if (! $this->canManage()) {
 
             return $this->forbidden();
 
         }
-
-
 
         return $this->saveTask((int) $id);
 
     }
 
-
-
     /**
-
      * Allow an assigned cleaner to update progress and cleaning scope.
-
      */
-
     public function updateProgress($id)
-
     {
 
         $user = haven_auth()->user();
 
-
-
-        if (!$user || !$this->isCleaner()) {
+        if (! $user || ! $this->isCleaner()) {
 
             return $this->forbidden();
 
         }
 
-
-
         $staffId = $this->currentStaffId();
-
-
 
         if ($staffId === null) {
 
@@ -678,19 +576,13 @@ class Housekeeping extends BaseController
 
         }
 
-
-
-        $model = new HousekeepingModel();
-
-
+        $model = new HousekeepingModel;
 
         $task = $model->find((int) $id);
 
-
-
         if (
 
-            !$task ||
+            ! $task ||
 
             (int) $task['assigned_staff_id'] !== $staffId
 
@@ -700,11 +592,7 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $status = (string) $this->request->getPost('status');
-
-
 
         $allowedTransitions = [
 
@@ -722,9 +610,7 @@ class Housekeeping extends BaseController
 
         ];
 
-
-
-        if (!in_array(
+        if (! in_array(
 
             $status,
 
@@ -742,15 +628,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $notes = trim(
 
             (string) $this->request->getPost('notes')
 
         );
-
-
 
         if (mb_strlen($notes) > 5000) {
 
@@ -762,15 +644,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
-        $unit = (new UnitModel())
+        $unit = (new UnitModel)
 
             ->find((int) $task['unit_id']);
 
-
-
-        if (!$unit) {
+        if (! $unit) {
 
             return $this->formError(
 
@@ -780,19 +658,15 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $bedroomsInput = $this->request
 
             ->getPost('bedrooms_cleaned');
 
-
-
         if (
 
-            !is_scalar($bedroomsInput) ||
+            ! is_scalar($bedroomsInput) ||
 
-            !ctype_digit((string) $bedroomsInput)
+            ! ctype_digit((string) $bedroomsInput)
 
         ) {
 
@@ -804,11 +678,7 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $bedroomsCleaned = (int) $bedroomsInput;
-
-
 
         if (
 
@@ -826,19 +696,13 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $existingBedrooms = isset($task['bedrooms_cleaned'])
 
             ? (int) $task['bedrooms_cleaned']
 
             : null;
 
-
-
         $existingCharge = $task['cleaning_charge'] ?? null;
-
-
 
         /*
 
@@ -862,11 +726,9 @@ class Housekeeping extends BaseController
 
         } else {
 
-            $charge = (new CleaningRateModel())
+            $charge = (new CleaningRateModel)
 
                 ->getRate($bedroomsCleaned);
-
-
 
             if ($charge === null) {
 
@@ -878,13 +740,9 @@ class Housekeeping extends BaseController
 
             }
 
-
-
             $adjustedBy = null;
 
         }
-
-
 
         $data = [
 
@@ -900,15 +758,11 @@ class Housekeeping extends BaseController
 
         ];
 
-
-
         if ($status === 'completed') {
 
             $data['completed_at'] = date('Y-m-d H:i:s');
 
         }
-
-
 
         $db = db_connect();
 
@@ -916,31 +770,31 @@ class Housekeeping extends BaseController
 
         try {
 
-            $unitId = (int)$task['unit_id'];
+            $unitId = (int) $task['unit_id'];
 
             $this->lockAccountingUnits($db, [$unitId]);
 
-            $fresh = $db->query('SELECT * FROM housekeeping WHERE id = ? FOR UPDATE', [(int)$id])->getRowArray();
+            $fresh = $db->query('SELECT * FROM housekeeping WHERE id = ? FOR UPDATE', [(int) $id])->getRowArray();
 
-            if (!$fresh || (int)$fresh['assigned_staff_id'] !== $staffId
+            if (! $fresh || (int) $fresh['assigned_staff_id'] !== $staffId
 
                 || $fresh['status'] !== $task['status']) {
 
                 throw new \RuntimeException('Task changed. Refresh and try again.');
-
             }
 
             $this->guardCleaningChange($db, $fresh, $data);
 
-            if (!$model->update((int)$id, $data)) {
+            if (! $model->update((int) $id, $data)) {
 
                 throw new \RuntimeException(implode(' ', $model->errors()) ?: 'Unable to update progress.');
-
             }
 
-            (new \App\Services\HousekeepingExpenseSync())->syncTask((int)$id);
+            (new HousekeepingExpenseSync)->syncTask((int) $id);
 
-            if ($db->transStatus() === false) throw new \RuntimeException('Database transaction failed.');
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Database transaction failed.');
+            }
 
             $db->transCommit();
 
@@ -952,7 +806,7 @@ class Housekeeping extends BaseController
 
             $db->transRollback();
 
-            log_message('error', 'Cleaning progress failed: {error}', ['error'=>$e->getMessage()]);
+            log_message('error', 'Cleaning progress failed: {error}', ['error' => $e->getMessage()]);
 
             return $this->formError($e->getMessage());
 
@@ -960,44 +814,31 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Handle task creation and management updates.
-
      */
-
     private function saveTask(?int $id)
-
     {
 
-        $model = new HousekeepingModel();
+        $model = new HousekeepingModel;
 
-        $unitModel = new UnitModel();
+        $unitModel = new UnitModel;
 
-        $staffModel = new StaffModel();
+        $staffModel = new StaffModel;
 
-        $reservationModel = new ReservationModel();
+        $reservationModel = new ReservationModel;
 
-        $rateModel = new CleaningRateModel();
-
-
+        $rateModel = new CleaningRateModel;
 
         $existing = null;
-
-
 
         if ($id !== null) {
 
             $existing = $model->find($id);
 
-
-
-            if (!$existing) {
+            if (! $existing) {
 
                 throw PageNotFoundException::forPageNotFound(
-
                     'Housekeeping task not found.'
 
                 );
@@ -1006,15 +847,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $unitId = (int) $this->request->getPost('unit_id');
 
         $unit = $unitModel->find($unitId);
 
-
-
-        if (!$unit) {
+        if (! $unit) {
 
             return $this->formError(
 
@@ -1024,13 +861,9 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $reservationInput = $this->request
 
             ->getPost('reservation_id');
-
-
 
         $reservationId = (
 
@@ -1040,17 +873,13 @@ class Housekeeping extends BaseController
 
         ) ? (int) $reservationInput : null;
 
-
-
         if ($reservationId !== null) {
 
             $reservation = $reservationModel->find($reservationId);
 
-
-
             if (
 
-                !$reservation ||
+                ! $reservation ||
 
                 (int) $reservation['unit_id'] !== $unitId
 
@@ -1066,13 +895,9 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $assignedInput = $this->request
 
             ->getPost('assigned_staff_id');
-
-
 
         $assignedStaffId = (
 
@@ -1082,13 +907,11 @@ class Housekeeping extends BaseController
 
         ) ? (int) $assignedInput : null;
 
-
-
         if (
 
             $assignedStaffId !== null &&
 
-            !$staffModel->find($assignedStaffId)
+            ! $staffModel->find($assignedStaffId)
 
         ) {
 
@@ -1100,15 +923,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $cleaningType = (string) $this->request
 
             ->getPost('cleaning_type');
 
-
-
-        if (!in_array($cleaningType, [
+        if (! in_array($cleaningType, [
 
             'checkout',
 
@@ -1128,15 +947,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $status = (string) $this->request
 
             ->getPost('status');
 
-
-
-        if (!in_array($status, [
+        if (! in_array($status, [
 
             'pending',
 
@@ -1160,15 +975,11 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $scheduledInput = trim(
 
             (string) $this->request->getPost('scheduled_at')
 
         );
-
-
 
         $scheduled = \DateTimeImmutable::createFromFormat(
 
@@ -1178,11 +989,9 @@ class Housekeeping extends BaseController
 
         );
 
-
-
         if (
 
-            !$scheduled ||
+            ! $scheduled ||
 
             $scheduled->format('Y-m-d\TH:i') !== $scheduledInput
 
@@ -1195,8 +1004,6 @@ class Housekeeping extends BaseController
             );
 
         }
-
-
 
         /*
 
@@ -1212,13 +1019,9 @@ class Housekeeping extends BaseController
 
             ->getPost('bedrooms_cleaned');
 
-
-
         if ($bedroomsInput === null || $bedroomsInput === '') {
 
             $bedroomsCleaned = $existing['bedrooms_cleaned'] ?? null;
-
-
 
             if ($bedroomsCleaned !== null) {
 
@@ -1230,9 +1033,9 @@ class Housekeeping extends BaseController
 
             if (
 
-                !is_scalar($bedroomsInput) ||
+                ! is_scalar($bedroomsInput) ||
 
-                !ctype_digit((string) $bedroomsInput)
+                ! ctype_digit((string) $bedroomsInput)
 
             ) {
 
@@ -1244,13 +1047,9 @@ class Housekeeping extends BaseController
 
             }
 
-
-
             $bedroomsCleaned = (int) $bedroomsInput;
 
         }
-
-
 
         if ($bedroomsCleaned !== null) {
 
@@ -1272,8 +1071,6 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         /*
 
          * Determine cleaning charge.
@@ -1284,8 +1081,6 @@ class Housekeeping extends BaseController
 
         $adjustedBy = null;
 
-
-
         if ($bedroomsCleaned !== null) {
 
             $existingBedrooms = isset($existing['bedrooms_cleaned'])
@@ -1293,8 +1088,6 @@ class Housekeeping extends BaseController
                 ? (int) $existing['bedrooms_cleaned']
 
                 : null;
-
-
 
             if (
 
@@ -1314,8 +1107,6 @@ class Housekeeping extends BaseController
 
                 $charge = $rateModel->getRate($bedroomsCleaned);
 
-
-
                 if ($charge === null) {
 
                     return $this->formError(
@@ -1328,8 +1119,6 @@ class Housekeeping extends BaseController
 
             }
 
-
-
             /*
 
              * Managers can explicitly override an individual charge.
@@ -1339,8 +1128,6 @@ class Housekeeping extends BaseController
             $overrideInput = $this->request
 
                 ->getPost('cleaning_charge_override');
-
-
 
             if (
 
@@ -1352,9 +1139,9 @@ class Housekeeping extends BaseController
 
                 if (
 
-                    !is_scalar($overrideInput) ||
+                    ! is_scalar($overrideInput) ||
 
-                    !is_numeric($overrideInput) ||
+                    ! is_numeric($overrideInput) ||
 
                     (float) $overrideInput < 0
 
@@ -1368,11 +1155,7 @@ class Housekeeping extends BaseController
 
                 }
 
-
-
                 $currentStaffId = $this->currentStaffId();
-
-
 
                 if ($currentStaffId === null) {
 
@@ -1384,8 +1167,6 @@ class Housekeeping extends BaseController
 
                 }
 
-
-
                 $charge = round((float) $overrideInput, 2);
 
                 $adjustedBy = $currentStaffId;
@@ -1394,19 +1175,15 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         $completedAt = $existing['completed_at'] ?? null;
 
         $verifiedAt = $existing['verified_at'] ?? null;
 
         $verifiedByStaffId = $existing['verified_by_staff_id'] ?? null;
 
-
-
         if (in_array($status, ['completed', 'verified'], true)) {
 
-            if (!$completedAt) {
+            if (! $completedAt) {
 
                 $completedAt = date('Y-m-d H:i:s');
 
@@ -1418,8 +1195,6 @@ class Housekeeping extends BaseController
 
         }
 
-
-
         /*
 
          * Verification requires explicit permission.
@@ -1430,9 +1205,7 @@ class Housekeeping extends BaseController
 
             $user = haven_auth()->user();
 
-
-
-            if (!$user || !$user->can('housekeeping.verify')) {
+            if (! $user || ! $user->can('housekeeping.verify')) {
 
                 return $this->formError(
 
@@ -1441,8 +1214,6 @@ class Housekeeping extends BaseController
                 );
 
             }
-
-
 
             if (
 
@@ -1460,11 +1231,7 @@ class Housekeeping extends BaseController
 
             }
 
-
-
             $currentStaffId = $this->currentStaffId();
-
-
 
             if ($currentStaffId === null) {
 
@@ -1476,8 +1243,6 @@ class Housekeeping extends BaseController
 
             }
 
-
-
             if ($assignedStaffId === $currentStaffId) {
 
                 return $this->formError(
@@ -1487,8 +1252,6 @@ class Housekeeping extends BaseController
                 );
 
             }
-
-
 
             $verifiedByStaffId = $currentStaffId;
 
@@ -1509,8 +1272,6 @@ class Housekeeping extends BaseController
             );
 
         }
-
-
 
         $data = [
 
@@ -1546,8 +1307,6 @@ class Housekeeping extends BaseController
 
         ];
 
-
-
         $db = db_connect();
 
         $db->transBegin();
@@ -1556,7 +1315,9 @@ class Housekeeping extends BaseController
 
             $affectedUnits = [$unitId];
 
-            if ($existing !== null) $affectedUnits[] = (int)$existing['unit_id'];
+            if ($existing !== null) {
+                $affectedUnits[] = (int) $existing['unit_id'];
+            }
 
             $this->lockAccountingUnits($db, $affectedUnits);
 
@@ -1564,12 +1325,13 @@ class Housekeeping extends BaseController
 
                 $fresh = $db->query('SELECT * FROM housekeeping WHERE id = ? FOR UPDATE', [$id])->getRowArray();
 
-                if (!$fresh) throw new \RuntimeException('Task not found.');
+                if (! $fresh) {
+                    throw new \RuntimeException('Task not found.');
+                }
 
                 if ($fresh['updated_at'] !== $existing['updated_at']) {
 
                     throw new \RuntimeException('Task changed. Refresh and try again.');
-
                 }
 
                 $existing = $fresh;
@@ -1583,14 +1345,15 @@ class Housekeeping extends BaseController
             if ($saved === false) {
 
                 throw new \RuntimeException(implode(' ', $model->errors()) ?: 'Unable to save housekeeping task.');
-
             }
 
-            $taskId = $id ?? (int)$model->getInsertID();
+            $taskId = $id ?? (int) $model->getInsertID();
 
-            (new \App\Services\HousekeepingExpenseSync())->syncTask($taskId);
+            (new HousekeepingExpenseSync)->syncTask($taskId);
 
-            if ($db->transStatus() === false) throw new \RuntimeException('Database transaction failed.');
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Database transaction failed.');
+            }
 
             $db->transCommit();
 
@@ -1602,7 +1365,7 @@ class Housekeeping extends BaseController
 
             $db->transRollback();
 
-            log_message('error', 'Housekeeping save failed: {error}', ['error'=>$e->getMessage()]);
+            log_message('error', 'Housekeeping save failed: {error}', ['error' => $e->getMessage()]);
 
             return $this->formError($e->getMessage());
 
@@ -1610,16 +1373,13 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /** Serialize financial changes with statement approval (unit-row locks). */
-
 
     /** Verify one or more completed jobs from the earnings dashboard. */
     public function verifyFromEarnings()
     {
         $user = haven_auth()->user();
-        if (!$user || $this->isCleaner() || !$user->can('housekeeping.verify') || !$this->canManage()) {
+        if (! $user || $this->isCleaner() || ! $user->can('housekeeping.verify') || ! $this->canManage()) {
             return redirect()->to(site_url('dashboard'))->with('error', 'You are not authorized to verify cleaning jobs.');
         }
         $staffId = $this->currentStaffId();
@@ -1627,15 +1387,15 @@ class Housekeeping extends BaseController
             return redirect()->back()->with('error', 'Your login must be linked to a staff record before verification.');
         }
         $rawIds = $this->request->getPost('job_ids');
-        if (!is_array($rawIds) || !$rawIds || count($rawIds) > 100) {
+        if (! is_array($rawIds) || ! $rawIds || count($rawIds) > 100) {
             return redirect()->back()->with('error', 'Select between 1 and 100 cleaning jobs to verify.');
         }
         $ids = [];
         foreach ($rawIds as $rawId) {
-            if (!is_scalar($rawId) || !ctype_digit((string)$rawId) || (int)$rawId < 1) {
+            if (! is_scalar($rawId) || ! ctype_digit((string) $rawId) || (int) $rawId < 1) {
                 return redirect()->back()->with('error', 'Invalid cleaning job selection.');
             }
-            $ids[] = (int)$rawId;
+            $ids[] = (int) $rawId;
         }
         $ids = array_values(array_unique($ids));
         sort($ids, SORT_NUMERIC);
@@ -1648,13 +1408,13 @@ class Housekeeping extends BaseController
                 throw new \RuntimeException('A selected cleaning job no longer exists. Refresh and try again.');
             }
             $this->lockAccountingUnits($db, array_column($preflight, 'unit_id'));
-            $model = new HousekeepingModel();
+            $model = new HousekeepingModel;
             foreach ($ids as $id) {
                 $job = $db->query('SELECT * FROM housekeeping WHERE id = ? FOR UPDATE', [$id])->getRowArray();
-                if (!$job || $job['status'] !== 'completed' || empty($job['completed_at'])) {
+                if (! $job || $job['status'] !== 'completed' || empty($job['completed_at'])) {
                     throw new \RuntimeException('A selected job is not awaiting verification. Refresh and try again.');
                 }
-                if ((int)($job['assigned_staff_id'] ?? 0) === $staffId) {
+                if ((int) ($job['assigned_staff_id'] ?? 0) === $staffId) {
                     throw new \RuntimeException('You cannot verify your own cleaning job.');
                 }
                 if (empty($job['assigned_staff_id']) || empty($job['bedrooms_cleaned']) || $job['cleaning_charge'] === null) {
@@ -1665,29 +1425,30 @@ class Housekeeping extends BaseController
                     'verified_by_staff_id' => $staffId,
                     'verified_at' => date('Y-m-d H:i:s'),
                 ];
-                $this->guardCleaningChange($db, $job, $data + ['unit_id' => (int)$job['unit_id'], 'completed_at' => $job['completed_at']]);
-                if (!$model->update($id, $data)) {
+                $this->guardCleaningChange($db, $job, $data + ['unit_id' => (int) $job['unit_id'], 'completed_at' => $job['completed_at']]);
+                if (! $model->update($id, $data)) {
                     throw new \RuntimeException(implode(' ', $model->errors()) ?: 'Could not verify cleaning job.');
                 }
-                (new \App\Services\HousekeepingExpenseSync())->syncTask($id);
+                (new HousekeepingExpenseSync)->syncTask($id);
             }
             if ($db->transStatus() === false) {
                 throw new \RuntimeException('Database transaction failed.');
             }
             $db->transCommit();
-            return redirect()->to(site_url('payments/cleaners/earnings') . '?' . http_build_query([
+
+            return redirect()->to(site_url('payments/cleaners/earnings').'?'.http_build_query([
                 'month' => $this->request->getPost('month') ?: date('Y-m'),
                 'staff_id' => $this->request->getPost('staff_id') ?: '',
-            ]))->with('success', count($ids) . ' cleaning job(s) verified successfully.');
+            ]))->with('success', count($ids).' cleaning job(s) verified successfully.');
         } catch (\Throwable $exception) {
             $db->transRollback();
             log_message('error', 'Cleaner verification failed: {error}', ['error' => $exception->getMessage()]);
+
             return redirect()->back()->with('error', $exception->getMessage());
         }
     }
 
     private function lockAccountingUnits($db, array $unitIds): void
-
     {
 
         $unitIds = array_values(array_unique(array_map('intval', $unitIds)));
@@ -1696,51 +1457,42 @@ class Housekeeping extends BaseController
 
         foreach ($unitIds as $unitId) {
 
-            if (!$db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
+            if (! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
 
                 throw new \RuntimeException('Housekeeping unit not found.');
-
             }
 
         }
 
     }
 
-
-
     /** Protect the month of an existing or newly completed cleaning expense. */
-
     private function guardCleaningChange($db, ?array $old, array $new): void
-
     {
 
-        $guard = new \App\Services\AccountingPeriodGuard($db);
+        $guard = new AccountingPeriodGuard($db);
 
-        if ($old !== null && !empty($old['completed_at'])) {
+        if ($old !== null && ! empty($old['completed_at'])) {
 
-            $guard->assertOpen((int)$old['unit_id'], substr((string)$old['completed_at'], 0, 10));
+            $guard->assertOpen((int) $old['unit_id'], substr((string) $old['completed_at'], 0, 10));
 
         }
 
-        if (!empty($new['completed_at'])) {
+        if (! empty($new['completed_at'])) {
 
-            $guard->assertOpen((int)$new['unit_id'], substr((string)$new['completed_at'], 0, 10));
+            $guard->assertOpen((int) $new['unit_id'], substr((string) $new['completed_at'], 0, 10));
 
         }
 
     }
 
-
-
     /** Synchronize accounting without hiding a successful housekeeping save. */
-
     private function syncAccountingTask(int $taskId): ?string
-
     {
 
         try {
 
-            (new \App\Services\HousekeepingExpenseSync())->syncTask($taskId);
+            (new HousekeepingExpenseSync)->syncTask($taskId);
 
             return null;
 
@@ -1752,25 +1504,19 @@ class Housekeeping extends BaseController
 
             ]);
 
-            return 'Housekeeping saved, but accounting synchronization failed: ' . $e->getMessage();
+            return 'Housekeeping saved, but accounting synchronization failed: '.$e->getMessage();
 
         }
 
     }
 
-
-
     /**
-
      * Retrieve apartments and property names.
-
      */
-
     private function getUnits(): array
-
     {
 
-        return (new UnitModel())
+        return (new UnitModel)
 
             ->select('units.*, properties.name AS property_name')
 
@@ -1792,19 +1538,13 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Retrieve staff members.
-
      */
-
     private function getStaff(): array
-
     {
 
-        return (new StaffModel())
+        return (new StaffModel)
 
             ->orderBy('full_name', 'ASC')
 
@@ -1812,29 +1552,23 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Retrieve reservations for linking cleaning tasks.
-
      */
-
     private function getReservations(): array
-
     {
 
-        return (new ReservationModel())
+        return (new ReservationModel)
 
             ->select(
 
-                'reservations.id, ' .
+                'reservations.id, '.
 
-                'reservations.unit_id, ' .
+                'reservations.unit_id, '.
 
-                'reservations.guest_name, ' .
+                'reservations.guest_name, '.
 
-                'reservations.check_in, ' .
+                'reservations.check_in, '.
 
                 'reservations.check_out'
 
@@ -1858,16 +1592,10 @@ class Housekeeping extends BaseController
 
     }
 
-
-
     /**
-
      * Redirect back with validation errors.
-
      */
-
     private function formError(string $message)
-
     {
 
         return redirect()->back()
@@ -1877,5 +1605,4 @@ class Housekeeping extends BaseController
             ->with('error', $message);
 
     }
-
 }

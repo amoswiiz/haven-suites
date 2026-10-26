@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Services\AccountingPeriodGuard;
 use App\Support\Migration\PageNotFoundException;
 
 /**
@@ -18,7 +19,7 @@ class InvoicePayments extends BaseController
             throw PageNotFoundException::forPageNotFound('Invoice not found.');
         }
         if (empty($invoice['reservation_id'])) {
-            return redirect()->to(site_url('invoices/' . $invoiceId))
+            return redirect()->to(site_url('invoices/'.$invoiceId))
                 ->with('error', 'Only reservation invoices can use existing guest payments.');
         }
 
@@ -58,7 +59,7 @@ class InvoicePayments extends BaseController
      */
     public function record(int $invoiceId)
     {
-        $back = site_url('invoices/' . $invoiceId);
+        $back = site_url('invoices/'.$invoiceId);
         $amountInput = trim((string) $this->request->getPost('amount'));
         $date = trim((string) $this->request->getPost('payment_date'));
         $method = trim((string) $this->request->getPost('payment_method'));
@@ -96,6 +97,21 @@ class InvoicePayments extends BaseController
             }
             if (strtoupper((string) ($invoice['currency'] ?? 'KES')) !== 'KES') {
                 throw new \RuntimeException('This payment register currently supports KES invoices only.');
+            }
+            if (! empty($invoice['reservation_id'])) {
+                $booking = $db->query('SELECT id, unit_id, status FROM reservations WHERE id = ? FOR UPDATE', [$invoice['reservation_id']])->getRowArray();
+                if (! $booking || $booking['status'] === 'cancelled') {
+                    throw new \RuntimeException('This booking is cancelled or unavailable. Review its invoice before recording payment.');
+                }
+                if ($booking['unit_id']) {
+                    $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$booking['unit_id']]);
+                    (new AccountingPeriodGuard($db))->assertOpen((int) $booking['unit_id'], $date);
+                }
+                $recorded = $db->table('guest_payments')->selectSum('amount', 'total')->where('reservation_id', $booking['id'])->get()->getRowArray();
+                $used = $db->table('invoice_payment_allocations a')->select('COALESCE(SUM(a.amount), 0) AS total', false)->join('guest_payments gp', 'gp.id = a.guest_payment_id')->where('gp.reservation_id', $booking['id'])->get()->getRowArray();
+                if ((int) round((float) ($recorded['total'] ?? 0) * 100) > (int) round((float) ($used['total'] ?? 0) * 100)) {
+                    throw new \RuntimeException('This booking has existing unallocated payments. Allocate those payments to its invoice before recording a new payment.');
+                }
             }
 
             $allocated = $db->table('invoice_payment_allocations')
@@ -152,11 +168,13 @@ class InvoicePayments extends BaseController
             }
 
             $db->transCommit();
-            return redirect()->to(site_url('receipts/' . $allocationId))
+
+            return redirect()->to(site_url('receipts/'.$allocationId))
                 ->with('success', 'Payment recorded and allocated. Receipt is ready.');
         } catch (\Throwable $e) {
             $db->transRollback();
-            log_message('error', 'Invoice payment recording failed for invoice ' . $invoiceId . ': ' . $e->getMessage());
+            log_message('error', 'Invoice payment recording failed for invoice '.$invoiceId.': '.$e->getMessage());
+
             return redirect()->to($back)->withInput()->with('error', $e->getMessage());
         }
     }
@@ -166,12 +184,12 @@ class InvoicePayments extends BaseController
         $paymentId = filter_var($this->request->getPost('guest_payment_id'), FILTER_VALIDATE_INT);
         $amountInput = trim((string) $this->request->getPost('amount'));
         if (! $paymentId || ! preg_match('/^\d{1,10}(?:\.\d{1,2})?$/', $amountInput)) {
-            return redirect()->to(site_url('invoices/' . $invoiceId . '/payments'))
+            return redirect()->to(site_url('invoices/'.$invoiceId.'/payments'))
                 ->with('error', 'Select a payment and enter a valid amount (maximum two decimal places).');
         }
         $cents = (int) round(((float) $amountInput) * 100);
         if ($cents <= 0) {
-            return redirect()->to(site_url('invoices/' . $invoiceId . '/payments'))
+            return redirect()->to(site_url('invoices/'.$invoiceId.'/payments'))
                 ->with('error', 'Allocation amount must be greater than zero.');
         }
 
@@ -210,12 +228,14 @@ class InvoicePayments extends BaseController
                 throw new \RuntimeException('Could not save the payment allocation.');
             }
             $db->transCommit();
-            return redirect()->to(site_url('invoices/' . $invoiceId . '/payments'))
+
+            return redirect()->to(site_url('invoices/'.$invoiceId.'/payments'))
                 ->with('success', 'Existing guest payment allocated to invoice successfully.');
         } catch (\Throwable $e) {
             $db->transRollback();
-            log_message('error', 'Invoice allocation error: ' . $e->getMessage());
-            return redirect()->to(site_url('invoices/' . $invoiceId . '/payments'))
+            log_message('error', 'Invoice allocation error: '.$e->getMessage());
+
+            return redirect()->to(site_url('invoices/'.$invoiceId.'/payments'))
                 ->with('error', $e->getMessage());
         }
     }

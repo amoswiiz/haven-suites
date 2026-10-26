@@ -20,6 +20,9 @@ class Reservations extends BaseController
         } elseif ($activity === 'checkouts') {
             $model->where('reservations.check_out', date('Y-m-d'))
                 ->whereIn('reservations.status', ['confirmed', 'checked_in', 'checked_out']);
+        } elseif (in_array($activity, ['checkouts_pending', 'checkouts_completed'], true)) {
+            $model->where('reservations.check_out', date('Y-m-d'))
+                ->whereIn('reservations.status', $activity === 'checkouts_pending' ? ['confirmed', 'checked_in'] : ['checked_out']);
         }
         $reservations = $model
             ->select('reservations.*, units.unit_number, properties.name AS property_name, '
@@ -62,7 +65,21 @@ class Reservations extends BaseController
             ->where('reservation_id', $id)
             ->orderBy('id', 'DESC')->get()->getResultArray();
 
+        $paymentInvoice = null;
+        $allocatedTotal = 0.0;
+        foreach ($invoices as $invoice) {
+            $allocated = $db->table('invoice_payment_allocations')->selectSum('amount', 'total')->where('invoice_id', $invoice['id'])->get()->getRowArray();
+            $allocatedTotal += (float) ($allocated['total'] ?? 0);
+            $invoice['balance'] = max(0, round((float) $invoice['total_amount'] - (float) ($allocated['total'] ?? 0), 2));
+            if ($paymentInvoice === null && $invoice['status'] === 'issued' && $invoice['balance'] > 0) {
+                $paymentInvoice = $invoice;
+            }
+        }
+        $recordedTotal = array_sum(array_map(static fn (array $payment): float => (float) $payment['amount'], $payments));
+
         return haven_view('reservations/show', [
+            'paymentInvoice' => $paymentInvoice,
+            'unallocatedPayments' => max(0, round($recordedTotal - $allocatedTotal, 2)),
             'reservation' => $reservation,
             'payments' => $payments,
             'invoices' => $invoices,
