@@ -15,7 +15,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
@@ -400,15 +402,21 @@ class InvestorController extends Controller
         return back()->with('success', 'Recorded payout published. This action does not send money.');
     }
 
-    public function portal(Request $request): View
+    public function portal(Request $request): View|RedirectResponse
     {
         $investor = $this->portalInvestor();
         $assignments = $this->rows('investor_assignments')->where('investor_id', $investor->id)->get();
         $section = $request->route('section') ?? 'dashboard';
+        if (in_array($section, ['statements', 'payouts'], true)) {
+            return redirect()->route('investor.section', ['tenant' => app('currentTenant')->slug, 'section' => 'money', ...$request->only('month', 'unit_id', 'history')]);
+        }
+        $request->validate(['history' => 'nullable|in:month,all']);
+        $filterMoneyMonth = $section === 'money' && $request->input('history', 'month') === 'month';
         $unitIds = $assignments->pluck('unit_id');
         $unitId = $request->integer('unit_id');
         abort_if($unitId && ! $unitIds->contains($unitId), 404);
         $bookingLists = [];
+        $calendarBookings = collect();
         $month = $request->validate(['month' => 'nullable|date_format:Y-m', 'unit_id' => 'nullable|integer|min:0', 'tab' => 'nullable|in:current,upcoming,completed'])['month'] ?? now(app('currentTenant')->timezone)->format('Y-m');
         $monthStart = $month.'-01';
         $monthEnd = date('Y-m-d', strtotime($monthStart.' +1 month'));
@@ -429,6 +437,9 @@ class InvestorController extends Controller
             });
             if ($unitId) {
                 $query->where('unit_id', $unitId);
+            }
+            if ($section === 'bookings') {
+                $calendarBookings = (clone $query)->whereIn('status', ['pending', 'confirmed', 'checked_in', 'checked_out'])->where('check_in', '<', $monthEnd)->where('check_out', '>', $monthStart)->orderBy('check_in')->get();
             }
             $calculator = new OwnerRemittanceCalculator;
             foreach ((clone $query)->whereIn('status', ['confirmed', 'checked_in', 'checked_out'])->where('check_in', '<', $monthEnd)->where('check_out', '>', $monthStart)->get() as $stay) {
@@ -473,20 +484,72 @@ class InvestorController extends Controller
         }
         $monthly['payout_minor'] = (int) $this->rows('investor_payouts')->where('investor_id', $investor->id)->where('currency', app('currentTenant')->currency)->where('payment_date', '>=', $monthStart)->where('payment_date', '<', $monthEnd)->whereIn('assignment_id', $assignments->filter(fn ($assignment) => ! $unitId || (int) $assignment->unit_id === $unitId)->pluck('id'))->sum('amount_minor');
 
-        return view('investors.portal', ['unreadCount' => (app('currentTenant')->modules['notifications'] ?? true) ? $this->rows('investor_events')->where('investor_id', $investor->id)->whereNull('read_at')->count() : 0, 'section' => $section, 'monthly' => $monthly, 'reportMonth' => $month, 'bookingLists' => $bookingLists, 'selectedUnitId' => $unitId, 'investor' => $investor, 'assignments' => $assignments->filter(fn ($a) => ! $unitId || (int) $a->unit_id === $unitId), 'units' => $this->units()->whereIn('id', $unitIds), 'statements' => $this->rows('investor_statements')->where('investor_id', $investor->id)->whereNull('superseded_at')->when($unitId, fn ($q) => $q->where('unit_id', $unitId))->latest('period_month')->paginate(5, ['*'], 'statements_page')->withQueryString(), 'payouts' => $this->rows('investor_payouts')->where('investor_id', $investor->id)->whereIn('assignment_id', $assignments->filter(fn ($a) => ! $unitId || (int) $a->unit_id === $unitId)->pluck('id'))->latest('payment_date')->paginate(5, ['*'], 'payouts_page')->withQueryString(), 'events' => (app('currentTenant')->modules['notifications'] ?? true) ? $this->rows('investor_events')->where('investor_id', $investor->id)->latest('id')->limit(50)->get() : collect()]);
+        return view('investors.portal', ['unreadCount' => (app('currentTenant')->modules['notifications'] ?? true) ? $this->rows('investor_events')->where('investor_id', $investor->id)->whereNull('read_at')->count() : 0, 'filterMoneyMonth' => $filterMoneyMonth, 'calendarBookings' => $calendarBookings, 'section' => $section, 'monthly' => $monthly, 'reportMonth' => $month, 'bookingLists' => $bookingLists, 'selectedUnitId' => $unitId, 'investor' => $investor, 'assignments' => $assignments->filter(fn ($a) => ! $unitId || (int) $a->unit_id === $unitId), 'units' => $this->units()->whereIn('id', $unitIds), 'statements' => $this->rows('investor_statements')->where('investor_id', $investor->id)->whereNull('superseded_at')->when($unitId, fn ($q) => $q->where('unit_id', $unitId))->when($filterMoneyMonth, fn ($q) => $q->where('period_month', $monthStart))->latest('period_month')->paginate(5, ['*'], 'statements_page')->withQueryString(), 'payouts' => $this->rows('investor_payouts')->where('investor_id', $investor->id)->whereIn('assignment_id', $assignments->filter(fn ($a) => ! $unitId || (int) $a->unit_id === $unitId)->pluck('id'))->when($filterMoneyMonth, fn ($q) => $q->where('payment_date', '>=', $monthStart)->where('payment_date', '<', $monthEnd))->latest('payment_date')->paginate(5, ['*'], 'payouts_page')->withQueryString(), 'events' => (app('currentTenant')->modules['notifications'] ?? true) ? $this->rows('investor_events')->where('investor_id', $investor->id)->latest('id')->limit(50)->get() : collect()]);
     }
 
     public function preferences(Request $request): RedirectResponse
     {
         $investor = $this->portalInvestor();
-        $data = $request->validate(['email_notifications' => 'required|boolean', 'sms_notifications' => 'required|boolean']);
-        if ($data['sms_notifications'] && (! $investor->phone_verified_at || ! $investor->sms_consented_at)) {
-            throw ValidationException::withMessages(['sms_notifications' => 'Contact management to confirm your phone number and record SMS consent first.']);
+        if ($request->has('phone')) {
+            $phone = preg_replace('/[\\s()-]+/', '', (string) $request->input('phone'));
+            if (preg_match('/^0[17][0-9]{8}$/', $phone)) {
+                $phone = '+254'.substr($phone, 1);
+            } elseif (preg_match('/^254[17][0-9]{8}$/', $phone)) {
+                $phone = '+'.$phone;
+            }
+            $request->merge(['phone' => $phone ?: null]);
+        }
+        $data = $request->validate([
+            'communication_email' => 'sometimes|nullable|email|max:255',
+            'phone' => ['sometimes', 'nullable', 'regex:/^\\+[1-9][0-9]{7,14}$/'],
+            'email_notifications' => 'required|boolean',
+            'sms_notifications' => 'required|boolean',
+            'sms_consent' => 'sometimes|boolean',
+        ]);
+        if (array_key_exists('communication_email', $data)) {
+            $data['communication_email'] = $data['communication_email'] ? strtolower($data['communication_email']) : null;
+            if ($data['communication_email'] !== $investor->communication_email) {
+                $data['communication_email_verified_at'] = $data['communication_email'] === strtolower($request->user()->email) ? now() : null;
+            }
+        }
+        $phoneChanged = array_key_exists('phone', $data) && $data['phone'] !== $investor->phone;
+        if ($phoneChanged) {
+            $data['phone_verified_at'] = null;
+            $data['sms_consented_at'] = null;
+        }
+        if ($request->has('sms_consent')) {
+            $data['sms_consented_at'] = $request->boolean('sms_consent') && ($data['phone'] ?? $investor->phone) ? now() : null;
+        }
+        unset($data['sms_consent']);
+        $verified = ! $phoneChanged && $investor->phone_verified_at;
+        $consented = array_key_exists('sms_consented_at', $data) ? $data['sms_consented_at'] : $investor->sms_consented_at;
+        if ($data['sms_notifications'] && (! $verified || ! $consented)) {
+            $data['sms_notifications'] = false;
         }
         $this->rows('investors')->where('id', $investor->id)->update([...$data, 'updated_at' => now()]);
-        $this->audit($investor->id, 'preferences.updated', 'Investor updated email and SMS preferences.');
+        $this->audit($investor->id, 'preferences.updated', 'Investor updated communication contacts and preferences.');
 
-        return back()->with('success', 'Notification preferences saved.');
+        return back()->with('success', 'Contact details saved. Confirm a new communication email before it receives updates. SMS requires phone confirmation by management and your consent.');
+    }
+
+    public function sendContactVerification(): RedirectResponse
+    {
+        $investor = $this->portalInvestor();
+        abort_unless($investor->communication_email, 422, 'Save a communication email first.');
+        $url = URL::temporarySignedRoute('investor.contact.verify', now()->addMinutes(60), ['tenant' => app('currentTenant')->slug, 'hash' => hash('sha256', $investor->id.':'.$investor->communication_email)]);
+        Mail::raw('Confirm your investor communication email by signing in and opening this link within 60 minutes: '.$url, fn ($message) => $message->to($investor->communication_email)->subject('Confirm your communication email'));
+
+        return back()->with('success', 'Confirmation email requested. Check your inbox; delivery requires a configured email service.');
+    }
+
+    public function verifyContact(Request $request, string $tenant, string $hash): RedirectResponse
+    {
+        $investor = $this->portalInvestor();
+        abort_unless($investor->communication_email && hash_equals(hash('sha256', $investor->id.':'.$investor->communication_email), $hash), 403);
+        $this->rows('investors')->where('id', $investor->id)->update(['communication_email_verified_at' => now(), 'updated_at' => now()]);
+        $this->audit($investor->id, 'contact.verified', 'Investor confirmed communication email.');
+
+        return redirect()->route('investor.section', ['tenant' => $tenant, 'section' => 'settings'])->with('success', 'Communication email confirmed.');
     }
 
     public function read(string $tenant, int $id): RedirectResponse

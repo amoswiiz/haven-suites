@@ -57,11 +57,11 @@
                     <input type="password"
                            name="password"
                            class="form-control"
-                           minlength="12"
+                           minlength="5"
                            autocomplete="new-password"
                            required>
                     <small class="text-muted">
-                        Use at least 12 characters.
+                        Use at least 5 characters.
                     </small>
                 </div>
 

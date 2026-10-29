@@ -91,6 +91,27 @@ class RoleVisibilityTest extends TestCase
             ->assertDontSee('href="http://127.0.0.1:8001/t/roles/invoices"', false);
     }
 
+    public function test_company_switching_is_shown_only_when_there_is_another_active_membership(): void
+    {
+        $user = $this->member('operations');
+        $this->actingAs($user)->get('/t/roles/dashboard')->assertOk()->assertDontSee('Switch company')->assertDontSee('Platform administration')->assertSee('Roles test');
+        $other = Tenant::create(['name' => 'Other company', 'slug' => 'other-menu', 'database_name' => 'unused_menu', 'active' => true]);
+        $this->get('/t/roles/dashboard')->assertOk()->assertDontSee('Switch company');
+        $user->tenants()->attach($other, ['roles' => json_encode(['operations']), 'legacy_user_id' => 1]);
+        $this->get('/t/roles/dashboard')->assertOk()->assertSee('Switch company');
+        $this->get('/')->assertOk()->assertSee('Other company');
+        $other->update(['active' => false]);
+        $this->get('/t/roles/dashboard')->assertOk()->assertDontSee('Switch company');
+        $this->get('/platform')->assertForbidden();
+    }
+
+    public function test_platform_administrator_has_a_clearly_labelled_platform_link(): void
+    {
+        $user = $this->member('superadmin');
+        $user->forceFill(['is_platform_admin' => true, 'email_verified_at' => now()])->save();
+        $this->actingAs($user)->get('/t/roles/dashboard')->assertOk()->assertSee('Platform administration')->assertDontSee('Switch company');
+    }
+
     public function test_sidebar_uses_one_active_destination_and_groups_payment_pages(): void
     {
         $this->actingAs($this->member('admin'));

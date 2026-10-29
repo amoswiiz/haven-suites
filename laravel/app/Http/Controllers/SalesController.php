@@ -110,6 +110,18 @@ class SalesController extends Controller
             ? DB::connection('tenant')->table('invoices')->where('reservation_id', $lead->reservation_id)->where('status', '!=', 'void')->latest('id')->get() : collect();
 
         $eligibleInvoices = collect();
+        $eligibleBookings = collect();
+        if (auth()->user()->can('sales.manage') && auth()->user()->can('reservations.manage')) {
+            $linkedElsewhere = $this->table('sales_leads')->whereNotNull('reservation_id')->where('id', '!=', $id)->pluck('reservation_id')->all();
+            $bookingsQuery = DB::connection('tenant')->table('reservations as r')->leftJoin('units as u', 'u.id', '=', 'r.unit_id')->leftJoin('properties as p', 'p.id', '=', 'u.property_id')->where('r.status', '!=', 'cancelled')->whereNotIn('r.id', $linkedElsewhere)->whereRaw('LOWER(TRIM(r.guest_name)) = ?', [mb_strtolower(trim($lead->name))]);
+            if ($lead->check_in) {
+                $bookingsQuery->where('r.check_in', $lead->check_in);
+            }
+            if ($lead->check_out) {
+                $bookingsQuery->where('r.check_out', $lead->check_out);
+            }
+            $eligibleBookings = $bookingsQuery->select('r.id', 'r.guest_name', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('r.id')->get();
+        }
         $searchData = request()->validate(['invoice_search' => 'nullable|string|max:150']);
         $invoiceSearch = trim($searchData['invoice_search'] ?? '');
         if (! $lead->reservation_id && auth()->user()->can('finance.view') && auth()->user()->can('sales.manage') && auth()->user()->can('reservations.manage')) {
@@ -138,7 +150,7 @@ class SalesController extends Controller
             $eligibleInvoices = $query->select('i.id', 'i.invoice_number', 'i.customer_name', 'i.issue_date', 'i.total_amount', 'i.currency', 'i.status', 'r.id as reservation_id', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('i.id')->limit(50)->get();
         }
 
-        return view('sales.show', ['eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
+        return view('sales.show', ['eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse

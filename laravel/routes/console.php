@@ -12,3 +12,5 @@ Schedule::command('haven:deliver-investor-notifications')->everyMinute()->withou
 Schedule::command('haven:sync-sms-status')->everyFiveMinutes()->withoutOverlapping();
 
 Schedule::command('haven:accrue-rent')->dailyAt('00:10')->timezone('Africa/Nairobi')->withoutOverlapping();
+
+Schedule::command('haven:task-notifications')->everyMinute()->withoutOverlapping();

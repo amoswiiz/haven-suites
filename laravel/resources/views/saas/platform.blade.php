@@ -1,7 +1,9 @@
 @extends('saas.layout')
 @section('title','Platform administration')
 @section('content')<h1>Platform administration</h1><p class="muted">Manage company access and subscriptions. This role does not grant access to company operational records.</p>
+<div class="actions"><a class="button" href="{{ route('platform.company.create') }}">Create company</a></div>
 @foreach($companies as $company)<section class="card"><div class="split"><div><h2>{{ $company->name }}</h2><p>{{ $company->slug }} · {{ $company->users_count }} members</p>@if($company->requested_plan)<span class="pill">Requested {{ ucfirst($company->requested_plan) }}</span>@endif</div><span class="pill">{{ $company->active?'Enabled':'Suspended' }}</span></div>
+@foreach($administratorInvitations->where('tenant_id',$company->id) as $invitation)<p>Administrator invitation: {{ $invitation->email }} &middot; {{ $invitation->revoked_at ? 'Revoked' : ($invitation->expires_at->isPast() ? 'Expired' : 'Awaiting acceptance') }}</p><form method="post" action="{{ route('platform.invitation.resend',$invitation->id) }}">@csrf<button class="secondary">Resend invitation</button></form>@endforeach
 <form method="post" action="{{ route('platform.company.update',$company->id) }}">@csrf<div class="grid">
 <div><label for="access-{{ $company->id }}">Access</label><select name="active" id="access-{{ $company->id }}"><option value="1" @selected($company->active)>Enabled</option><option value="0" @selected(!$company->active)>Suspended</option></select></div>
 <div><label for="plan-{{ $company->id }}">Plan</label><select name="plan" id="plan-{{ $company->id }}">@foreach(['legacy',...array_keys(config('saas.plans'))] as $plan)<option @selected($company->plan===$plan)>{{ $plan }}</option>@endforeach</select></div>

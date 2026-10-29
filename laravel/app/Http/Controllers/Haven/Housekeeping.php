@@ -299,6 +299,8 @@ class Housekeeping extends BaseController
         }
 
         return haven_view('housekeeping/cleaner_entry', [
+            'pageTitle' => 'Record cleaning',
+            'assignedCleaningTasks' => $this->isCleaner() ? DB::connection('tenant')->table('housekeeping as h')->join('units as u', 'u.id', '=', 'h.unit_id')->leftJoin('properties as p', 'p.id', '=', 'u.property_id')->where('h.assigned_staff_id', $this->currentStaffId())->whereIn('h.status', ['pending', 'assigned', 'in_progress'])->orderBy('h.scheduled_at')->select('h.id', 'h.status', 'h.notes', 'h.scheduled_at', 'h.bedrooms_cleaned', 'u.bedrooms', 'u.unit_number', 'p.name as property_name')->get() : collect(),
             'cleaningBookings' => DB::connection('tenant')->table('reservations as r')
                 ->join('units as u', 'u.id', '=', 'r.unit_id')
                 ->leftJoin('properties as p', 'p.id', '=', 'u.property_id')
@@ -1480,7 +1482,7 @@ class Housekeeping extends BaseController
 
         if (! empty($new['completed_at'])) {
 
-            $guard->assertOpen((int) $new['unit_id'], substr((string) $new['completed_at'], 0, 10));
+            $guard->assertOpen((int) ($new['unit_id'] ?? $old['unit_id'] ?? 0), substr((string) $new['completed_at'], 0, 10));
 
         }
 

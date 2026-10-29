@@ -134,7 +134,9 @@ class CompanyInvitationController extends Controller
             config(['database.connections.tenant' => $original]);
         }
 
-        return redirect('/t/'.$tenant->slug.($invitation->investor_id ? '/investor-portal' : '/home'))->with('success', 'You have joined '.$tenant->name.'.');
+        $destination = $invitation->investor_id ? '/investor-portal' : ($invitation->role === 'admin' && ! $tenant->onboarding_completed_at ? '/company/setup' : '/home');
+
+        return redirect('/t/'.$tenant->slug.$destination)->with('success', 'You have joined '.$tenant->name.'.');
     }
 
     private function invitation(string $token): CompanyInvitation

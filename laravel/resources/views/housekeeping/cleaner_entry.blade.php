@@ -63,6 +63,10 @@ $oldCleaner = (string) (old('assigned_staff_id') ?? '');
         <div class="alert alert-success" role="alert"><?= esc($message) ?></div>
     <?php endif; ?>
 
+    @if($assignedCleaningTasks->isNotEmpty())
+    <section class="hs-panel p-4 mb-4"><h4 class="hs-title">Your assigned cleaning tasks</h4><p class="text-muted">Use these tasks to avoid entering the apartment and booking again. Complete a task here instead of recording a second cleaning below.</p>
+    @foreach($assignedCleaningTasks as $job)<article class="border rounded p-3 mb-3"><strong>{{ $job->property_name }} / {{ $job->unit_number }}</strong><p>{{ date('d M Y H:i',strtotime($job->scheduled_at)) }} - {{ ucwords(str_replace('_',' ',$job->status)) }}</p><form method="post" action="{{ site_url('housekeeping/progress/'.$job->id) }}">@csrf<input type="hidden" name="status" value="{{ $job->status==='in_progress'?'completed':'in_progress' }}"><label for="task-bedrooms-{{ $job->id }}">{{ $job->status==='in_progress'?'Bedrooms actually cleaned':'Bedrooms for this task' }}</label><select id="task-bedrooms-{{ $job->id }}" name="bedrooms_cleaned" class="form-select mb-2" required><option value="">Select bedrooms</option>@for($n=1;$n<=$job->bedrooms;$n++)<option value="{{ $n }}" @selected($job->bedrooms_cleaned==$n)>{{ $n }}</option>@endfor</select><label for="task-notes-{{ $job->id }}">Notes</label><textarea id="task-notes-{{ $job->id }}" class="form-control mb-2" name="notes" maxlength="5000">{{ $job->notes }}</textarea><button type="submit" class="btn hs-primary">{{ $job->status==='in_progress'?'Complete cleaning':'Start cleaning' }}</button></form></article>@endforeach</section>
+    @endif
     <div class="hs-panel p-4 p-md-5">
         <p class="text-muted mb-4">Select the apartment you cleaned. Your cleaning fee is determined by the configured rate for the number of bedrooms actually cleaned. Your submission will await management verification.</p>
         <?php if (haven_can_access(site_url('housekeeping/my-cleanings'), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/my-cleanings') ?>" id="hs-cleaning-entry-form">

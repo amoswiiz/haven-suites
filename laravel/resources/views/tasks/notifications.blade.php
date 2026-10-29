@@ -1,0 +1,6 @@
+@extends('saas.layout')
+@section('title','Task notifications')
+@section('content')
+<h1>Task notifications</h1><a href="{{ route('tasks.index',app('currentTenant')->slug) }}">Back to tasks</a><p class="muted">Updates about assignments, deadlines, reviews and completed work.</p>
+@forelse($notices as $notice)<section class="card"><p><strong>{{ $notice->message }}</strong> @if(!$notice->read_at)<span class="pill">Unread</span>@endif</p><small>{{ $notice->created_at }}</small><div class="actions"><a href="{{ route('tasks.show',[app('currentTenant')->slug,$notice->task_id]) }}">Open task</a>@if(!$notice->read_at)<form method="post" action="{{ route('tasks.read',[app('currentTenant')->slug,$notice->id]) }}">@csrf<button class="secondary">Mark read</button></form>@endif</div><details><summary>Email / SMS status</summary><p>Email: {{ ucfirst($notice->email_status) }} &middot; SMS: {{ ucfirst($notice->sms_status) }}</p><p class="muted">Submitted means handed to the provider; it does not confirm delivery. Simulated means no external message was sent. Skipped means the channel was not enabled or contact details were unavailable.</p></details></section>@empty<p>No task notifications yet.</p>@endforelse{{ $notices->links() }}
+@endsection

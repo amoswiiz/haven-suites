@@ -18,7 +18,7 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
 
 <div style="max-width:1100px">
     @if(isset($salesLead))
-        <div class="alert alert-info">Guest details copied from enquiry #{{ $salesLead->id }}. After saving, return to <a href="{{ route('sales.show',[app('currentTenant')->slug,$salesLead->id]) }}">the enquiry</a> to link the reservation and verify the deposit.</div>
+        <div class="alert alert-info">Guest details copied from enquiry #{{ $salesLead->id }}. After saving, use the booking workspace to finish linking this booking to <a href="{{ route('sales.show',[app('currentTenant')->slug,$salesLead->id]) }}">the enquiry</a> to link the reservation and verify the deposit.</div>
     @endif
 
     <div class="mb-4">
@@ -40,6 +40,7 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
           id="reservationForm">
 
         <?= csrf_field() ?>
+        @if(isset($salesLead))<input type="hidden" name="lead_id" value="{{ $salesLead->id }}">@endif
 
         <!-- Apartment Selection -->
         <div class="card border-0 shadow-sm mb-4">
@@ -402,23 +403,7 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
                         <input type="number" name="owner_net_amount" id="owner_net_amount" class="form-control" min="0" step="0.01" value="<?= esc($value('owner_net_amount'), 'attr') ?>">
                         <div class="form-text">Internal only. The owner total and Haven Suites markup are calculated using the number of nights.</div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">
-                            Amount Paid (KES)
-                        </label>
-
-                        <div class="input-group">
-                            <span class="input-group-text">KES</span>
-
-                            <input type="number"
-                                   name="amount_paid"
-                                   id="amount_paid"
-                                   class="form-control"
-                                   min="0"
-                                   step="0.01"
-                                   value="<?= esc($value('amount_paid', 0)) ?>">
-                        </div>
-                    </div>
+                    <div class="col-12"><p class="alert alert-info">Save the booking first. Its workspace will guide you through invoicing and recording payments with receipts.</p></div>
 
                     <div class="col-12">
 
@@ -545,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const checkIn = document.getElementById('check_in');
     const checkOut = document.getElementById('check_out');
     const rateInput = document.getElementById('nightly_rate');
-    const paidInput = document.getElementById('amount_paid');
+
 
     const totalNights = document.getElementById('totalNights');
     const bookingTotal = document.getElementById('bookingTotal');
@@ -623,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const paid = Math.max(
             0,
-            parseFloat(paidInput.value) || 0
+            0
         );
 
         const guestNightly = Math.max(0, parseFloat(guestTotal.value) || 0);
@@ -656,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function () {
     checkIn.addEventListener('change', calculateBooking);
     checkOut.addEventListener('change', calculateBooking);
     rateInput.addEventListener('input', calculateBooking);
-    paidInput.addEventListener('input', calculateBooking);
+
 
     // Preserve entered rates when returning after a validation error.
     if (!rateInput.value && unitSelect.value) {

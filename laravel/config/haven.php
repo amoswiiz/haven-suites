@@ -3,7 +3,7 @@
 return ['roles' => [
 
     // Complete system access.
-    'superadmin' => [
+    'superadmin' => ['tasks.*',
         'investors.*', 'notifications.*',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.*',
@@ -21,7 +21,7 @@ return ['roles' => [
     ],
 
     // Administrative operations.
-    'admin' => [
+    'admin' => ['staff.accounts.manage', 'tasks.*',
         'investors.*', 'notifications.*',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
@@ -37,7 +37,7 @@ return ['roles' => [
     ],
 
     // Property and operations management.
-    'manager' => [
+    'manager' => ['tasks.*',
         'investors.view', 'notifications.view',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
@@ -53,7 +53,7 @@ return ['roles' => [
     ],
 
     // Daily operations.
-    'operations' => [
+    'operations' => ['tasks.view',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
         'properties.view',
@@ -66,20 +66,20 @@ return ['roles' => [
     ],
 
     // Housekeeping team.
-    'cleaner' => [
+    'cleaner' => ['tasks.view',
         'housekeeping.view',
         'housekeeping.manage',
     ],
 
     // Property investors and owners.
-    'owner' => [
+    'owner' => ['tasks.owner',
         'investor.portal',
         'reports.view',
     ],
 
-    'sales' => ['sales.*', 'agents.view', 'messaging.*', 'availability.view'],
+    'sales' => ['tasks.view', 'sales.*', 'agents.view', 'messaging.*', 'availability.view'],
 
     // No management permissions.
-    'user' => [],
+    'user' => ['tasks.view'],
 
 ]];

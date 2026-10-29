@@ -32,13 +32,14 @@ $status = (string) ($r['status'] ?? 'pending');
     <div><div class="small" style="color:#ffbd8c;font-weight:700;letter-spacing:.09em">HAVEN SUITES · RESERVATION</div><h2 class="fw-bold mb-1">Booking #<?= $id ?></h2><p class="mb-0"><?= esc($r['guest_name'] ?? '') ?> · <?= esc($apartment) ?></p></div>
     <div class="text-md-end"><span class="hs-status"><?= esc($statusLabels[$status] ?? ucfirst($status)) ?></span><div class="small mt-2" style="color:#e7eefb"><?= esc(ucfirst($r['booking_type'] ?? 'managed')) ?> Booking</div></div>
   </div>
+  @include('reservations.workspace')
   <div class="row g-3 mb-4">
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Booking Total</div><strong>KES <?= number_format($total,2) ?></strong></div></div>
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Recorded payments</div><strong>KES <?= number_format($recordedPayments,2) ?></strong></div></div>
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Booking Balance</div><strong>KES <?= number_format($bookingBalance,2) ?></strong></div></div>
   </div>
   <div class="row g-3 mb-4">
-    <div class="col-lg-6"><div class="hs-card"><h5>Guest Details</h5>
+    <div class="col-lg-6"><div class="hs-card"><h5 id="booking-guest">Guest Details</h5>
       <div class="row g-3"><div class="col-12"><div class="hs-label">Guest Name</div><div class="hs-value"><?= esc($r['guest_name'] ?? '—') ?></div></div>
       <div class="col-sm-6"><div class="hs-label">Phone</div><div class="hs-value"><?= esc($r['guest_phone'] ?: '—') ?></div></div>
       <div class="col-sm-6"><div class="hs-label">Email</div><div class="hs-value"><?= esc($r['guest_email'] ?: '—') ?></div></div>
@@ -57,6 +58,7 @@ $status = (string) ($r['status'] ?? 'pending');
     </div></div>
   </div>
   <?php if (!empty($r['notes'])): ?><div class="hs-card mb-4"><h5>Booking Notes</h5><div class="hs-pre"><?= esc($r['notes']) ?></div></div><?php endif; ?>
+  @if(auth()->user()->can('finance.view'))
   @include('reservations.payment')
   <div class="hs-card mb-4"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h5 class="mb-2">Recorded Guest Payments</h5><span class="text-muted small">Total recorded: KES <?= number_format($recordedPayments,2) ?></span></div>
     <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Payment #</th><th>Date</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th></tr></thead><tbody>
@@ -71,5 +73,6 @@ $status = (string) ($r['status'] ?? 'pending');
       <?php if (empty($invoices)): ?><tr><td colspan="5" class="text-muted text-center py-3">No invoices linked to this reservation.</td></tr><?php endif; ?>
     </tbody></table></div>
   </div>
+  @endif
 </div>
 @endsection

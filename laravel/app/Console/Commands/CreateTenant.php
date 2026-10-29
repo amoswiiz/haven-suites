@@ -22,8 +22,8 @@ class CreateTenant extends Command
         $user = User::where('email',$email)->first();
         $password = null;
         if (!$user) {
-            $password = $this->secret('Administrator password (minimum 12 characters)');
-            Validator::make(['password'=>$password],['password'=>'required|string|min:12'])->validate();
+            $password = $this->secret('Administrator password (minimum 5 characters)');
+            Validator::make(['password'=>$password],['password'=>'required|string|min:5'])->validate();
         }
         $config = config('database.connections.tenant');
         $dsn = 'mysql:host='.$config['host'].';port='.$config['port'].';charset=utf8mb4';

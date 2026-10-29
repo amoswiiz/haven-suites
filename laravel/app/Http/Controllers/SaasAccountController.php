@@ -22,7 +22,7 @@ class SaasAccountController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->merge(['email' => strtolower(trim((string) $request->input('email')))]);
-        $data = $request->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:180|unique:users,email', 'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()]]);
+        $data = $request->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:180|unique:users,email', 'password' => ['required', 'confirmed', Password::min(5)->mixedCase()->numbers()]]);
         $user = new User(['name' => $data['name'], 'username' => 'host_'.strtolower(Str::random(18)), 'email' => strtolower($data['email']), 'password' => $data['password'], 'active' => true]);
         $user->requires_email_verification = true;
         $user->save();

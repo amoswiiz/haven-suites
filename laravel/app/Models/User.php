@@ -27,6 +27,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Tenant::class)->withPivot('roles', 'legacy_user_id');
     }
 
+    public function hasMultipleCompanies(): bool
+    {
+        return $this->tenants()->where('active', true)->limit(2)->get(['tenants.id'])->count() > 1;
+    }
+
     public function roles(): array
     {
         if (! app()->bound('currentTenant')) {
@@ -46,7 +51,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         foreach ((array) $abilities as $ability) {
             $module = match (explode('.', $ability)[0]) {
-                'investors', 'investor' => 'investors', 'notifications' => 'notifications',
+                'tasks' => 'tasks', 'investors', 'investor' => 'investors', 'notifications' => 'notifications',
                 'sales' => 'sales', 'agents' => 'agents', 'messaging' => 'messaging',
                 'reservations' => 'reservations', 'units', 'properties', 'availability' => 'properties',
                 'housekeeping' => 'housekeeping', 'maintenance' => 'maintenance',

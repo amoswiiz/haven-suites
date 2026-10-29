@@ -167,7 +167,7 @@ class RoyceTalkSmsTest extends TestCase
         $admin = User::factory()->create();
         $admin->tenants()->attach($tenant, ['roles' => json_encode(['admin']), 'legacy_user_id' => 1]);
         DB::table('investor_deliveries')->where('id', $id)->update(['status' => 'undelivered', 'sms_provider' => 'roycetalk', 'provider_reference' => 'review-reference', 'provider_status' => 'rejected']);
-        $this->actingAs($admin)->get('/t/'.$tenant->slug.'/investor-notifications')->assertOk()->assertSee('review-reference')->assertSee('undelivered');
+        $this->actingAs($admin)->get('/t/'.$tenant->slug.'/investor-notifications')->assertOk()->assertSee('review-reference')->assertSee('Not delivered');
         $this->post('/t/'.$tenant->slug.'/investor-notifications/'.$id.'/retry')->assertRedirect();
         $this->assertDatabaseHas('investor_deliveries', ['id' => $id, 'status' => 'pending', 'provider_reference' => null, 'provider_status' => null]);
         $this->assertStringContainsString('review-reference', DB::table('investor_audit_events')->where('action', 'notification.retry')->value('details'));

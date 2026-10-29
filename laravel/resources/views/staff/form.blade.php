@@ -78,7 +78,16 @@ $canResetPassword = (bool) ($canResetPassword ?? false);
                             </div>
                         </div>
                     <?php elseif (!$hasLoginAccount): ?>
-                        <p class="text-muted mb-0">This staff record is not linked to a login account. Link an account before resetting its password.</p>
+                        <p class="text-muted mb-2">This staff member does not have a linked login.</p>
+<?php if (haven_can_access(site_url('staff/' . $member['id'] . '/account/create'), 'GET')): ?>
+    <a class="btn btn-outline-primary"
+       href="<?= esc(site_url('staff/' . $member['id'] . '/account/create'), 'attr') ?>">
+        Create login
+    </a>
+    <p class="text-muted small mt-2 mb-0">
+        Save any staff changes first. You can set a password directly; no email invitation is required.
+    </p>
+<?php endif; ?>
                     <?php else: ?>
                         <p class="text-muted mb-0">You do not have permission to reset staff passwords.</p>
                     <?php endif; ?>

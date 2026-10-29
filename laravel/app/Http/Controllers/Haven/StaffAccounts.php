@@ -59,7 +59,7 @@ class StaffAccounts extends BaseController
         $group = (string) $this->request->getPost('group');
 
         if (!in_array($group, $this->allowedGroups, true)) {
-            return redirect()->back()->withInput()
+            return redirect()->back()->withInput(request()->except(['password', 'password_confirmation', 'new_password', 'confirm_password']))
                 ->with('error', 'Invalid user role selected.');
         }
 
@@ -68,7 +68,7 @@ class StaffAccounts extends BaseController
         $validation->setRules([
             'username' => 'required|min_length[3]|max_length[30]|alpha_dash',
             'email' => 'required|valid_email|max_length[150]',
-            'password' => 'required|min_length[12]',
+            'password' => 'required|min_length[5]',
         ]);
 
         if (!$validation->run([
@@ -76,7 +76,7 @@ class StaffAccounts extends BaseController
             'email' => $email,
             'password' => $password,
         ])) {
-            return redirect()->back()->withInput()
+            return redirect()->back()->withInput(request()->except(['password', 'password_confirmation', 'new_password', 'confirm_password']))
                 ->with('error', implode(' ', $validation->getErrors()));
         }
 
@@ -87,7 +87,7 @@ class StaffAccounts extends BaseController
         ]);
 
         if ($existing) {
-            return redirect()->back()->withInput()
+            return redirect()->back()->withInput(request()->except(['password', 'password_confirmation', 'new_password', 'confirm_password']))
                 ->with('error', 'An account already exists with this email.');
         }
 
@@ -96,6 +96,7 @@ class StaffAccounts extends BaseController
 
         try {
             $user = new User([
+                'name' => $member['full_name'],
                 'username' => $username,
                 'email' => $email,
                 'password' => $password,
@@ -143,7 +144,7 @@ class StaffAccounts extends BaseController
 
             log_message('error', 'Staff account creation failed: ' . $e->getMessage());
 
-            return redirect()->back()->withInput()
+            return redirect()->back()->withInput(request()->except(['password', 'password_confirmation', 'new_password', 'confirm_password']))
                 ->with('error', 'Unable to create the staff account. Check the application logs.');
         }
     }

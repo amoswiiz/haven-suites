@@ -11,7 +11,9 @@ use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\SaasAccountController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UnitAccountingController;
+use App\Http\Controllers\WorkCentreController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('pricing', 'saas.pricing')->name('pricing');
@@ -36,12 +38,35 @@ Route::middleware('auth')->group(function (): void {
     });
     Route::prefix('platform')->middleware(['saas.verified', 'platform.admin'])->group(function (): void {
         Route::get('/', [PlatformController::class, 'index'])->name('platform.index');
+        Route::get('companies/create', [PlatformController::class, 'create'])->name('platform.company.create');
+        Route::post('companies', [PlatformController::class, 'store'])->middleware('throttle:3,10')->name('platform.company.store');
+        Route::post('invitations/{id}/resend', [PlatformController::class, 'resendInvitation'])->whereNumber('id')->middleware('throttle:3,1')->name('platform.invitation.resend');
         Route::post('companies/{id}/modules', [PlatformController::class, 'modules'])->whereNumber('id')->name('platform.company.modules');
         Route::post('companies/{id}', [PlatformController::class, 'update'])->whereNumber('id')->name('platform.company.update');
         Route::post('payments/{id}/approve', [BillingController::class, 'approve'])->whereNumber('id')->name('platform.payment.approve');
     });
 });
 Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::prefix('tasks')->name('tasks.')->group(function (): void {
+        Route::get('/', [TaskController::class, 'index'])->name('index');
+        Route::get('new', [TaskController::class, 'create'])->name('create');
+        Route::post('/', [TaskController::class, 'store'])->name('store');
+        Route::get('notifications', [TaskController::class, 'notices'])->name('notifications');
+        Route::post('notifications/{id}/read', [TaskController::class, 'readNotice'])->whereNumber('id')->name('read');
+        Route::get('preferences', [TaskController::class, 'preferences'])->name('preferences');
+        Route::post('preferences', [TaskController::class, 'savePreferences'])->name('preferences.save');
+        Route::get('{id}', [TaskController::class, 'show'])->whereNumber('id')->name('show');
+        Route::get('{id}/edit', [TaskController::class, 'edit'])->whereNumber('id')->name('edit');
+        Route::post('{id}', [TaskController::class, 'update'])->whereNumber('id')->name('update');
+        Route::post('{id}/action', [TaskController::class, 'action'])->whereNumber('id')->name('action');
+        Route::post('{id}/comments', [TaskController::class, 'comment'])->whereNumber('id')->name('comment');
+        Route::get('{id}/attachments/{update}', [TaskController::class, 'attachment'])->whereNumber(['id', 'update'])->name('attachment');
+    });
+    Route::get('work', [WorkCentreController::class, 'index'])->name('work.index');
+    Route::post('work', [WorkCentreController::class, 'store'])->name('work.store');
+    Route::post('work/{id}/resolve', [WorkCentreController::class, 'resolve'])->whereNumber('id')->name('work.resolve');
+    Route::get('today', [WorkCentreController::class, 'today'])->name('work.today');
+    Route::get('company/setup', [WorkCentreController::class, 'setup'])->name('work.setup');
     Route::get('onboarding', [OnboardingController::class, 'property'])->name('onboarding.property');
     Route::post('onboarding', [OnboardingController::class, 'finish'])->name('onboarding.finish');
     Route::get('company/settings', [CompanySettingsController::class, 'edit'])->name('company.settings');
@@ -95,8 +120,10 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
     Route::post('investors/{id}/payouts', [InvestorController::class, 'payout'])->whereNumber('id')->middleware(['permission:investors.manage', 'permission:finance.manage'])->name('investors.payout');
     Route::get('investor-portal', [InvestorController::class, 'portal'])->middleware('permission:investor.portal')->name('investor.portal');
     Route::get('investor-portal/reports', [InvestorController::class, 'reports'])->middleware('permission:investor.portal')->name('investor.reports');
-    Route::get('investor-portal/{section}', [InvestorController::class, 'portal'])->where('section', 'properties|statements|payouts|agreements|settings')->middleware('permission:investor.portal')->name('investor.section');
+    Route::get('investor-portal/{section}', [InvestorController::class, 'portal'])->where('section', 'properties|bookings|money|statements|payouts|agreements|settings')->middleware('permission:investor.portal')->name('investor.section');
     Route::post('investor-portal/preferences', [InvestorController::class, 'preferences'])->middleware('permission:investor.portal')->name('investor.preferences');
+    Route::post('investor-portal/contact-verification', [InvestorController::class, 'sendContactVerification'])->middleware(['permission:investor.portal', 'throttle:3,1'])->name('investor.contact.send');
+    Route::get('investor-portal/contact/verify/{hash}', [InvestorController::class, 'verifyContact'])->middleware(['permission:investor.portal', 'signed'])->name('investor.contact.verify');
     Route::post('investor-portal/notifications/{id}/read', [InvestorController::class, 'read'])->whereNumber('id')->middleware('permission:investor.portal')->name('investor.read');
     Route::get('investor-portal/statements/{id}', [InvestorController::class, 'statement'])->whereNumber('id')->name('investor.statement');
     Route::get('investor-notifications', [InvestorController::class, 'notifications'])->middleware('permission:notifications.view')->name('investor.notifications');

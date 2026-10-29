@@ -6,6 +6,7 @@
 @endsection
 @section('content')
 @if(auth()->user()->inGroup('admin','superadmin') && haven_can_access(site_url('invoices/settings'),'GET'))<div class="text-end mb-3"><a class="btn btn-outline-secondary btn-sm" href="{{ site_url('invoices/settings') }}">Invoice settings</a></div>@endif
+@if(empty($settings['id']))<div class="alert alert-warning">Invoice numbering is not configured for this company. @if(haven_can_access(site_url('invoices/settings'),'GET'))<a href="{{ site_url('invoices/settings') }}">Complete invoice settings</a>@else Ask an administrator to complete invoice settings.@endif You can prepare a draft, but it cannot be issued yet.</div>@endif
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
  <div><?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a href="<?= site_url('invoices') ?>" class="small text-decoration-none">&larr; Invoice Directory</a><?php endif; ?><h3 class="fw-bold mt-2 hs-invoice-title">Create Invoice Draft</h3><p class="text-muted mb-0">Choose a reservation or bill a customer directly.</p></div>
 </div>

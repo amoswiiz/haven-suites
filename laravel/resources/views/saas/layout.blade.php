@@ -22,7 +22,7 @@ body:not(.has-company-sidebar) .saas-content{padding:0}.saas-content{max-width:1
 <aside id="company-navigation" class="hs-sidebar" aria-label="Account navigation">
 <button type="button" class="secondary hs-menu-toggle hs-menu-close" style="margin:16px">Close menu</button>
 <div class="hs-brand"><span class="hs-brand-name">HAVEN SUITES</span></div>
-<nav class="hs-nav" aria-label="Main navigation"><a class="hs-nav-link" href="{{ url('/') }}">My companies</a>
+<nav class="hs-nav" aria-label="Main navigation"><a class="hs-nav-link" href="{{ url('/') }}">{{ auth()->user()->hasMultipleCompanies() ? 'My companies' : 'My workspace' }}</a>
 @if(auth()->user()->is_platform_admin)
 <a class="hs-nav-link {{ request()->is('platform*')?'active':'' }}" href="{{ route('platform.index') }}">Platform administration</a>
 @endif
@@ -36,24 +36,9 @@ body:not(.has-company-sidebar) .saas-content{padding:0}.saas-content{max-width:1
 @endauth
 <header>@auth<button type="button" class="hs-menu-toggle company-menu-toggle" aria-controls="company-navigation" aria-expanded="false">Menu</button>@endauth<a class="brand" href="{{ url('/') }}">{{ app()->bound('currentTenant') ? app('currentTenant')->name : 'HAVEN SUITES' }}<small>PROPERTY MANAGEMENT</small></a><nav>
 @auth
-<a href="{{ url('/') }}">My companies</a>
-@if(app()->bound('currentTenant') && haven_can_access(site_url('sales'),'GET'))
-<a href="{{ route('sales.index',app('currentTenant')->slug) }}">Sales pipeline</a>
-@endif
-@if(app()->bound('currentTenant') && haven_can_access(site_url('sales/agents'),'GET'))
-<a href="{{ route('sales.agents',app('currentTenant')->slug) }}">Agents</a>
-@endif
-@if(app()->bound('currentTenant') && haven_can_access(site_url('sales/connections'),'GET'))
-<a href="{{ route('sales.connections',app('currentTenant')->slug) }}">Messaging</a>
-@endif
+@if(!app()->bound('currentTenant'))<a href="{{ url('/') }}">{{ auth()->user()->hasMultipleCompanies() ? 'My companies' : 'My workspace' }}</a>@endif
 @if(auth()->user()->is_platform_admin)<a href="{{ route('platform.index') }}">Platform</a>@endif
-@if(app()->bound('currentTenant') && auth()->user()->inGroup('superadmin','admin'))
-<a href="{{ site_url('dashboard') }}">Dashboard</a><a href="{{ route('company.settings', app('currentTenant')->slug) }}">Company</a>
-@if(haven_can_access(site_url('company/team'),'GET'))
-<a href="{{ route('company.team', app('currentTenant')->slug) }}">Team</a>
-@endif
-<a href="{{ route('company.subscription', app('currentTenant')->slug) }}">Subscription</a>
-@endif
+<span aria-label="Current page">@yield('title','Workspace')</span>
 <form class="inline" method="post" action="{{ url('/logout') }}">@csrf<button>Sign out</button></form>
 @else<a href="{{ route('pricing') }}">Plans</a><a href="{{ url('/login') }}">Sign in</a><a href="{{ route('register') }}">Start free trial</a>@endauth
 </nav></header>

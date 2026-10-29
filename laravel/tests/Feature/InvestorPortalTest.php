@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class InvestorPortalTest extends TestCase
@@ -41,6 +42,56 @@ class InvestorPortalTest extends TestCase
         return DB::table('investors')->where('id', $id)->first();
     }
 
+    public function test_investors_manage_only_their_contacts_and_confirm_new_email(): void
+    {
+        Mail::fake();
+        $tenant = $this->company();
+        $owner = $this->member($tenant);
+        $investor = $this->profile($tenant, $owner);
+        $other = $this->profile($tenant, $this->member($tenant));
+        $url = '/t/'.$tenant->slug.'/investor-portal/preferences';
+        $this->actingAs($owner)->post($url, ['communication_email' => 'updates@example.test', 'phone' => '0702 898 694', 'sms_consent' => 1, 'email_notifications' => 1, 'sms_notifications' => 1, 'investor_id' => $other->id, 'phone_verified_at' => now()])->assertSessionHasNoErrors()->assertRedirect();
+        $saved = DB::table('investors')->find($investor->id);
+        $this->assertSame('+254702898694', $saved->phone);
+        $this->assertNull($saved->phone_verified_at);
+        $this->assertNotNull($saved->sms_consented_at);
+        $this->assertFalse((bool) $saved->sms_notifications);
+        $this->assertSame('updates@example.test', $saved->communication_email);
+        $this->assertNull($saved->communication_email_verified_at);
+        $this->assertSame($owner->email, $owner->fresh()->email);
+        $this->assertSame($owner->email, $saved->email);
+        $this->assertNull(DB::table('investors')->find($other->id)->communication_email);
+        $this->post($url, ['communication_email' => 'bad', 'phone' => 'bad', 'email_notifications' => 1, 'sms_notifications' => 0])->assertSessionHasErrors(['communication_email', 'phone']);
+        $hash = hash('sha256', $investor->id.':updates@example.test');
+        $link = URL::temporarySignedRoute('investor.contact.verify', now()->addHour(), ['tenant' => $tenant->slug, 'hash' => $hash]);
+        $this->get($link)->assertRedirect();
+        $this->assertNotNull(DB::table('investors')->find($investor->id)->communication_email_verified_at);
+        $this->post($url, ['communication_email' => 'new@example.test', 'email_notifications' => 1, 'sms_notifications' => 0])->assertSessionHasNoErrors();
+        $this->get($link)->assertForbidden();
+        $this->get('/t/'.$tenant->slug.'/investor-portal/settings')->assertOk()->assertSee('Communication email')->assertSee('Mobile number')->assertSee('Send email confirmation');
+        Mail::assertNothingSent();
+    }
+
+    public function test_email_updates_wait_for_communication_address_confirmation(): void
+    {
+        config(['investors.live_delivery' => false]);
+        $tenant = $this->company();
+        $owner = $this->member($tenant);
+        $investor = $this->profile($tenant, $owner);
+        DB::table('investors')->where('id', $investor->id)->update(['communication_email' => 'updates@example.test']);
+        $investor = DB::table('investors')->find($investor->id);
+        $service = app(InvestorNotifications::class);
+        $event = $service->record($investor, 'unconfirmed-contact', 'test', 'Test', 'Update');
+        $delivery = DB::table('investor_deliveries')->where('event_id', $event)->where('channel', 'email')->first();
+        $service->deliver($delivery->id);
+        $this->assertSame('skipped', DB::table('investor_deliveries')->find($delivery->id)->status);
+        DB::table('investors')->where('id', $investor->id)->update(['communication_email_verified_at' => now()]);
+        $event = $service->record($investor, 'confirmed-contact', 'test', 'Test', 'Update');
+        $delivery = DB::table('investor_deliveries')->where('event_id', $event)->where('channel', 'email')->first();
+        $service->deliver($delivery->id);
+        $this->assertSame('simulated', DB::table('investor_deliveries')->find($delivery->id)->status);
+    }
+
     public function test_investor_reports_filter_published_flows_and_keep_latest_balances(): void
     {
         $tenant = $this->company();
@@ -63,13 +114,25 @@ class InvestorPortalTest extends TestCase
         $dashboard = $this->get('/t/'.$tenant->slug.'/investor-portal?month=2026-02')->assertOk()->assertSee('Your investment overview')->assertSee('KES -20.00')->assertSee('Haven funds operating expenses');
         $this->assertLessThan(strpos($dashboard->getContent(), 'Your unit bookings'), strpos($dashboard->getContent(), 'Net entitlement'));
         $dashboard->assertDontSee('Email and SMS preferences')->assertDontSee('Reservations &amp; Guests', false);
-        foreach (['properties', 'statements', 'payouts', 'agreements', 'settings'] as $section) {
+        foreach (['properties', 'money', 'agreements', 'settings'] as $section) {
             $page = $this->get('/t/'.$tenant->slug.'/investor-portal/'.$section.'?unit_id=1&month=2026-02')->assertOk();
             $this->assertSame($section, $page->viewData('section'));
             $page->assertDontSee('Your unit bookings');
         }
         $this->get('/t/'.$tenant->slug.'/investor-portal/settings')->assertOk()->assertSee('Email and SMS preferences');
         $this->get('/t/'.$tenant->slug.'/investor-portal?tab=invalid')->assertSessionHasErrors('tab');
+        $moneyUrl = '/t/'.$tenant->slug.'/investor-portal/money';
+        $money = $this->get($moneyUrl.'?month=2026-02')->assertOk()->assertSee('Statements &amp; Payments', false)->assertSee('Your earnings for the month')->assertSee('Payment history')->assertSee('KES -20.00')->assertSee('KES 80.00');
+        $this->assertSame(1, $money->viewData('statements')->total());
+        $this->assertSame(1, $money->viewData('payouts')->total());
+        $allHistory = $this->get($moneyUrl.'?month=2026-02&history=all')->assertOk();
+        $this->assertSame(3, $allHistory->viewData('statements')->total());
+        $this->assertSame(2, $allHistory->viewData('payouts')->total());
+        $this->get($moneyUrl.'?month=2026-03')->assertOk()->assertSee('Awaiting statement')->assertSee('No payments published for this selection.');
+        $this->get($moneyUrl.'?history=invalid')->assertSessionHasErrors('history');
+        foreach (['statements', 'payouts'] as $oldSection) {
+            $this->get('/t/'.$tenant->slug.'/investor-portal/'.$oldSection.'?month=2026-02&unit_id=1')->assertRedirect(route('investor.section', ['tenant' => $tenant->slug, 'section' => 'money', 'month' => '2026-02', 'unit_id' => 1]));
+        }
         $monthly = $this->get($url.'?month=2026-02')->assertOk();
         $this->assertCount(1, $monthly->viewData('rows'));
         $this->assertSame(-2000, $monthly->viewData('totals')['entitlement']);
@@ -84,6 +147,7 @@ class InvestorPortalTest extends TestCase
         $other = $this->member($tenant);
         $this->profile($tenant, $other);
         $this->actingAs($other)->get($url.'?period=yearly&year=2026')->assertOk()->assertDontSee('PRIVATE-FORMULA');
+        $this->get($moneyUrl.'?month=2026-02&history=all')->assertOk()->assertDontSee('PRIVATE-FORMULA')->assertDontSee('REPORT-PAYOUT');
         $this->actingAs($other)->get($url.'?unit_id=1&download=csv')->assertNotFound();
         $tenant->modules = ['investors' => false];
         $tenant->save();
@@ -154,6 +218,14 @@ class InvestorPortalTest extends TestCase
             $actual = collect($response->viewData('bookingLists'))->flatMap(fn ($page) => $page->pluck('id'))->sort()->values()->all();
             sort($visible);
             $this->assertSame($visible, $actual);
+            $tenant->update(['contact_email' => 'manager@example.test', 'contact_phone' => '+254702898694']);
+            $calendar = $this->get('/t/'.$tenant->slug.'/investor-portal/bookings?month=2026-10')->assertOk()->assertSee('Booking calendar')->assertSee('Previous month')->assertSee('5,000.00')->assertDontSee('PRIVATE GUEST NAME')->assertDontSee('private-guest@example.test');
+            $this->assertSame($visible, $calendar->viewData('calendarBookings')->pluck('id')->sort()->values()->all());
+            $novemberCalendar = $this->get('/t/'.$tenant->slug.'/investor-portal/bookings?month=2026-11')->assertOk();
+            $this->assertCount(1, $novemberCalendar->viewData('calendarBookings'));
+            $this->get('/t/'.$tenant->slug.'/investor-portal/bookings?unit_id='.$otherUnit)->assertNotFound();
+            $this->get('/t/'.$tenant->slug.'/investor-portal/settings')->assertOk()->assertSee('mailto:manager@example.test', false)->assertSee('tel:+254702898694', false);
+
             $response->assertSee('Nightly rate')->assertSee('Total stay price')->assertSee('Monthly report summary')->assertSee('5,000.00');
             $this->assertSame(3, $response->viewData('monthly')['bookings']);
             $this->assertSame(9, $response->viewData('monthly')['nights']);
@@ -167,6 +239,8 @@ class InvestorPortalTest extends TestCase
             $tenant->modules = ['reservations' => false];
             $tenant->save();
             $this->get('/t/'.$tenant->slug.'/investor-portal')->assertOk()->assertDontSee('Your unit bookings');
+            $disabledCalendar = $this->get('/t/'.$tenant->slug.'/investor-portal/bookings')->assertOk()->assertSee('Booking visibility is currently disabled');
+            $this->assertCount(0, $disabledCalendar->viewData('calendarBookings'));
         } finally {
             while ($db->transactionLevel() > 0) {
                 $db->rollBack();

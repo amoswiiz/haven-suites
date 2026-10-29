@@ -22,6 +22,7 @@
 </div>
 <?php if (haven_session()->getFlashdata('success')): ?><div class="alert alert-success no-print" style="max-width:1000px;margin:0 auto 16px"><?= esc(haven_session()->getFlashdata('success')) ?></div><?php endif; ?>
 <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger no-print" style="max-width:1000px;margin:0 auto 16px"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
+@if($invoice['status']==='draft' && empty($settings['id']))<div class="alert alert-warning no-print">Complete company invoice settings before issuing this draft. @if(haven_can_access(site_url('invoices/settings'),'GET'))<a href="{{ site_url('invoices/settings') }}">Open invoice settings</a>@endif</div>@endif
 @include('invoices.document')
 
 <?php if (($invoice['status'] ?? '') !== 'void'): ?>

@@ -1,6 +1,7 @@
 <?php
 $currentPath = trim(uri_string(), '/');
 $user = haven_auth()->user();
+$taskUnread = $user && ($user->can('tasks.view') || $user->can('tasks.owner')) ? \Illuminate\Support\Facades\DB::table('task_notices')->where('tenant_id',app('currentTenant')->id)->where('user_id',auth()->id())->whereNull('read_at')->count() : 0;
 
 $groups = [
     ['label' => 'Communications', 'icon' => 'message-circle', 'items' => [
@@ -83,10 +84,11 @@ foreach (['Reservations & Guests' => 'Bookings & Guests', 'Operations' => 'Opera
     }
     if ($label === 'Settings') {
         $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => $item['path'] !== 'owner-statement-closing'));
-        foreach (['invoices/settings' => 'Invoice settings', 'company/settings' => 'Company settings', 'company/team' => 'Team & access', 'company/subscription' => 'Subscription'] as $path => $name) {
+        foreach (['company/setup' => 'Setup checklist', 'invoices/settings' => 'Invoice settings', 'company/settings' => 'Company settings', 'company/team' => 'Team & access', 'company/subscription' => 'Subscription'] as $path => $name) {
             $group['items'][] = ['label' => $name, 'path' => $path, 'access' => 'company_admin', 'icon' => 'settings'];
         }
     }
+    if ($label === 'Operations') array_unshift($group['items'], ['label'=>"Today's work", 'path'=>'today', 'access'=>'daily_work', 'icon'=>'calendar-days']);
     if ($label === 'Finance') $group['items'][] = $byLabel['Team & Settings']['items'][1];
     $groups[] = $group;
 }
@@ -108,9 +110,10 @@ if ($investorNavigation) {
     $groups = [['label' => 'Investor workspace', 'icon' => 'house', 'items' => [
         ['label' => 'Dashboard', 'path' => 'investor-portal', 'permission' => 'investor.portal', 'icon' => 'house'],
         ['label' => 'Properties', 'path' => 'investor-portal/properties', 'permission' => 'investor.portal', 'icon' => 'building-2'],
+        ['label' => 'Property tasks'.($taskUnread ? ' ('.$taskUnread.')' : ''), 'path' => 'tasks', 'permission' => 'tasks.owner', 'icon' => 'clipboard-list'],
+        ['label' => 'Bookings', 'path' => 'investor-portal/bookings', 'permission' => 'investor.portal', 'icon' => 'calendar-days'],
         ['label' => 'Reports', 'path' => 'investor-portal/reports', 'permission' => 'investor.portal', 'icon' => 'file-text'],
-        ['label' => 'Statements', 'path' => 'investor-portal/statements', 'permission' => 'investor.portal', 'icon' => 'file-text'],
-        ['label' => 'Payouts', 'path' => 'investor-portal/payouts', 'permission' => 'investor.portal', 'icon' => 'wallet'],
+        ['label' => 'Statements & Payments', 'path' => 'investor-portal/money', 'permission' => 'investor.portal', 'icon' => 'file-text'],
         ['label' => 'Agreements', 'path' => 'investor-portal/agreements', 'permission' => 'investor.portal', 'icon' => 'handshake'],
         ['label' => 'Settings', 'path' => 'investor-portal/settings', 'permission' => 'investor.portal', 'icon' => 'settings'],
     ]]];
@@ -118,6 +121,7 @@ if ($investorNavigation) {
 
 $canAccess = static function (array $item) use ($user): bool {
     if ($user === null) return false;
+    if (($item['access'] ?? '') === 'daily_work') { return $user->can('units.view') && $user->can('reservations.view'); }
     if (($item['access'] ?? '') === 'company_admin') {
         return $user->inGroup('admin', 'superadmin');
     }
@@ -144,6 +148,7 @@ $activePath = match ($activePath) {
 };
 if (str_starts_with($currentPath, 'receipts/')) $activePath = 'invoices';
 if ($currentPath === 'dashboard') $activePath = 'dashboard';
+if (str_starts_with($currentPath,'work')) $activePath = 'work';
 $isActive = static fn (string $path): bool => $activePath === $path;
 ?>
 <style>
@@ -177,7 +182,13 @@ $isActive = static fn (string $path): bool => $activePath === $path;
             @endif
         </div>
     </div>
-    <div class="px-3 mb-3"><a class="hs-nav-link" href="{{ url('/') }}" aria-label="Switch company">{{ app('currentTenant')->name }} <span class="small">&middot; Switch company</span></a><label for="menu-search" class="form-label mt-2">Find a page</label><input id="menu-search" type="search" class="form-control" placeholder="Booking, rent, receipt" autocomplete="off" aria-controls="sidebar-links"><p id="menu-search-status" class="small mt-2" role="status" aria-live="polite"></p></div><div class="hs-menu-heading">MAIN MENU</div>
+    <div class="px-3 mb-3"><div class="py-2 fw-semibold">{{ app('currentTenant')->name }}</div>
+    @if(auth()->user()->is_platform_admin)
+    <a class="hs-nav-link" href="{{ route('platform.index') }}">Platform administration</a>
+    @elseif(auth()->user()->hasMultipleCompanies())
+    <a class="hs-nav-link" href="{{ url('/') }}">Switch company</a>
+    @endif
+    <label for="menu-search" class="form-label mt-2">Find a page</label><input id="menu-search" type="search" class="form-control" placeholder="Booking, rent, receipt" autocomplete="off" aria-controls="sidebar-links"><p id="menu-search-status" class="small mt-2" role="status" aria-live="polite"></p></div><div class="hs-menu-heading">MAIN MENU</div>
     @if(!$investorNavigation)
     @php($createActions = ['reservations/create' => 'New booking', 'sales/new' => 'New enquiry', 'quotations/create' => 'New quotation', 'invoices/create' => 'New invoice', 'communications/sms' => 'Send SMS'])
     @php($createActions = array_filter($createActions, static fn (string $path): bool => haven_can_access(site_url($path), 'GET'), ARRAY_FILTER_USE_KEY))
@@ -188,12 +199,14 @@ $isActive = static fn (string $path): bool => $activePath === $path;
     @endif
     @endif
     <nav id="sidebar-links" class="hs-nav" aria-label="Main navigation">
+        @if(!$investorNavigation && $user->can('tasks.view'))<a data-menu-item data-keywords="tasks assignments deadlines work" class="hs-nav-link {{ str_starts_with($currentPath,'tasks') ? 'active' : '' }}" href="{{ route('tasks.index',app('currentTenant')->slug) }}" @if(str_starts_with($currentPath,'tasks')) aria-current="page" @endif>Tasks @if($taskUnread)<span class="pill">{{ $taskUnread }} unread</span>@endif</a>@endif
 
         <?php if (!$investorNavigation && $user !== null && $user->can('dashboard.view')): ?>
             <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" data-menu-item data-keywords="home overview today" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>" <?= $isActive('dashboard') ? 'aria-current="page"' : '' ?>>
                 <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
             </a><?php endif; ?>
         <?php endif; ?>
+        @if(!$investorNavigation && ($user->can('sales.view') || $user->can('reservations.view') || $user->can('finance.view')))<a data-menu-item data-keywords="approvals requests tasks finance reservations" href="{{ site_url('work') }}" class="hs-nav-link {{ $isActive('work')?'active':'' }}" @if($isActive('work')) aria-current="page" @endif>Work inbox &amp; approvals</a>@endif
         <?php foreach ($groups as $group): ?>
             <?php
                 $visible = array_values(array_filter($group['items'], static fn ($item) => $canAccess($item) && haven_can_access(site_url($item['path']), 'GET')));

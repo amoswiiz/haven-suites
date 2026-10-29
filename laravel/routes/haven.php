@@ -486,12 +486,12 @@ Route::post('staff/update/{id}', [Staff::class, 'update'])->middleware([
 Route::get('staff/{id}/account/create', [StaffAccounts::class, 'create'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:users.manage',
+    2 => 'permission:staff.accounts.manage',
 ])->whereNumber('id');
 Route::post('staff/{id}/account/store', [StaffAccounts::class, 'store'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:users.manage',
+    2 => 'permission:staff.accounts.manage',
 ])->whereNumber('id');
 Route::get('maintenance', [Maintenance::class, 'index'])->middleware([
     0 => 'auth',

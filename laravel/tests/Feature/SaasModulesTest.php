@@ -52,6 +52,86 @@ class SaasModulesTest extends TestCase
         return DB::connection('tenant');
     }
 
+    public function test_platform_can_create_an_isolated_company_and_invite_its_administrator(): void
+    {
+        Notification::fake();
+        $platform = User::factory()->create();
+        $platform->forceFill(['is_platform_admin' => true])->save();
+        $this->actingAs($platform)->get('/platform/companies/create')->assertOk()->assertSee('Create company');
+        $this->post('/platform/companies', ['name' => 'New Coastal Company', 'slug' => 'new-coastal-company', 'admin_email' => 'ADMIN@example.test', 'plan' => 'team', 'modules' => ['team', 'properties', 'reservations', 'finance']])->assertSessionHasNoErrors()->assertRedirect(route('platform.index'));
+        $tenant = Tenant::where('slug', 'new-coastal-company')->firstOrFail();
+        $this->databases[] = $tenant->database_name;
+        $this->assertSame('team', $tenant->plan);
+        $this->assertSame('trial', $tenant->subscription_status);
+        $this->assertFalse($tenant->modules['messaging']);
+        $this->assertSame(0, $tenant->users()->count());
+        $this->assertSame(0, $this->operational($tenant)->table('reservations')->count());
+        $this->assertSame('New Coastal Company', $this->operational($tenant)->table('invoice_settings')->value('business_name'));
+        $invitation = CompanyInvitation::where('tenant_id', $tenant->id)->firstOrFail();
+        $this->assertSame('admin@example.test', $invitation->email);
+        $this->assertSame('admin', $invitation->role);
+        $url = null;
+        Notification::assertSentOnDemand(CompanyInvitationNotification::class, function ($notification) use (&$url): bool {
+            $url = $notification->invitationUrl;
+
+            return true;
+        });
+        $oldHash = $invitation->token_hash;
+        $this->post('/platform/invitations/'.$invitation->id.'/resend')->assertRedirect(route('platform.index'));
+        $this->assertNotSame($oldHash, $invitation->fresh()->token_hash);
+        $this->get($url)->assertNotFound();
+        $newUrl = null;
+        Notification::assertSentOnDemand(CompanyInvitationNotification::class, function ($notification) use ($url, &$newUrl): bool {
+            if ($notification->invitationUrl === $url) {
+                return false;
+            }
+            $newUrl = $notification->invitationUrl;
+
+            return true;
+        });
+        $invitation->update(['expires_at' => now()->subMinute()]);
+        $this->get($newUrl)->assertGone();
+        $invitation->update(['expires_at' => now()->addDays(7)]);
+        $wrongUser = User::factory()->create();
+        $this->actingAs($wrongUser)->post($newUrl)->assertForbidden();
+        $admin = User::factory()->create(['email' => 'admin@example.test']);
+        $this->actingAs($admin)->post($newUrl)->assertRedirect('/t/'.$tenant->slug.'/company/setup');
+        $this->assertNotNull($invitation->fresh()->accepted_at);
+        $this->assertFalse($admin->fresh()->is_platform_admin);
+        $this->assertSame(['admin'], json_decode($admin->tenants()->first()->pivot->roles, true));
+        $this->get('/t/'.$tenant->slug.'/company/setup')->assertOk();
+        $this->get('/platform')->assertForbidden();
+        $this->actingAs($platform)->get('/t/'.$tenant->slug.'/dashboard')->assertForbidden();
+        $this->post('/platform/companies', ['name' => 'Duplicate', 'slug' => $tenant->slug, 'admin_email' => 'other@example.test', 'plan' => 'starter', 'modules' => ['team']])->assertSessionHasErrors('slug');
+    }
+
+    public function test_company_creation_requires_platform_access_and_valid_modules(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create();
+        $this->actingAs($user)->get('/platform/companies/create')->assertForbidden();
+        $this->post('/platform/companies', [])->assertForbidden();
+        $user->forceFill(['is_platform_admin' => true])->save();
+        $this->post('/platform/companies', ['name' => 'Invalid', 'slug' => 'invalid-company', 'admin_email' => 'admin@example.test', 'plan' => 'starter', 'modules' => ['properties']])->assertSessionHasErrors('modules');
+        $this->assertDatabaseCount('tenants', 0);
+        Notification::assertNothingSent();
+    }
+
+    public function test_invitation_delivery_failure_keeps_the_company_available_for_resend(): void
+    {
+        Notification::shouldReceive('send')->once()->andThrow(new \RuntimeException('Test mail failure'));
+        $platform = User::factory()->create();
+        $platform->forceFill(['is_platform_admin' => true])->save();
+        $this->actingAs($platform)->post('/platform/companies', ['name' => 'Mail Retry Company', 'slug' => 'mail-retry-company', 'admin_email' => 'retry@example.test', 'plan' => 'starter', 'modules' => ['team']])->assertRedirect(route('platform.index'))->assertSessionHasErrors('invitation');
+        $tenant = Tenant::where('slug', 'mail-retry-company')->firstOrFail();
+        $this->databases[] = $tenant->database_name;
+        $invitation = CompanyInvitation::where('tenant_id', $tenant->id)->firstOrFail();
+        Notification::fake();
+        $this->post('/platform/invitations/'.$invitation->id.'/resend')->assertRedirect(route('platform.index'))->assertSessionHas('success');
+        Notification::assertSentOnDemand(CompanyInvitationNotification::class);
+        $this->assertDatabaseCount('tenants', 1);
+    }
+
     public function test_registration_requires_verification_and_cannot_grant_platform_access(): void
     {
         Notification::fake();
@@ -80,6 +160,11 @@ class SaasModulesTest extends TestCase
         $this->assertSame(1, $db->table('properties')->count());
         $this->post('/t/'.$tenant->slug.'/reservations/store', ['booking_type' => 'managed', 'unit_id' => $unit, 'guest_name' => 'First Guest', 'guest_phone' => '0700000000', 'guest_email' => '', 'check_in' => '2036-01-10', 'check_out' => '2036-01-12', 'adults' => 1, 'children' => 0, 'nightly_rate' => 4500, 'amount_paid' => 0, 'status' => 'confirmed'])->assertSessionHas('success');
         $this->assertEquals(9000, $this->operational($tenant)->table('reservations')->value('total_amount'));
+        $this->assertSame('New host company', $this->operational($tenant)->table('invoice_settings')->value('business_name'));
+        $reservation = $this->operational($tenant)->table('reservations')->value('id');
+        $this->post('/t/'.$tenant->slug.'/invoices', ['invoice_type' => 'reservation', 'reservation_id' => $reservation, 'issue_date' => date('Y-m-d'), 'due_date' => date('Y-m-d')])->assertSessionHas('success');
+        $invoice = $this->operational($tenant)->table('invoices')->value('id');
+        $this->post('/t/'.$tenant->slug.'/invoices/'.$invoice.'/issue')->assertSessionHas('success');
     }
 
     public function test_company_settings_are_scoped_and_forbid_managers(): void

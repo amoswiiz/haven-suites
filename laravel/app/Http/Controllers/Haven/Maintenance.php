@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Haven;
 
 use App\Models\Haven\MaintenanceModel;
-use App\Models\Haven\UnitModel;
 use App\Models\Haven\StaffModel;
+use App\Models\Haven\UnitModel;
 use App\Support\Migration\PageNotFoundException;
 
 class Maintenance extends BaseController
@@ -14,16 +14,20 @@ class Maintenance extends BaseController
      */
     public function index()
     {
-        $model = new MaintenanceModel();
+        $model = new MaintenanceModel;
+        if (request()->filled('unit_id')) {
+            request()->validate(['unit_id' => 'required|integer|min:1']);
+            $model->where('maintenance.unit_id', request()->integer('unit_id'));
+        }
         if ($this->request->getGet('activity') === 'open') {
             $model->whereIn('maintenance.status', ['open', 'assigned', 'in_progress', 'on_hold']);
         }
 
         $maintenance = $model
             ->select(
-                'maintenance.*, ' .
-                'units.unit_number, ' .
-                'properties.name AS property_name, ' .
+                'maintenance.*, '.
+                'units.unit_number, '.
+                'properties.name AS property_name, '.
                 'staff.full_name AS assigned_staff_name'
             )
             ->join(
@@ -45,7 +49,7 @@ class Maintenance extends BaseController
             ->findAll();
 
         return haven_view('maintenance/index', [
-            'maintenance' => $maintenance
+            'maintenance' => $maintenance,
         ]);
     }
 
@@ -57,7 +61,7 @@ class Maintenance extends BaseController
         return haven_view('maintenance/form', [
             'issue' => null,
             'units' => $this->getUnits(),
-            'staff' => $this->getStaff()
+            'staff' => $this->getStaff(),
         ]);
     }
 
@@ -74,11 +78,11 @@ class Maintenance extends BaseController
      */
     public function edit($id)
     {
-        $model = new MaintenanceModel();
+        $model = new MaintenanceModel;
 
         $issue = $model->find($id);
 
-        if (!$issue) {
+        if (! $issue) {
             throw PageNotFoundException::forPageNotFound(
                 'Maintenance issue not found.'
             );
@@ -87,7 +91,7 @@ class Maintenance extends BaseController
         return haven_view('maintenance/form', [
             'issue' => $issue,
             'units' => $this->getUnits(),
-            'staff' => $this->getStaff()
+            'staff' => $this->getStaff(),
         ]);
     }
 
@@ -104,11 +108,11 @@ class Maintenance extends BaseController
      */
     private function saveIssue(?int $id)
     {
-        $model = new MaintenanceModel();
-        $unitModel = new UnitModel();
-        $staffModel = new StaffModel();
+        $model = new MaintenanceModel;
+        $unitModel = new UnitModel;
+        $staffModel = new StaffModel;
 
-        if ($id !== null && !$model->find($id)) {
+        if ($id !== null && ! $model->find($id)) {
             throw PageNotFoundException::forPageNotFound(
                 'Maintenance issue not found.'
             );
@@ -116,7 +120,7 @@ class Maintenance extends BaseController
 
         $unitId = (int) $this->request->getPost('unit_id');
 
-        if (!$unitModel->find($unitId)) {
+        if (! $unitModel->find($unitId)) {
             return $this->formError(
                 'Please select a valid apartment.'
             );
@@ -134,7 +138,7 @@ class Maintenance extends BaseController
 
         if (
             $assignedStaffId !== null &&
-            !$staffModel->find($assignedStaffId)
+            ! $staffModel->find($assignedStaffId)
         ) {
             return $this->formError(
                 'Please select a valid staff member.'
@@ -158,11 +162,11 @@ class Maintenance extends BaseController
         $priority = (string) $this->request
             ->getPost('priority');
 
-        if (!in_array($priority, [
+        if (! in_array($priority, [
             'low',
             'medium',
             'high',
-            'urgent'
+            'urgent',
         ], true)) {
             return $this->formError(
                 'Please select a valid priority.'
@@ -172,13 +176,13 @@ class Maintenance extends BaseController
         $status = (string) $this->request
             ->getPost('status');
 
-        if (!in_array($status, [
+        if (! in_array($status, [
             'open',
             'assigned',
             'in_progress',
             'on_hold',
             'completed',
-            'cancelled'
+            'cancelled',
         ], true)) {
             return $this->formError(
                 'Please select a valid maintenance status.'
@@ -193,9 +197,9 @@ class Maintenance extends BaseController
         ) ? 0 : $costInput;
 
         if (
-            !is_numeric($cost) ||
+            ! is_numeric($cost) ||
             (float) $cost < 0 ||
-            !is_finite((float) $cost)
+            ! is_finite((float) $cost)
         ) {
             return $this->formError(
                 'Please enter a valid maintenance cost.'
@@ -208,7 +212,7 @@ class Maintenance extends BaseController
 
         $completedAt = $existing['completed_at'] ?? null;
 
-        if ($status === 'completed' && !$completedAt) {
+        if ($status === 'completed' && ! $completedAt) {
             $completedAt = date('Y-m-d H:i:s');
         }
 
@@ -238,7 +242,7 @@ class Maintenance extends BaseController
             'cost' => (float) $cost,
             'reported_at' => $existing['reported_at']
                 ?? date('Y-m-d H:i:s'),
-            'completed_at' => $completedAt
+            'completed_at' => $completedAt,
         ];
 
         try {
@@ -247,7 +251,7 @@ class Maintenance extends BaseController
                 : $model->update($id, $data);
         } catch (\Throwable $e) {
             log_message('error', 'Maintenance save failed: {error}', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return $this->formError(
@@ -276,7 +280,7 @@ class Maintenance extends BaseController
      */
     private function getUnits(): array
     {
-        return (new UnitModel())
+        return (new UnitModel)
             ->select(
                 'units.*, properties.name AS property_name'
             )
@@ -295,7 +299,7 @@ class Maintenance extends BaseController
      */
     private function getStaff(): array
     {
-        return (new StaffModel())
+        return (new StaffModel)
             ->where('status', 'active')
             ->orderBy('full_name', 'ASC')
             ->findAll();

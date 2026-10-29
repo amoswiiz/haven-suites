@@ -187,7 +187,9 @@ class BusinessWorkflowTest extends TestCase
     public function test_booking_creation_prevents_overlap_and_rejects_invalid_dates(): void
     {
         $data = $this->reservation($this->unit());
-        $this->post('/t/workflow/reservations/store', $data)->assertRedirect('/t/workflow/reservations');
+        $response = $this->post('/t/workflow/reservations/store', $data)->assertSessionHas('success');
+        $createdId = DB::connection('tenant')->table('reservations')->where('unit_id', $data['unit_id'])->value('id');
+        $response->assertRedirect('/t/workflow/reservations/'.$createdId);
         $this->assertSame(1, DB::connection('tenant')->table('reservations')->where('unit_id', $data['unit_id'])->count());
         $this->post('/t/workflow/reservations/store', $data)->assertSessionHas('error');
         $this->assertSame(1, DB::connection('tenant')->table('reservations')->where('unit_id', $data['unit_id'])->count());
@@ -317,6 +319,24 @@ class BusinessWorkflowTest extends TestCase
             $this->assertEquals(200, $invoice->total_amount);
             $this->get('/t/workflow/invoices/'.$invoice->id)->assertOk()->assertSee('Nairobi billing address')->assertSee('Payment due on arrival');
         }
+    }
+
+    public function test_booking_creation_requires_real_payments_to_use_the_payment_register(): void
+    {
+        $data = $this->reservation($this->unit());
+        $db = DB::connection('tenant');
+        $this->get('/t/workflow/reservations/create')->assertOk()->assertDontSee('name="amount_paid"', false);
+        $this->post('/t/workflow/reservations/store', [...$data, 'amount_paid' => 50])->assertSessionHas('error');
+        $this->assertSame(0, $db->table('reservations')->where('unit_id', $data['unit_id'])->count());
+        $this->post('/t/workflow/reservations/store', $data)->assertSessionHas('success');
+        $booking = $db->table('reservations')->where('unit_id', $data['unit_id'])->first();
+        $this->assertEquals(0, $booking->amount_paid);
+        $this->post('/t/workflow/payments/guests/'.$booking->id.'/total', ['guest_total' => 200])->assertSessionHas('success');
+        $this->post('/t/workflow/payments/guests/'.$booking->id, ['amount' => 100, 'payment_date' => date('Y-m-d'), 'payment_method' => 'cash'])->assertSessionHas('success');
+        $this->get('/t/workflow/reservations/'.$booking->id)->assertOk()->assertSee('KES 100.00')->assertDontSee('Historical booking paid value');
+        $this->get('/t/workflow/reservations/'.$booking->id.'/edit')->assertOk()->assertSee('KES 100.00');
+        $this->post('/t/workflow/reservations/update/'.$booking->id, [...$data, 'nightly_rate' => 10])->assertSessionHas('error');
+        $this->assertEquals(200, $db->table('reservations')->where('id', $booking->id)->value('total_amount'));
     }
 
     public function test_payment_cannot_exceed_guest_balance(): void

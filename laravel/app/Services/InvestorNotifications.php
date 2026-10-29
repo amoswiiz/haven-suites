@@ -50,7 +50,7 @@ class InvestorNotifications
 
             return;
         }
-        $enabled = $delivery->channel === 'email' ? ($settings->email_enabled ?? true) && $investor->email_notifications : ($settings->sms_enabled ?? false) && $investor->sms_notifications && $investor->sms_consented_at && $investor->phone_verified_at && $investor->phone;
+        $enabled = $delivery->channel === 'email' ? ($settings->email_enabled ?? true) && $investor->email_notifications && (! $investor->communication_email || $investor->communication_email_verified_at) : ($settings->sms_enabled ?? false) && $investor->sms_notifications && $investor->sms_consented_at && $investor->phone_verified_at && $investor->phone;
         if (! $enabled) {
             $this->status($id, 'skipped', 'Channel disabled or contact consent/verification missing.');
 
@@ -75,7 +75,7 @@ class InvestorNotifications
             return;
         }
         try {
-            Mail::raw($tenant->name.': '.$event->title."\nA new investor update is available. Sign in securely to view the details: ".$event->portal_url, fn ($message) => $message->to($investor->email)->subject($event->title));
+            Mail::raw($tenant->name.': '.$event->title."\nA new investor update is available. Sign in securely to view the details: ".$event->portal_url, fn ($message) => $message->to($investor->communication_email ?: $investor->email)->subject($event->title));
             DB::table('investor_deliveries')->where('id', $id)->update(['status' => 'submitted', 'submitted_at' => now(), 'last_error' => null, 'updated_at' => now()]);
         } catch (\Throwable $exception) {
             report($exception);

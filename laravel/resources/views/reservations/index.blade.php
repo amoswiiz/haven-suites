@@ -87,7 +87,7 @@ $totalOutstanding = 0;
 foreach ($reservationList as $reservation) {
     if ($reservation['status'] !== 'cancelled') {
         $balance = (float) $reservation['total_amount']
-            - (float) $reservation['amount_paid'];
+            - (float) $reservation['recorded_paid'];
 
         $totalOutstanding += max(0, $balance);
     }
@@ -238,7 +238,7 @@ $statusLabels = [
                     $balance = max(
                         0,
                         (float) $reservation['total_amount']
-                        - (float) $reservation['amount_paid']
+                        - (float) $reservation['recorded_paid']
                     );
 
                     $start = new \DateTimeImmutable(
@@ -318,7 +318,7 @@ $statusLabels = [
 
                         <td>
                             KES <?= number_format(
-                                (float) $reservation['amount_paid'],
+                                (float) $reservation['recorded_paid'],
                                 0
                             ) ?>
                         </td>
@@ -386,7 +386,7 @@ $statusLabels = [
 <?php
   $modalStart = new \DateTimeImmutable($reservation['check_in']);
   $modalEnd = new \DateTimeImmutable($reservation['check_out']);
-  $modalBalance = max(0, (float) $reservation['total_amount'] - (float) $reservation['amount_paid']);
+  $modalBalance = max(0, (float) $reservation['total_amount'] - (float) $reservation['recorded_paid']);
   $modalApartment = ($reservation['booking_type'] ?? 'managed') === 'partner'
     ? ($reservation['partner_name'] ?? 'Partner Apartment')
     : (($reservation['property_name'] ?? 'Building') . ' – ' . ($reservation['unit_number'] ?? '-'));
@@ -411,11 +411,11 @@ $statusLabels = [
       <hr>
       <div class="row g-3">
         <div class="col-4"><div class="small text-muted">Booking total</div><strong>KES <?= number_format((float) $reservation['total_amount'], 2) ?></strong></div>
-        <div class="col-4"><div class="small text-muted">Recorded paid</div><strong>KES <?= number_format((float) $reservation['amount_paid'], 2) ?></strong></div>
+        <div class="col-4"><div class="small text-muted">Recorded paid</div><strong>KES <?= number_format((float) $reservation['recorded_paid'], 2) ?></strong></div>
         <div class="col-4"><div class="small text-muted">Balance</div><strong style="color:#c46b32">KES <?= number_format($modalBalance, 2) ?></strong></div>
       </div>
       <?php if (!empty($reservation['notes'])): ?><hr><div class="small text-muted">Booking notes</div><div style="white-space:pre-wrap"><?= esc($reservation['notes']) ?></div><?php endif; ?>
-      <div class="small text-muted mt-3">Payment figures shown are from the reservation record. Detailed payment transactions are managed separately.</div>
+      <div class="small text-muted mt-3">Payment figures come from recorded guest payments. Open the booking workspace for invoices and receipts.</div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
   </div></div>

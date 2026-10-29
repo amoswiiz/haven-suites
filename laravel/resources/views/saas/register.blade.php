@@ -5,7 +5,7 @@
 <form method="post" action="{{ route('register') }}">@csrf
 <label for="name">Your full name</label><input id="name" name="name" value="{{ old('name') }}" autocomplete="name" required maxlength="150">
 <label for="email">Email address</label><input id="email" name="email" type="email" value="{{ old('email') }}" autocomplete="email" required>
-<label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required><small class="muted">At least 12 characters, including upper and lower case letters and a number.</small>
+<label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="5" required><small class="muted">At least 5 characters, including upper and lower case letters and a number.</small>
 <label for="password_confirmation">Confirm password</label><input id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" required>
 <div class="actions"><button>Create account</button><a href="{{ url('/login') }}">Already registered? Sign in</a></div></form></div>
 @endsection

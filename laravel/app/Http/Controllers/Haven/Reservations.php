@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Haven;
 
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\UnitModel;
+use App\Services\ApartmentReadiness;
 use App\Support\Migration\PageNotFoundException;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,7 @@ class Reservations extends BaseController
                 ->whereIn('reservations.status', $activity === 'checkouts_pending' ? ['confirmed', 'checked_in'] : ['checked_out']);
         }
         $reservations = $model
-            ->select('reservations.*, units.unit_number, properties.name AS property_name, '
+            ->select('reservations.*, COALESCE((SELECT SUM(gp.amount) FROM guest_payments gp WHERE gp.reservation_id = reservations.id),0) AS recorded_paid, units.unit_number, properties.name AS property_name, '
                 .'pa.apartment_name AS partner_name, pa.building_name AS partner_building, '
                 .'pa.location AS partner_location, pa.owner_name AS partner_owner')
             ->join('units', 'units.id = reservations.unit_id', 'left')
@@ -76,8 +77,22 @@ class Reservations extends BaseController
             }
         }
         $recordedTotal = array_sum(array_map(static fn (array $payment): float => (float) $payment['amount'], $payments));
+        $operational = DB::connection('tenant');
+        $unitId = (int) ($reservation['unit_id'] ?? 0);
+        $workspaceCleaning = auth()->user()->can('housekeeping.view') ? $operational->table('housekeeping')->where(function ($query) use ($id, $unitId): void {
+            $query->where('reservation_id', $id);
+            if ($unitId) {
+                $query->orWhere('unit_id', $unitId);
+            }
+        })->latest('scheduled_at')->limit(15)->get() : collect();
+        $workspaceMaintenance = $unitId && auth()->user()->can('maintenance.view') ? $operational->table('maintenance')->where('unit_id', $unitId)->whereIn('status', ['open', 'assigned', 'in_progress', 'on_hold'])->latest('reported_at')->limit(15)->get() : collect();
+        $workspaceKyc = haven_can_access(site_url('staff/kyc'), 'GET') ? $operational->table('customer_kyc')->where('reservation_id', $id)->latest('id')->value('status') : null;
+        $workspaceReceipts = auth()->user()->can('finance.view') ? $operational->table('invoice_payment_allocations as a')->join('guest_payments as gp', 'gp.id', '=', 'a.guest_payment_id')->where('gp.reservation_id', $id)->select('a.id', 'a.amount', 'gp.payment_date')->latest('a.id')->get() : collect();
+        $readiness = $unitId && auth()->user()->can('units.view') ? app(ApartmentReadiness::class)->overview($unitId)->first() : null;
 
         return haven_view('reservations/show', [
+            'pageTitle' => 'Booking #'.$id,
+            'workspaceCleaning' => $workspaceCleaning, 'workspaceMaintenance' => $workspaceMaintenance, 'workspaceKyc' => $workspaceKyc, 'workspaceReceipts' => $workspaceReceipts, 'readiness' => $readiness,
             'paymentInvoice' => $paymentInvoice,
             'unallocatedPayments' => max(0, round($recordedTotal - $allocatedTotal, 2)),
             'reservation' => $reservation,
@@ -104,13 +119,18 @@ class Reservations extends BaseController
             ->where('status', 'active')
             ->orderBy('apartment_name', 'ASC')->get()->getResultArray();
 
-        return haven_view('reservations/form', ['units' => $units, 'partners' => $partners, 'salesLead' => $salesLead]);
+        return haven_view('reservations/form', ['pageTitle' => 'New booking', 'units' => $units, 'partners' => $partners, 'salesLead' => $salesLead]);
     }
 
     public function store()
     {
         $db = db_connect();
         $reservationModel = new ReservationModel;
+        $sourceLead = null;
+        if (request()->filled('lead_id')) {
+            abort_unless(auth()->user()->can('sales.view'), 403);
+            $sourceLead = DB::table('sales_leads')->where('tenant_id', app('currentTenant')->id)->where('id', request()->integer('lead_id'))->whereNull('reservation_id')->firstOrFail();
+        }
         $type = trim((string) $this->request->getPost('booking_type'));
         if (! in_array($type, ['managed', 'partner'], true)) {
             return $this->formError('Select a valid booking type.');
@@ -208,8 +228,8 @@ class Reservations extends BaseController
         }
         $amountPaid = $this->request->getPost('amount_paid');
         $amountPaid = ($amountPaid === '' || $amountPaid === null) ? 0 : $amountPaid;
-        if (! is_numeric($amountPaid) || ! is_finite((float) $amountPaid) || (float) $amountPaid < 0) {
-            return $this->formError('Enter a valid amount paid.');
+        if (! is_numeric($amountPaid) || ! is_finite((float) $amountPaid) || (float) $amountPaid !== 0.0) {
+            return $this->formError('Save the booking first, then record money received against its invoice to generate a receipt.');
         }
         $ownerNet = null;
         if ($type === 'partner') {
@@ -296,8 +316,8 @@ class Reservations extends BaseController
                 : 'Unable to save reservation. Please check the details.');
         }
 
-        return redirect()->to(site_url('reservations'))
-            ->with('success', 'Reservation created successfully.');
+        return redirect()->to(site_url('reservations/'.(int) $reservationModel->getInsertID().($sourceLead ? '?lead_id='.$sourceLead->id : '')))
+            ->with('success', 'Booking saved. Next, prepare its invoice. Record payments only after money has been received.');
     }
 
     /** Edit an existing reservation. Financial payments are managed separately. */
@@ -308,6 +328,7 @@ class Reservations extends BaseController
         if (! $reservation) {
             throw PageNotFoundException::forPageNotFound('Reservation not found.');
         }
+        $reservation['recorded_paid'] = (float) DB::connection('tenant')->table('guest_payments')->where('reservation_id', $id)->sum('amount');
         $units = (new UnitModel)
             ->select('units.*, properties.name AS property_name')
             ->join('properties', 'properties.id = units.property_id', 'left')
@@ -386,7 +407,8 @@ class Reservations extends BaseController
             }
             $ownerNet = round($nights * (float) $ownerNightlyInput, 2);
         }
-        if ($total < (float) $original['amount_paid']) {
+        $registeredPaid = (float) DB::connection('tenant')->table('guest_payments')->where('reservation_id', $id)->sum('amount');
+        if ($total < max((float) $original['amount_paid'], $registeredPaid)) {
             return $this->formError('Booking total cannot be less than the amount already paid.');
         }
         // Issued invoices must be adjusted through invoice workflows, not silently changed here.
@@ -415,6 +437,11 @@ class Reservations extends BaseController
         ];
         $db->transBegin();
         try {
+            $db->query('SELECT id FROM reservations WHERE id = ? FOR UPDATE', [$id]);
+            $latestPaid = (float) DB::connection('tenant')->table('guest_payments')->where('reservation_id', $id)->sum('amount');
+            if ($total < max((float) $original['amount_paid'], $latestPaid)) {
+                throw new \RuntimeException('The booking total cannot be lower than money already received.');
+            }
             if (in_array($status, ['confirmed', 'checked_in'], true)) {
                 $overlap = $db->table('reservations')
                     ->where('id !=', $id)
