@@ -2,6 +2,28 @@
 @section('title', $section==='money' ? 'Statements & Payments' : 'Investor portal')
 @section('content')
 @include('investors.overview')
+@if(in_array($section, ['dashboard', 'money']))
+<section class="card" id="carried-balances">
+    <h2>Latest published balances</h2>
+    <p class="muted">Latest available statement for each ownership agreement up to {{ date('F Y', strtotime($reportMonth.'-01')) }}. Earlier balances remain visible when a new statement has not been published.</p>
+    <div class="table-wrap"><table>
+        <thead><tr><th>Property</th><th>Statement month</th><th>Balance</th><th>Statement</th></tr></thead>
+        <tbody>
+        @forelse($monthly['latest_balances'] ?? [] as $balance)
+            <tr>
+                <td>{{ $balance['property'] }}</td>
+                <td>{{ date('F Y', strtotime($balance['month'].'-01')) }}</td>
+                <td>{{ $balance['currency'] }} {{ number_format($balance['closing_minor']/100, 2) }}<br><small>{{ $balance['closing_minor'] < 0 ? 'Deficit carried forward' : ($balance['closing_minor'] > 0 ? 'Outstanding at statement close' : 'Settled at statement close') }}</small></td>
+                <td><a href="{{ route('investor.statement', [app('currentTenant')->slug, $balance['statement_id']]) }}">View statement</a></td>
+            </tr>
+        @empty
+            <tr><td colspan="4">No published balances available. This does not mean the balance is zero.</td></tr>
+        @endforelse
+        </tbody>
+    </table></div>
+    <p class="muted">These are statement balances, not live cash balances. Later collections, payments and adjustments may not yet be included. Investor contributions and reserved project funds are not included in these balances.</p>
+</section>
+@endif
 @if($section==='bookings')
 @include('investors.calendar')
 @endif
