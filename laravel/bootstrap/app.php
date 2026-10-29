@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.write' => TenantWriteAccess::class,
         ]);
         $middleware->redirectGuestsTo('/login');
+        $middleware->web(append: [\App\Http\Middleware\ImpersonateUser::class]);
         $middleware->preventRequestForgery(except: ['billing/webhooks/stripe', 'billing/webhooks/mpesa/*']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {})

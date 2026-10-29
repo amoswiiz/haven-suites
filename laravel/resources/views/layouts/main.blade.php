@@ -52,6 +52,7 @@
         </div>
     </header>
     <div class="hs-content">
+        @include('impersonation.banner')
         @if(auth()->user()?->inGroup('superadmin','admin') && app('currentTenant')->plan !== 'legacy' && !app('currentTenant')->onboarding_completed_at)
         <p><a href="{{ route('onboarding.property', app('currentTenant')->slug) }}">Finish company setup</a></p>
         @endif

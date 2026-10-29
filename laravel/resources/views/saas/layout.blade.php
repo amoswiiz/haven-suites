@@ -46,6 +46,7 @@ body:not(.has-company-sidebar) .saas-content{padding:0}.saas-content{max-width:1
 <main id="saas-main" tabindex="-1">
 @endguest
 <div class="saas-content">
+@include('impersonation.banner')
 @if(session('success'))<div class="alert" role="status">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert error" role="alert"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @yield('content')<footer>Haven Suites · A separate workspace for every company.</footer></div></main>
