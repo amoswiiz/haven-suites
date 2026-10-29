@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyInvitation;
 use App\Models\Tenant;
-use App\Notifications\CompanyInvitationNotification;
 use App\Services\CompanyMembership;
 use App\Services\InvestorNotifications;
 use App\Services\OwnerRemittanceCalculator;
@@ -16,7 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -143,18 +141,26 @@ class InvestorController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate(['name' => 'required|string|max:150', 'email' => 'required|email|max:180', 'phone' => 'nullable|regex:/^\+[1-9][0-9]{7,14}$/']);
-        $data['email'] = strtolower($data['email']);
+        $data['email'] = strtolower(trim($data['email']));
         if ($this->rows('investors')->where('email', $data['email'])->exists()) {
             throw ValidationException::withMessages(['email' => 'This investor already exists in this company.']);
         }
-        $id = DB::transaction(function () use ($data): int {
-            $id = DB::table('investors')->insertGetId([...$data, 'tenant_id' => app('currentTenant')->id, 'created_at' => now(), 'updated_at' => now()]);
+        $id = DB::transaction(function () use ($data, $request): int {
+            Tenant::whereKey(app('currentTenant')->id)->lockForUpdate()->firstOrFail();
+            return DB::connection('tenant')->transaction(function () use ($data, $request): int {
+            if ($this->rows('investors')->where('email', $data['email'])->exists()) {
+                throw ValidationException::withMessages(['email' => 'This investor already exists in this company.']);
+            }
+            $user = app(\App\Services\InvestorLogin::class)->createOrLink($data['name'], $data['email'], $request);
+            $id = DB::table('investors')->insertGetId([...$data, 'user_id' => $user->id, 'tenant_id' => app('currentTenant')->id, 'created_at' => now(), 'updated_at' => now()]);
             $this->audit($id, 'created', 'Investor profile created.');
+            $this->audit($id, 'account.linked', 'Owner login #'.$user->id.' linked through direct setup; new account email confirmation recorded by management.');
 
             return $id;
+            });
         });
 
-        return redirect()->route('investors.show', [app('currentTenant')->slug, $id])->with('success', 'Investor created. Assign properties and invite them to the portal.');
+        return redirect()->route('investors.show', [app('currentTenant')->slug, $id])->with('success', 'Investor and Owner login ready. Assign properties to grant access to their bookings and statements.');
     }
 
     public function show(string $tenant, int $id): View
@@ -190,39 +196,27 @@ class InvestorController extends Controller
 
     public function invite(string $tenant, int $id, CompanyMembership $membership): RedirectResponse
     {
-        $investor = $this->investor($id);
-        abort_unless($investor->active, 403);
-        abort_unless(app('currentTenant')->modules['team'] ?? true, 403);
-        $existing = app('currentTenant')->users()->where('email', $investor->email)->first();
-        if ($existing) {
-            $roles = json_decode($existing->pivot->roles, true);
-            if (! in_array('owner', $roles, true) || ! $existing->hasVerifiedEmail()) {
-                throw ValidationException::withMessages(['email' => 'An existing member must have verified email and the Owner role before linking this profile.']);
-            }$this->rows('investors')->where('id', $id)->update(['user_id' => $existing->id, 'updated_at' => now()]);
-            $this->audit($id, 'account.linked', 'Linked existing verified owner account.');
-
-            return back()->with('success', 'Existing investor login linked.');
-        }
-        $token = bin2hex(random_bytes(32));
-        $invitation = DB::transaction(function () use ($investor, $membership, $token): CompanyInvitation {
-            $company = Tenant::whereKey($investor->tenant_id)->lockForUpdate()->firstOrFail();
-            $pending = CompanyInvitation::where('tenant_id', $company->id)->where('email', '!=', $investor->email)->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->count();
-            $membership->assertCapacity($company, $pending);
-            CompanyInvitation::where('tenant_id', $company->id)->where('email', $investor->email)->whereNull('accepted_at')->update(['revoked_at' => now()]);
-
-            return CompanyInvitation::create(['tenant_id' => $company->id, 'investor_id' => $investor->id, 'invited_by' => auth()->id(), 'email' => $investor->email, 'role' => 'owner', 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addDays(7)]);
+        // Retain the existing POST route for compatibility, without sending invitations.
+        $request = request();
+        DB::transaction(function () use ($id, $request): void {
+            Tenant::whereKey(app('currentTenant')->id)->lockForUpdate()->firstOrFail();
+            DB::connection('tenant')->transaction(function () use ($id, $request): void {
+                $investor = $this->investor($id);
+                abort_unless($investor->active, 403);
+                if ($investor->user_id) {
+                    return;
+                }
+                $user = app(\App\Services\InvestorLogin::class)->createOrLink($investor->name, strtolower($investor->email), $request);
+                if ($this->rows('investors')->where('user_id', $user->id)->where('id', '!=', $id)->exists()) {
+                    throw ValidationException::withMessages(['email' => 'This login is already linked to another investor in this company.']);
+                }
+                $this->rows('investors')->where('id', $id)->update(['user_id' => $user->id, 'updated_at' => now()]);
+                CompanyInvitation::where('tenant_id', app('currentTenant')->id)->where('investor_id', $id)->whereNull('accepted_at')->update(['revoked_at' => now()]);
+                $this->audit($id, 'account.linked', 'Owner login #'.$user->id.' linked through direct setup; new account email confirmation recorded by management.');
+            });
         });
-        try {
-            Notification::route('mail', $investor->email)->notify(new CompanyInvitationNotification(app('currentTenant')->name, route('invitations.show', $token)));
-        } catch (\Throwable $exception) {
-            $invitation->update(['revoked_at' => now()]);
-            report($exception);
 
-            return back()->withErrors(['email' => 'Invitation delivery failed. Check email settings.']);
-        }
-        $this->audit($id, 'invited', 'Expiring investor invitation issued through the configured email transport.');
-
-        return back()->with('success', 'Invitation issued through the configured email transport. Existing account holders sign in; new investors register and verify their email before accepting.');
+        return back()->with('success', 'Owner login is ready. No invitation is required.');
     }
 
     public function assignment(string $tenant, int $id, Request $request): RedirectResponse
@@ -469,6 +463,27 @@ class InvestorController extends Controller
             $published->where('unit_id', $unitId);
         }
         $monthly['expected_units'] = $assignments->filter(fn (object $assignment): bool => (! $unitId || (int) $assignment->unit_id === $unitId) && $assignment->starts_on < $monthEnd && (! $assignment->ends_on || $assignment->ends_on >= $monthStart))->pluck('unit_id')->unique()->count();
+        // Closing balances already include carry-forward: take one latest
+        // published statement per assignment, never sum successive months.
+        $monthly['latest_balances'] = [];
+        $latestStatements = $this->rows('investor_statements')
+            ->where('investor_id', $investor->id)
+            ->whereIn('assignment_id', $assignments->pluck('id'))
+            ->whereNull('superseded_at')->whereNotNull('published_at')
+            ->where('period_month', '<=', $monthStart)
+            ->when($unitId, fn ($query) => $query->where('unit_id', $unitId))
+            ->orderByDesc('period_month')->orderByDesc('revision')->orderByDesc('id')
+            ->get()->unique('assignment_id');
+        foreach ($latestStatements as $statement) {
+            $snapshot = json_decode($statement->snapshot, true, 512, JSON_THROW_ON_ERROR);
+            $monthly['latest_balances'][] = [
+                'statement_id' => $statement->id,
+                'property' => $snapshot['property'],
+                'month' => substr($statement->period_month, 0, 7),
+                'currency' => $snapshot['currency'],
+                'closing_minor' => (new OwnerRemittanceCalculator)->cents($snapshot['totals']['closing_balance'] ?? '0'),
+            ];
+        }
         $monthly['published_count'] = 0;
         $monthly['published_totals'] = array_fill_keys(['collected', 'rental_income', 'management_fee', 'expenses', 'entitlement', 'closing_balance'], 0);
         $calculator = new OwnerRemittanceCalculator;

@@ -2,9 +2,15 @@
 @section('title','Investor management')
 @section('content')
 <a href="{{ route('investors.index',app('currentTenant')->slug) }}">&larr; Investors</a><h1 style="margin-top:18px">{{ $investor->name }}</h1><p>{{ $investor->email }} &middot; {{ $investor->phone }} <span class="pill">{{ $investor->active?'Active':'Suspended' }}</span></p>
-<section class="card"><h2>Portal access</h2><p>{{ $investor->user_id?'Investor account linked.':($invitation?->accepted_at?'Invitation accepted':($invitation?->revoked_at?'Invitation revoked':($invitation?->expires_at?->isPast()?'Invitation expired':($invitation?'Invitation pending':'Not invited')))) }}</p><p>Investor sign-in: <a href="{{ route('investor.login') }}">{{ route('investor.login') }}</a></p>
+<section class="card"><h2>Portal access</h2><p>{{ $investor->user_id?'Owner login linked.':'Owner login needs setup.' }}</p><p>Investor sign-in: <a href="{{ route('investor.login') }}">{{ route('investor.login') }}</a></p>
 @if(auth()->user()->can('investors.manage'))
-<form method="post" action="{{ route('investors.invite',[app('currentTenant')->slug,$investor->id]) }}">@csrf<button>{{ $investor->user_id?'Check / link existing login':'Invite / Resend invitation' }}</button></form>
+@if(!$investor->user_id && $investor->active)
+<form id="owner-login-form" method="post" action="{{ route('investors.invite',[app('currentTenant')->slug,$investor->id]) }}">
+@csrf
+@include('investors.login-fields')
+<div class="actions"><button>Create / link Owner login</button></div>
+</form>
+@endif
 <details style="margin-top:16px"><summary>Access and contact settings</summary><form method="post" action="{{ route('investors.update',[app('currentTenant')->slug,$investor->id]) }}">@csrf<label for="active">Portal access</label><select id="active" name="active"><option value="1" @selected($investor->active)>Active</option><option value="0" @selected(!$investor->active)>Suspended</option></select><label for="contact-phone">Phone (+country code)</label><input id="contact-phone" name="phone" value="{{ $investor->phone }}"><label><input style="width:auto" type="checkbox" name="phone_confirmed" value="1"> I confirmed this phone number directly with the investor</label><label><input style="width:auto" type="checkbox" name="sms_consent" value="1"> Investor consent to SMS was obtained</label><p class="muted">Changing the phone number clears its previous confirmation and SMS preference. Confirming details does not enable SMS; the investor chooses their preferences.</p><div class="actions"><button>Save access and contact</button></div></form></details>
 @endif</section>
 <section class="card"><h2>Property assignments</h2><div class="table-wrap"><table><thead><tr><th>Property / Unit</th><th>Share</th><th>Ownership period</th><th>Agreement</th></tr></thead><tbody>@forelse($assignments as $assignment)@php($unit=$units->firstWhere('id',$assignment->unit_id))<tr><td>{{ $unit?->property_name }} / {{ $unit?->unit_number }}<br>Assignment #{{ $assignment->id }}</td><td>{{ $assignment->share_basis_points/100 }}%</td><td>{{ $assignment->starts_on }} to {{ $assignment->ends_on ?: 'Ongoing' }}</td><td>{{ $assignment->agreement_reference }}
