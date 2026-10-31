@@ -552,7 +552,11 @@ class InvestorController extends Controller
         $investor = $this->portalInvestor();
         abort_unless($investor->communication_email, 422, 'Save a communication email first.');
         $url = URL::temporarySignedRoute('investor.contact.verify', now()->addMinutes(60), ['tenant' => app('currentTenant')->slug, 'hash' => hash('sha256', $investor->id.':'.$investor->communication_email)]);
-        Mail::raw('Confirm your investor communication email by signing in and opening this link within 60 minutes: '.$url, fn ($message) => $message->to($investor->communication_email)->subject('Confirm your communication email'));
+        try {
+            app(\App\Services\CompanyMail::class)->send(app('currentTenant'), $investor->communication_email, 'Confirm your communication email', 'Confirm your investor communication email by signing in and opening this link within 60 minutes: '.$url);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['communication_email' => 'Email could not be confirmed as sent. Contact management to check email delivery settings.']);
+        }
 
         return back()->with('success', 'Confirmation email requested. Check your inbox; delivery requires a configured email service.');
     }

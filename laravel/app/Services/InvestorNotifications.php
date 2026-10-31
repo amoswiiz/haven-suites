@@ -69,16 +69,16 @@ class InvestorNotifications
 
             return;
         }
-        if (in_array(config('mail.default'), ['log', 'array'], true)) {
+        if (! app(CompanyMail::class)->sendsExternally($tenant->id)) {
             $this->status($id, 'simulated', 'Mail transport does not send externally.');
 
             return;
         }
         try {
-            Mail::raw($tenant->name.': '.$event->title."\nA new investor update is available. Sign in securely to view the details: ".$event->portal_url, fn ($message) => $message->to($investor->communication_email ?: $investor->email)->subject($event->title));
+            app(CompanyMail::class)->send($tenant, $investor->communication_email ?: $investor->email, $event->title, $tenant->name.': '.$event->title."\nA new investor update is available. Sign in securely to view the details: ".$event->portal_url);
             DB::table('investor_deliveries')->where('id', $id)->update(['status' => 'submitted', 'submitted_at' => now(), 'last_error' => null, 'updated_at' => now()]);
         } catch (\Throwable $exception) {
-            report($exception);
+            // Do not log SMTP exceptions: they may contain credentials or transcripts.
             $this->status($id, 'unknown', 'Transport failed; delivery is uncertain. Review before retrying.');
         }
     }
