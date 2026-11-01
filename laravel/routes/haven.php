@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ExternalCalendarController;
 use App\Http\Controllers\Haven\Availability;
 use App\Http\Controllers\Haven\CleanerBalances;
 use App\Http\Controllers\Haven\CleanerEarnings;
@@ -41,6 +42,15 @@ use App\Http\Controllers\Haven\Units;
 use App\Http\Controllers\InvoiceSettingsController;
 use App\Http\Controllers\StandaloneQuotationController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('availability/external', [ExternalCalendarController::class, 'index'])
+    ->middleware(['auth', 'tenant.member', 'permission:availability.view']);
+Route::post('availability/external', [ExternalCalendarController::class, 'store'])
+    ->middleware(['auth', 'tenant.member', 'permission:properties.manage', 'throttle:10,1']);
+Route::post('availability/external/{id}/sync', [ExternalCalendarController::class, 'sync'])
+    ->whereNumber('id')->middleware(['auth', 'tenant.member', 'permission:properties.manage', 'throttle:10,1']);
+Route::post('availability/external/{id}/delete', [ExternalCalendarController::class, 'destroy'])
+    ->whereNumber('id')->middleware(['auth', 'tenant.member', 'permission:properties.manage']);
 
 Route::get('receipts/{id}', [Receipts::class, 'show'])->middleware([
     0 => 'auth',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Haven;
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\UnitModel;
 use App\Services\ApartmentReadiness;
+use App\Services\ExternalCalendars;
 use App\Support\Migration\PageNotFoundException;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
@@ -291,6 +292,9 @@ class Reservations extends BaseController
             }
             // Only confirmed/checked-in reservations block dates, consistent with existing logic.
             if (in_array($status, ['confirmed', 'checked_in'], true)) {
+                if ($type === 'managed' && app(ExternalCalendars::class)->overlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
+                    throw new \RuntimeException('This apartment is blocked by an external calendar for those dates.');
+                }
                 $overlap = $db->table('reservations')
                     ->where($type === 'managed' ? 'unit_id' : 'partner_apartment_id',
                         $type === 'managed' ? $unitId : $partnerId)
@@ -443,6 +447,9 @@ class Reservations extends BaseController
                 throw new \RuntimeException('The booking total cannot be lower than money already received.');
             }
             if (in_array($status, ['confirmed', 'checked_in'], true)) {
+                if ($type !== 'partner' && app(ExternalCalendars::class)->overlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
+                    throw new \RuntimeException('This apartment is blocked by an external calendar for those dates.');
+                }
                 $overlap = $db->table('reservations')
                     ->where('id !=', $id)
                     ->where($type === 'partner' ? 'partner_apartment_id' : 'unit_id', $type === 'partner' ? $partnerId : $unitId)

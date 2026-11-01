@@ -63,6 +63,8 @@
     color: #9a6700;
 }
 
+.availability-table .external { background: #e9e2fa; color: #643b94; }
+
 .availability-table .inactive {
     background: #edf0f3;
     color: #667085;
@@ -200,7 +202,17 @@ foreach ($units as $unit) {
                 }
             }
 
-            if ($cell['status'] === 'booked') {
+            foreach ($externalBlocks->get($id, collect()) as $block) {
+                if ($block->start_date <= $date && $block->end_date > $date) {
+                    $cell['external'] = $block->name;
+                    if ($cell['status'] === 'available') {
+                        $cell['status'] = 'external';
+                    }
+                    break;
+                }
+            }
+
+            if (in_array($cell['status'], ['booked', 'external'], true)) {
                 $bookedNights++;
             } else {
                 $availableNights++;
@@ -225,6 +237,10 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
 ?>
 
 <div class="hs-availability-page">
+@if($externalSyncWarning)
+<div class="alert alert-warning">An external calendar has failed or has not synced in the last 30 minutes. Dates may be outdated. <a href="{{ site_url('availability/external') }}">Review external calendars</a>.</div>
+@endif
+<div class="mb-3"><a class="btn btn-outline-primary" href="{{ site_url('availability/external') }}">External calendars</a> <span class="text-muted small">Purple dates are blocked by an external calendar.</span></div>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
 
     <div>
@@ -476,12 +492,16 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
                                 $reservation = $cell['reservation'];
 
                                 $tooltip = match ($cell['status']) {
+                                    'external' => 'External block: ' . ($cell['external'] ?? ''),
                                     'booked' => 'Booked: ' .
                                         ($reservation['guest_name'] ?? ''),
                                     'maintenance' => 'Under maintenance',
                                     'inactive' => 'Inactive apartment',
                                     default => 'Available'
                                 };
+                                if ($cell['status'] === 'booked' && isset($cell['external'])) {
+                                    $tooltip .= ' / Also blocked externally: '.$cell['external'];
+                                }
                                 ?>
 
                                 <td
@@ -531,6 +551,8 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
                                         <i data-lucide="check"
                                            style="width:13px;height:13px"></i>
 
+                                    <?php elseif ($cell['status'] === 'external'): ?>
+                                        E
                                     <?php elseif ($cell['status'] === 'maintenance'): ?>
                                         <i data-lucide="wrench"
                                            style="width:13px;height:13px"></i>
