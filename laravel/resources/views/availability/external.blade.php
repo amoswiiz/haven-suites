@@ -11,6 +11,34 @@
 @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger">@foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach</div>@endif
 @if(auth()->user()->can('properties.manage'))
+<section class="card card-body mb-4" aria-labelledby="calendar-exports-heading">
+    <h5 id="calendar-exports-heading">Export local apartment calendars</h5>
+    <p>Generate a private .ics link for each apartment and paste it into the matching listing's calendar import settings. It includes confirmed and checked-in local bookings only. Imported external blocks, guest details, and payment information are excluded.</p>
+    <div class="alert alert-info">Airbnb must be able to reach this URL over the internet. Localhost links work for local testing only; use your public HTTPS domain when connecting Airbnb. Anyone with a private link can view its blocked dates.</div>
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Apartment</th><th>Private export URL</th><th>Actions</th></tr></thead><tbody>
+    @forelse($units as $unit)
+        <tr><td>{{ $unit->property_name }} / {{ $unit->unit_number }}</td><td>
+        @if($exports->has($unit->id))
+            <label class="visually-hidden" for="export-url-{{ $unit->id }}">Export URL for {{ $unit->unit_number }}</label>
+            <input class="form-control" id="export-url-{{ $unit->id }}" value="{{ $exports->get($unit->id) }}" readonly onclick="this.select()" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-copy-export="export-url-{{ $unit->id }}">Copy link</button>
+        @else
+            <span class="text-muted">No export link generated.</span>
+        @endif
+        </td><td>
+            <form class="d-inline" method="post" action="{{ route('calendar.export.generate', ['tenant' => app('currentTenant')->slug, 'unitId' => $unit->id]) }}" @if($exports->has($unit->id)) onsubmit="return confirm('Replace this export link? Update any external calendars using the old link.')" @endif>
+                @csrf<button class="btn btn-sm btn-outline-primary">{{ $exports->has($unit->id) ? 'Replace link' : 'Generate link' }}</button>
+            </form>
+            @if($exports->has($unit->id))
+            <form class="d-inline" method="post" action="{{ route('calendar.export.revoke', ['tenant' => app('currentTenant')->slug, 'unitId' => $unit->id]) }}" onsubmit="return confirm('Disable this export link? Connected platforms will stop receiving updates.')">
+                @csrf<button class="btn btn-sm btn-outline-danger">Disable link</button>
+            </form>
+            @endif
+        </td></tr>
+    @empty<tr><td colspan="3">Add an apartment before generating an export calendar.</td></tr>@endforelse
+    </tbody></table></div>
+    <span id="export-copy-status" class="small text-muted" role="status" aria-live="polite"></span>
+</section>
 <form method="post" action="{{ site_url('availability/external') }}" class="card card-body mb-4">
     @csrf
     <h5>Connect a calendar</h5>
@@ -32,4 +60,23 @@
 </td></tr>
 @empty<tr><td colspan="5">No external calendars connected.</td></tr>@endforelse
 </tbody></table></div>
+@endsection
+
+@section('scripts')
+<script>
+document.querySelectorAll('[data-copy-export]').forEach(button => {
+    button.addEventListener('click', async () => {
+        const input = document.getElementById(button.dataset.copyExport);
+        const status = document.getElementById('export-copy-status');
+        input.focus();
+        input.select();
+        try {
+            await navigator.clipboard.writeText(input.value);
+            status.textContent = 'Export link copied.';
+        } catch {
+            status.textContent = 'Link selected. Press Ctrl+C or use your device’s copy action.';
+        }
+    });
+});
+</script>
 @endsection

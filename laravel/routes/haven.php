@@ -45,6 +45,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('availability/external', [ExternalCalendarController::class, 'index'])
     ->middleware(['auth', 'tenant.member', 'permission:availability.view']);
+Route::post('availability/external/exports/{unitId}', [ExternalCalendarController::class, 'generateExport'])
+    ->whereNumber('unitId')->middleware(['auth', 'tenant.member', 'permission:properties.manage'])->name('calendar.export.generate');
+Route::post('availability/external/exports/{unitId}/revoke', [ExternalCalendarController::class, 'revokeExport'])
+    ->whereNumber('unitId')->middleware(['auth', 'tenant.member', 'permission:properties.manage'])->name('calendar.export.revoke');
 Route::post('availability/external', [ExternalCalendarController::class, 'store'])
     ->middleware(['auth', 'tenant.member', 'permission:properties.manage', 'throttle:10,1']);
 Route::post('availability/external/{id}/sync', [ExternalCalendarController::class, 'sync'])

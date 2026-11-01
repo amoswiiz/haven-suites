@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tenant;
 use App\Services\ExternalCalendars;
+use App\Services\UnitCalendarExport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,8 +21,13 @@ class ExternalCalendarController extends Controller
             ->orderBy('p.name')->orderBy('u.unit_number')->get(['u.id', 'u.unit_number', 'p.name as property_name']);
         $feeds = DB::table('external_calendars')->where('tenant_id', app('currentTenant')->id)
             ->orderBy('name')->get(['id', 'unit_id', 'name', 'last_synced_at', 'last_error']);
+        $exports = collect();
+        if (auth()->user()->can('properties.manage')) {
+            $exports = DB::table('unit_calendar_exports')->where('tenant_id', app('currentTenant')->id)->get()
+                ->mapWithKeys(static fn (object $export): array => [(int) $export->unit_id => route('calendar.export', ['token' => Crypt::decryptString($export->token_encrypted)])]);
+        }
 
-        return view('availability.external', compact('units', 'feeds'));
+        return view('availability.external', compact('units', 'feeds', 'exports'));
     }
 
     public function store(Request $request, ExternalCalendars $calendars): RedirectResponse
@@ -62,5 +70,40 @@ class ExternalCalendarController extends Controller
         });
 
         return back()->with('success', 'Calendar disconnected and its imported blocks removed.');
+    }
+
+    public function generateExport(string $tenant, int $unitId): RedirectResponse
+    {
+        abort_unless(DB::connection('tenant')->table('units')->where('id', $unitId)->exists(), 404);
+        $token = bin2hex(random_bytes(32));
+        DB::table('unit_calendar_exports')->upsert([
+            'tenant_id' => app('currentTenant')->id, 'unit_id' => $unitId,
+            'token_hash' => hash('sha256', $token), 'token_encrypted' => Crypt::encryptString($token),
+            'created_at' => now(), 'updated_at' => now(),
+        ], ['tenant_id', 'unit_id'], ['token_hash', 'token_encrypted', 'updated_at']);
+
+        return back()->with('success', 'Export link created. Any previous link for this apartment has been disabled.');
+    }
+
+    public function revokeExport(string $tenant, int $unitId): RedirectResponse
+    {
+        DB::table('unit_calendar_exports')->where('tenant_id', app('currentTenant')->id)->where('unit_id', $unitId)->delete();
+
+        return back()->with('success', 'Export link disabled. External platforms can no longer refresh it.');
+    }
+
+    public function export(string $token, UnitCalendarExport $calendar): Response
+    {
+        $export = DB::table('unit_calendar_exports')->where('token_hash', hash('sha256', $token))->first();
+        abort_unless($export, 404);
+        $tenant = Tenant::whereKey($export->tenant_id)->where('active', true)->firstOrFail();
+
+        return response($calendar->render($tenant, (int) $export->unit_id), 200, [
+            'Content-Type' => 'text/calendar; charset=utf-8',
+            'Content-Disposition' => 'inline; filename="availability.ics"',
+            'Cache-Control' => 'private, no-store',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
     }
 }
