@@ -8,7 +8,7 @@ $value = static function ($field, $default = '') use ($member) {
 };
 $hasLoginAccount = (bool) ($hasLoginAccount ?? false);
 $canResetPassword = (bool) ($canResetPassword ?? false);
-$canCreateLogin = !$isEdit && haven_auth()->user() !== null
+$canCreateLogin = (!$isEdit || empty($member['user_id'])) && haven_auth()->user() !== null
     && haven_auth()->user()->can('staff.accounts.manage');
 ?>
 <div style="max-width:900px">
@@ -67,7 +67,7 @@ $canCreateLogin = !$isEdit && haven_auth()->user() !== null
                 <?php if ($canCreateLogin): ?>
                     <hr class="my-4">
                     <h5 class="fw-bold mb-2">Login Details</h5>
-                    <p class="text-muted small">Set a password now. Save Staff creates the staff record and login together using the email above. No email invitation is required.</p>
+                    <p class="text-muted small">Set a password now. Saving this form saves the staff details and creates their login together using the email above. No email invitation is required.</p>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label" for="username">Username</label>
@@ -87,7 +87,7 @@ $canCreateLogin = !$isEdit && haven_auth()->user() !== null
                         </div>
                     </div>
                 <?php endif; ?>
-                <?php if ($isEdit): ?>
+                <?php if ($isEdit && !$canCreateLogin): ?>
                     <hr class="my-4">
                     <h5 class="fw-bold mb-2">Account Security</h5>
                     <?php if ($canResetPassword): ?>
@@ -104,15 +104,7 @@ $canCreateLogin = !$isEdit && haven_auth()->user() !== null
                         </div>
                     <?php elseif (!$hasLoginAccount): ?>
                         <p class="text-muted mb-2">This staff member does not have a linked login.</p>
-<?php if (haven_can_access(site_url('staff/' . $member['id'] . '/account/create'), 'GET')): ?>
-    <a class="btn btn-outline-primary"
-       href="<?= esc(site_url('staff/' . $member['id'] . '/account/create'), 'attr') ?>">
-        Create login
-    </a>
-    <p class="text-muted small mt-2 mb-0">
-        Save any staff changes first. You can set a password directly; no email invitation is required.
-    </p>
-<?php endif; ?>
+                        <p class="text-muted small">An administrator with staff account permissions can set up login details on this form.</p>
                     <?php else: ?>
                         <p class="text-muted mb-0">You do not have permission to reset staff passwords.</p>
                     <?php endif; ?>

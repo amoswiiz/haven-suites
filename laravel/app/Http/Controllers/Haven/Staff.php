@@ -21,6 +21,11 @@ class Staff extends BaseController
 
     public function store()
     {
+        return $this->saveWithLogin();
+    }
+
+    private function saveWithLogin($staffId = null)
+    {
         $model = new StaffModel();
         $data = $this->formData();
         $actor = haven_auth()->user();
@@ -32,6 +37,9 @@ class Staff extends BaseController
         };
 
         if (!$canCreateLogin) {
+            if ($staffId !== null) {
+                return $back('You are not authorized to create staff logins.');
+            }
             foreach (['username', 'password', 'password_confirmation', 'login_role'] as $field) {
                 if (request()->filled($field)) {
                     return $back('You are not authorized to create staff logins.');
@@ -94,6 +102,14 @@ class Staff extends BaseController
             $centralStarted = true;
             $tenant->transBegin();
             $tenantStarted = true;
+            if ($staffId !== null) {
+                // Serialize account creation for this existing staff record.
+                $locked = \Illuminate\Support\Facades\DB::connection('tenant')
+                    ->table('staff')->where('id', $staffId)->lockForUpdate()->first();
+                if (!$locked || !empty($locked->user_id)) {
+                    throw new \RuntimeException('Staff already linked or unavailable.');
+                }
+            }
             $users = model(UserModel::class);
             if (!$users->save($user)) {
                 throw new \RuntimeException('Unable to save the login account.');
@@ -105,7 +121,8 @@ class Staff extends BaseController
             }
             $account->addGroup($loginGroup);
             $data['user_id'] = $legacyId;
-            if (!$model->insert($data)) {
+            $saved = $staffId === null ? $model->insert($data) : $model->update($staffId, $data);
+            if (!$saved) {
                 $message = implode(' ', $model->errors());
                 $tenant->transRollback();
                 $tenantStarted = false;
@@ -132,7 +149,9 @@ class Staff extends BaseController
         }
 
         return redirect()->to(site_url('staff'))
-            ->with('success', 'Staff member and login created successfully.');
+            ->with('success', $staffId === null
+                ? 'Staff member and login created successfully.'
+                : 'Staff member updated and login created successfully.');
     }
 
     public function edit($id)
@@ -158,6 +177,17 @@ class Staff extends BaseController
         $member = $model->find($id);
         if (!$member) {
             throw PageNotFoundException::forPageNotFound('Staff member not found.');
+        }
+
+        if (empty($member['user_id']) && haven_auth()->user()?->can('staff.accounts.manage')) {
+            return $this->saveWithLogin($id);
+        }
+        foreach (['username', 'password', 'password_confirmation', 'login_role'] as $field) {
+            if (request()->filled($field)) {
+                return redirect()->back()
+                    ->withInput(request()->except(['password', 'password_confirmation', 'new_password', 'confirm_password']))
+                    ->with('error', 'Login creation is unavailable for this staff member.');
+            }
         }
 
         $password = (string) $this->request->getPost('new_password');

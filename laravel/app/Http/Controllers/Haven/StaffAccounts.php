@@ -31,10 +31,7 @@ class StaffAccounts extends BaseController
                 ->with('error', 'This staff member already has a login account.');
         }
 
-        return haven_view('staff/account_form', [
-            'member' => $member,
-            'groups' => $this->allowedGroups,
-        ]);
+        return redirect()->to(site_url('staff/edit/' . $staffId));
     }
 
     public function store($staffId)
