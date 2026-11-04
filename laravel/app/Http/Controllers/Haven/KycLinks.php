@@ -42,11 +42,11 @@ class KycLinks extends BaseController
         if ($url) {
             $html .= '<div class="notice"><strong>New invitation link — copy it now.</strong> For privacy, the full link is shown only once.</div>'
                 . '<input aria-label="Guest KYC link" readonly onclick="this.select()" value="' . esc($url, 'attr') . '">'
-                . '<p>Send this link privately to the guest via WhatsApp. Do not publish it publicly.</p>';
+                . '<p>Send this link privately to the guest. It expires 72 hours after creation. Do not publish it publicly.</p>';
         }
         $html .= '<form method="post" action="' . esc($action, 'attr') . '">'
             . csrf_field()
-            . '<p>Generate a new one-time guest registration link for this reservation. Any older unused link for this reservation will stop working.</p>'
+            . '<p>Generate a new one-time guest registration link for this reservation, valid for 72 hours. Any older unused link for this reservation will stop working.</p>'
             . '<button type="submit">Generate KYC Link</button></form>'
             . '<h2 style="font-size:18px;margin-top:28px">Recent KYC requests</h2>';
         if ($recent) {

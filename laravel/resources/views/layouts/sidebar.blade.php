@@ -28,6 +28,7 @@ $groups = [
         ['label' => 'External calendars', 'path' => 'availability/external', 'icon' => 'calendar-sync', 'permission' => 'availability.view'],
         ['label' => 'Customers', 'path' => 'customers', 'icon' => 'contact', 'permission' => 'finance.view'],
         ['label' => 'Guest KYC', 'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'finance.view'],
+        ['label' => 'Send guest KYC link', 'path' => 'staff/kyc/invite', 'icon' => 'mail', 'permission' => 'finance.manage'],
     ]],
     ['label' => 'Properties', 'icon' => 'building-2', 'items' => [
         ['label' => 'Apartment Units', 'path' => 'units', 'icon' => 'house', 'permission' => 'units.view'],

@@ -86,6 +86,12 @@ Route::post('staff/kyc/{id}/invoice', [Invoices::class, 'fromKyc'])->middleware(
     1 => 'tenant.member',
     2 => 'permission:invoices.manage',
 ])->whereNumber('id');
+Route::get('staff/kyc/invite', [\App\Http\Controllers\Haven\GuestKycInvitations::class, 'index'])
+    ->middleware(['auth', 'tenant.member', 'permission:finance.manage']);
+Route::post('staff/kyc/invite', [\App\Http\Controllers\Haven\GuestKycInvitations::class, 'generate'])
+    ->middleware(['auth', 'tenant.member', 'permission:finance.manage', 'throttle:10,1']);
+Route::post('staff/kyc/invite/sms', [\App\Http\Controllers\Haven\GuestKycInvitations::class, 'send'])
+    ->middleware(['auth', 'tenant.member', 'permission:finance.manage', 'permission:messaging.manage', 'throttle:3,1']);
 Route::get('staff/kyc', [KycReviews::class, 'index'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',

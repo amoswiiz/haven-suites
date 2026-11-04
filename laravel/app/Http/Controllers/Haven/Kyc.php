@@ -18,21 +18,24 @@ class Kyc extends BaseController
         }
 
         $db = db_connect();
-        return $db->table('customer_kyc')
+        $record = $db->table('customer_kyc')
             ->where('submission_token_hash', hash('sha256', strtolower($token)))
             ->where('submitted_at', null)
             ->get()->getRowArray() ?: null;
+        return $record && (new \App\Services\KycInvitationValidity)->usable($record) ? $record : null;
     }
 
     public function form(string $token)
     {
         $submission = $this->submission($token);
-        if (! $submission || empty($submission['reservation_id'])) {
-            return $this->response->setStatusCode(404)->setContent('This KYC link is invalid or has already been used. Please contact Haven Suites.');
+        if (! $submission) {
+            return $this->response->setStatusCode(404)->setContent('This KYC link is invalid, expired or has already been used. Please contact Haven Suites.');
         }
 
-        $reservation = db_connect()->table('reservations')->where('id', $submission['reservation_id'])->get()->getRowArray();
-        if (! $reservation) {
+        $reservation = ! empty($submission['reservation_id'])
+            ? db_connect()->table('reservations')->where('id', $submission['reservation_id'])->get()->getRowArray()
+            : null;
+        if (! empty($submission['reservation_id']) && ! $reservation) {
             return $this->response->setStatusCode(404)->setContent('Reservation not found.');
         }
 
@@ -46,8 +49,12 @@ class Kyc extends BaseController
     public function submit(string $token): RedirectResponse
     {
         $submission = $this->submission($token);
-        if (! $submission || empty($submission['reservation_id'])) {
+        if (! $submission) {
             return redirect()->to(site_url('kyc/invalid'));
+        }
+
+        if ((string) $this->request->getPost('consent') !== '1') {
+            return redirect()->back()->withInput()->with('kyc_errors', ['consent' => 'Please confirm the information and its stated use.']);
         }
 
         $rules = [
@@ -69,8 +76,10 @@ class Kyc extends BaseController
         }
 
         $db = db_connect();
-        $reservation = $db->table('reservations')->where('id', $submission['reservation_id'])->get()->getRowArray();
-        if (! $reservation) {
+        $reservation = ! empty($submission['reservation_id'])
+            ? $db->table('reservations')->where('id', $submission['reservation_id'])->get()->getRowArray()
+            : null;
+        if (! empty($submission['reservation_id']) && ! $reservation) {
             return redirect()->back()->with('kyc_errors', ['reservation' => 'Reservation no longer exists.']);
         }
 
@@ -99,9 +108,21 @@ class Kyc extends BaseController
 
         try {
             $db->transBegin();
+            // Serialize token consumption before changing customer details.
+            $submission = $db->query('SELECT * FROM customer_kyc WHERE id = ? FOR UPDATE', [$submission['id']])->getRowArray();
+            if (! $submission || ! (new \App\Services\KycInvitationValidity)->usable($submission)
+                || ! hash_equals((string) $submission['submission_token_hash'], hash('sha256', strtolower($token)))) {
+                throw new \RuntimeException('KYC invitation is no longer usable.');
+            }
+            $reservation = ! empty($submission['reservation_id'])
+                ? $db->query('SELECT * FROM reservations WHERE id = ? FOR UPDATE', [$submission['reservation_id']])->getRowArray()
+                : null;
+            if (! empty($submission['reservation_id']) && ! $reservation) {
+                throw new \RuntimeException('Reservation no longer exists.');
+            }
             // Prefer a customer already attached to the reservation. Do not
             // merge customers based on a phone number alone.
-            $customerId = ! empty($reservation['customer_id']) ? (int) $reservation['customer_id'] : null;
+            $customerId = ! empty($reservation['customer_id']) ? (int) $reservation['customer_id'] : (int) $submission['customer_id'];
             $customer = $customerId ? $db->table('customers')->where('id', $customerId)->get()->getRowArray() : null;
             $customerData = [
                 'full_name' => $name,
@@ -119,6 +140,7 @@ class Kyc extends BaseController
             }
 
             $db->table('customer_kyc')->where('id', $submission['id'])->where('submitted_at', null)->update([
+                'submission_token_hash' => null,
                 'customer_id' => $customerId,
                 'document_type' => $this->request->getPost('document_type'),
                 'document_storage_key' => $storageName,
@@ -128,6 +150,7 @@ class Kyc extends BaseController
                 'submitted_at' => $now,
                 'updated_at' => $now,
             ]);
+            if ($reservation) {
             $db->table('reservations')->where('id', $submission['reservation_id'])->update([
                 'customer_id' => $customerId,
                 'guest_name' => $name,
@@ -135,6 +158,7 @@ class Kyc extends BaseController
                 'guest_email' => $email !== '' ? $email : null,
                 'updated_at' => $now,
             ]);
+            }
 
             if ($db->transStatus() === false) {
                 throw new \RuntimeException('Database transaction failed');
@@ -143,7 +167,7 @@ class Kyc extends BaseController
         } catch (\Throwable $e) {
             $db->transRollback();
             @unlink($path);
-            log_message('error', 'KYC save failed: ' . $e->getMessage());
+            log_message('error', 'KYC submission could not be saved.');
             return redirect()->back()->with('kyc_errors', ['general' => 'We could not save your details. Please contact Haven Suites.']);
         }
 
@@ -157,6 +181,6 @@ class Kyc extends BaseController
 
     public function invalid()
     {
-        return $this->response->setStatusCode(404)->setContent('This KYC link is invalid or has already been used. Please contact Haven Suites.');
+        return $this->response->setStatusCode(404)->setContent('This KYC link is invalid, expired or has already been used. Please contact Haven Suites.');
     }
 }

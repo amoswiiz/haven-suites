@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
     <title>Guest Registration | Haven Suites</title>
     <style>
         :root{font-family:Arial,Helvetica,sans-serif;color:#1d2b3c;background:#f3f6fa}
@@ -26,10 +27,11 @@
 <main>
     <div class="card">
         <h2>Guest KYC Registration</h2>
-        <p class="intro">Please provide your official contact and identification details for your reservation. These details will also be used when preparing your invoice.</p>
+        <p class="intro">Please provide your official contact and identification details for guest registration. These details will also be used for your booking and invoice when applicable.</p>
 
         <div class="booking">
-            <strong>Reservation #<?= esc((string) ($reservation['id'] ?? '')) ?></strong>
+            <strong><?= !empty($reservation['id']) ? 'Reservation #'.esc((string) $reservation['id']) : 'Pre-booking guest registration' ?></strong>
+            <?php if (empty($reservation['id'])): ?>Submitting this form does not create or confirm a booking.<?php endif; ?>
             <?php if (! empty($reservation['check_in']) && ! empty($reservation['check_out'])): ?>
                 Check-in: <?= esc((string) $reservation['check_in']) ?> &nbsp; | &nbsp; Check-out: <?= esc((string) $reservation['check_out']) ?>
             <?php endif; ?>
@@ -79,7 +81,7 @@
                 <small>JPG, PNG or PDF only. Maximum file size: 5 MB. Please upload a clear, readable copy.</small>
             </div>
             <label class="consent" for="consent">
-                <input type="checkbox" id="consent" required>
+                <input type="checkbox" id="consent" name="consent" value="1" required>
                 <span>I confirm that the information is accurate and understand it will be used for guest identification, reservation administration and invoicing.</span>
             </label>
             <button class="submit" type="submit">Submit Guest Registration</button>
