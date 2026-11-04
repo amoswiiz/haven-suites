@@ -33,6 +33,7 @@ $logoUrl = base_url('assets/images/haven-suites-logo.png');
 .hs-receipt-badge{display:inline-block;background:#e4f4ea;color:#207448;padding:5px 11px;border-radius:20px;font-weight:700;font-size:12px}
 @media(max-width:600px){.hs-receipt-header,.hs-receipt-body{padding:22px}.hs-receipt-document-title{text-align:left}.hs-receipt-logo{width:200px;max-width:100%}}
 @media print{
+  .hs-impersonation-controls,.hs-content > .alert{display:none!important}
   .hs-receipt-actions,.sidebar,.hs-sidebar,nav,.navbar,header,.topbar,.app-sidebar{display:none!important}
   .main-content,.content-wrapper,main{margin:0!important;padding:0!important;max-width:none!important}
   body{background:#fff!important}
