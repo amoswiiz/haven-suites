@@ -64,27 +64,27 @@ Route::get('receipts/{id}', [Receipts::class, 'show'])->middleware([
 Route::post('invoices/{id}/customer', [Invoices::class, 'linkCustomer'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ])->whereNumber('id');
 Route::get('invoices/{id}/payments', [InvoicePayments::class, 'index'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ])->whereNumber('id');
 Route::post('invoices/{id}/payments', [InvoicePayments::class, 'allocate'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ])->whereNumber('id');
 Route::post('invoices/{id}/payments/record', [InvoicePayments::class, 'record'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ])->whereNumber('id');
 Route::post('staff/kyc/{id}/invoice', [Invoices::class, 'fromKyc'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ])->whereNumber('id');
 Route::get('staff/kyc', [KycReviews::class, 'index'])->middleware([
     0 => 'auth',
@@ -145,30 +145,30 @@ Route::get('customers/{id}', [Customers::class, 'show'])->middleware([
 Route::get('invoices/{id}', [Invoices::class, 'show'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.view',
+    2 => 'permission:invoices.view',
 ])->whereNumber('id');
 Route::get('invoices/settings', [InvoiceSettingsController::class, 'edit'])->middleware(['auth', 'tenant.member', 'permission:finance.manage']);
 Route::post('invoices/settings', [InvoiceSettingsController::class, 'update'])->middleware(['auth', 'tenant.member', 'permission:finance.manage']);
-Route::get('invoices/{id}/pdf', [Invoices::class, 'pdf'])->middleware(['auth', 'tenant.member', 'permission:finance.view'])->whereNumber('id');
+Route::get('invoices/{id}/pdf', [Invoices::class, 'pdf'])->middleware(['auth', 'tenant.member', 'permission:invoices.view'])->whereNumber('id');
 Route::post('invoices/{id}/issue', [Invoices::class, 'issue'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ])->whereNumber('id');
 Route::get('invoices/create', [Invoices::class, 'create'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ]);
 Route::post('invoices', [Invoices::class, 'store'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.manage',
+    2 => 'permission:invoices.manage',
 ]);
 Route::get('invoices', [Invoices::class, 'index'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
-    2 => 'permission:finance.view',
+    2 => 'permission:invoices.view',
 ]);
 Route::get('reports/investor', [InvestorReports::class, 'index'])->middleware([
     0 => 'auth',

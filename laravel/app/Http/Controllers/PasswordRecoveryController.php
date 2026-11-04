@@ -21,9 +21,14 @@ class PasswordRecoveryController extends Controller
     {
         $request->merge(['email' => strtolower(trim((string) $request->input('email')))]);
         $request->validate(['email' => 'required|email']);
-        Password::sendResetLink($request->only('email'));
+        try {
+            Password::sendResetLink($request->only('email'));
+        } catch (\Throwable $exception) {
+            // SMTP diagnostics can contain credentials or reset links.
+            \Illuminate\Support\Facades\Log::warning('Password recovery email could not be sent.');
+        }
 
-        return back()->with('success', 'If an account exists for that email, a password reset link has been sent.');
+        return back()->with('success', 'If this email is eligible for recovery, you will receive a password link. If it does not arrive, contact your administrator.');
     }
 
     public function reset(string $token, Request $request): View

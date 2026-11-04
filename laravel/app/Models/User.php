@@ -27,6 +27,42 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Tenant::class)->withPivot('roles', 'legacy_user_id');
     }
 
+    public function sendPasswordResetNotification($token): void
+    {
+        if (!$this->active) {
+            return;
+        }
+
+        $companies = $this->is_platform_admin
+            ? collect()
+            : $this->tenants()->where('tenants.active', true)->limit(2)->get();
+
+        if ($companies->count() !== 1) {
+            // A global account must not depend on an arbitrary company's mail server.
+            if (in_array(config('mail.default'), ['log', 'array'], true)) {
+                throw new \RuntimeException('Platform email delivery is not configured.');
+            }
+            parent::sendPasswordResetNotification($token);
+            return;
+        }
+
+        $company = $companies->first();
+        $mail = app(\App\Services\CompanyMail::class);
+        if (!$mail->sendsExternally($company->id)) {
+            throw new \RuntimeException('Company email delivery is disabled.');
+        }
+
+        // Use the configured application origin, not the incoming Host header.
+        $url = rtrim(config('app.url'), '/').route('password.reset', [
+            'token' => $token,
+            'email' => $this->getEmailForPasswordReset(),
+        ], false);
+        $minutes = (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60);
+        $mail->send($company, $this->getEmailForPasswordReset(), 'Set or reset your password',
+            "Use this secure link to set or reset your password:\n".$url.
+            "\n\nThis link expires in ".$minutes." minutes. If you did not request it, ignore this email.");
+    }
+
     public function hasMultipleCompanies(): bool
     {
         return $this->tenants()->where('active', true)->limit(2)->get(['tenants.id'])->count() > 1;
@@ -55,7 +91,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 'sales' => 'sales', 'agents' => 'agents', 'messaging' => 'messaging',
                 'reservations' => 'reservations', 'units', 'properties', 'availability' => 'properties',
                 'housekeeping' => 'housekeeping', 'maintenance' => 'maintenance',
-                'finance' => 'finance', 'reports' => 'reports', 'staff' => 'team', default => null,
+                'finance', 'invoices' => 'finance', 'reports' => 'reports', 'staff' => 'team', default => null,
             };
             if ($module !== null && ! CompanyModules::enabled($module)) {
                 return false;

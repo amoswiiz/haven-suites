@@ -3,7 +3,7 @@
 return ['roles' => [
 
     // Complete system access.
-    'superadmin' => ['tasks.*',
+    'superadmin' => ['invoices.*', 'tasks.*',
         'investors.*', 'notifications.*',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.*',
@@ -21,7 +21,7 @@ return ['roles' => [
     ],
 
     // Administrative operations.
-    'admin' => ['staff.accounts.manage', 'tasks.*',
+    'admin' => ['invoices.*', 'staff.accounts.manage', 'tasks.*',
         'investors.*', 'notifications.*',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
@@ -37,7 +37,7 @@ return ['roles' => [
     ],
 
     // Property and operations management.
-    'manager' => ['tasks.*',
+    'manager' => ['invoices.view', 'invoices.manage', 'tasks.*',
         'investors.view', 'notifications.view',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
@@ -53,7 +53,7 @@ return ['roles' => [
     ],
 
     // Daily operations.
-    'operations' => ['tasks.view',
+    'operations' => ['invoices.view', 'invoices.manage', 'tasks.view',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
         'properties.view',

@@ -384,7 +384,7 @@ class Invoices extends BaseController
             'paid' => $paid,
             'paymentHistory' => $paymentHistory,
             'balance' => max(0, round((float) $invoice['total_amount'] - $paid, 2)),
-            'canManage' => haven_auth()->user()?->can('finance.manage') ?? false,
+            'canManage' => haven_auth()->user()?->can('invoices.manage') ?? false,
         ];
     }
 
@@ -454,7 +454,7 @@ class Invoices extends BaseController
      */
     public function linkCustomer(int $id)
     {
-        if (! (haven_auth()->user()?->can('finance.manage') ?? false)) {
+        if (! (haven_auth()->user()?->can('invoices.manage') ?? false)) {
             return redirect()->to(site_url('invoices/'.$id))
                 ->with('error', 'You do not have permission to link customers.');
         }

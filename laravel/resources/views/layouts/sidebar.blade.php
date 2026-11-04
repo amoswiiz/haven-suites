@@ -41,7 +41,7 @@ $groups = [
     ]],
     ['label' => 'Finance', 'icon' => 'wallet', 'items' => [
         ['label' => 'Unit accounting & rent', 'path' => 'accounting/units', 'icon' => 'receipt', 'permission' => 'finance.view'],
-        ['label' => 'Invoices', 'path' => 'invoices', 'icon' => 'file-text', 'permission' => 'finance.view'],
+        ['label' => 'Invoices', 'path' => 'invoices', 'icon' => 'file-text', 'permission' => 'invoices.view'],
         ['label' => 'Guest Payments', 'path' => 'payments/guests', 'icon' => 'wallet', 'permission' => 'finance.view'],
         ['label' => 'Partner Owner Payments', 'path' => 'payments/partners', 'icon' => 'hand-coins', 'permission' => 'finance.view'],
         ['label' => 'Partner Owner Balances', 'path' => 'payments/partners/owners', 'icon' => 'file-text', 'permission' => 'finance.view'],
