@@ -369,7 +369,7 @@ $selectedStaffId = (string) $value('assigned_staff_id');
                                 class="form-select">
 
                             <?php foreach ($statuses as $key => $label): ?>
-                                 <?php if ($key === 'verified' && (!$canVerify || !$isEdit || $previousStatus !== 'completed')) continue; ?>
+                                 <?php if ($key === 'verified' && $previousStatus !== 'verified' && (!$canVerify || !$isEdit || $previousStatus !== 'completed')) continue; ?>
                                  <?php if ($previousStatus === 'verified' && $key !== 'verified') continue; ?>
                                 <option
                                     value="<?= esc($key, 'attr') ?>"
