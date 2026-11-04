@@ -89,8 +89,8 @@ class GuestKycInvitations extends BaseController
             return back()->with('error', 'SMS delivery is disabled or not configured. You can still copy the link.');
         }
         $tenant = app('currentTenant');
-        $message = $tenant->name.': Please complete your guest registration: '.$invitation['url']
-            .' This private link expires 72 hours after creation. Registration does not confirm a booking.';
+        $message = 'Welcome to '.$tenant->name.'! Please register here: '.$invitation['url']
+            ."\n\nValid for 72hrs. You'll receive an SMS once your booking is confirmed.";
         // Keep the access token out of broadly accessible SMS history.
         $inserted = DB::table('manual_sms_messages')->insertOrIgnore([
             'tenant_id' => $tenant->id, 'sent_by' => auth()->id(), 'send_token' => $data['send_token'],
