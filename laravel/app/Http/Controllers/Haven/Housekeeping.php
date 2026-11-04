@@ -1503,6 +1503,68 @@ class Housekeeping extends BaseController
         ]))->with('success', count($preview['changes']).' cleaning fees and linked expenses updated.');
     }
 
+    public function reviewFromEarnings()
+    {
+        $user = haven_auth()->user();
+        abort_unless($user && $this->canManage() && $user->can('housekeeping.verify'), 403);
+        $reviewer = $this->currentStaffId();
+        abort_unless($reviewer !== null, 403, 'Your login must be linked to a staff record.');
+        $input = request()->validate([
+            'job_id' => ['required', 'integer', 'min:1'],
+            'action' => ['required', 'in:dispute,resolve'],
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
+            'month' => ['required', 'date_format:Y-m'],
+            'staff_id' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $input['reason'] = trim($input['reason']);
+        if (mb_strlen($input['reason']) < 3) return redirect()->back()->with('error', 'Enter a review reason of at least three characters.');
+        $db = db_connect();
+        $db->transBegin();
+        try {
+            $initial = $db->table('housekeeping')->where('id', $input['job_id'])->get()->getRowArray();
+            if (! $initial) throw new \RuntimeException('Cleaning job not found.');
+            $this->lockAccountingUnits($db, [(int) $initial['unit_id']]);
+            $job = $db->query('SELECT * FROM housekeeping WHERE id = ? FOR UPDATE', [$input['job_id']])->getRowArray();
+            if (! $job || (int) $job['unit_id'] !== (int) $initial['unit_id']) {
+                throw new \RuntimeException('Cleaning changed. Refresh and try again.');
+            }
+            if ((int) $job['assigned_staff_id'] === $reviewer) throw new \RuntimeException('You cannot review your own cleaning job.');
+            $allowed = $input['action'] === 'dispute' ? ['completed', 'verified'] : ['disputed'];
+            if (! in_array($job['status'], $allowed, true) || empty($job['completed_at'])) {
+                throw new \RuntimeException('This cleaning is not eligible for the selected review action.');
+            }
+            (new AccountingPeriodGuard($db))->assertOpen((int) $job['unit_id'], substr($job['completed_at'], 0, 10));
+            if ($db->table('cleaner_payment_allocations')->where('housekeeping_id', $job['id'])->countAllResults()) {
+                throw new \RuntimeException('This job has payments. Reconcile them before changing its review status.');
+            }
+            $expense = $db->table('unit_expenses')->where('source_type', 'housekeeping')->where('source_id', $job['id'])->get()->getRowArray();
+            if ($expense) {
+                (new AccountingPeriodGuard($db))->assertOpen((int) $expense['unit_id'], $expense['expense_date']);
+                if ((float) $expense['amount_paid'] != 0 || $db->table('expense_payments')->where('expense_id', $expense['id'])->countAllResults()) {
+                    throw new \RuntimeException('The linked expense has payments. Reconcile first.');
+                }
+            }
+            $status = $input['action'] === 'dispute' ? 'disputed' : 'completed';
+            $audit = sprintf('[%s; reviewer staff #%d; %s -> %s; previous verifier %s at %s] %s',
+                date('Y-m-d H:i:s'), $reviewer, $job['status'], $status,
+                $job['verified_by_staff_id'] ?? '-', $job['verified_at'] ?? '-', $input['reason']);
+            $notes = trim(($job['notes'] ?? '')."\n".$audit);
+            if (mb_strlen($notes) > 5000) throw new \RuntimeException('Notes are too long to append this review. Contact an administrator.');
+            if (! $db->table('housekeeping')->where('id', $job['id'])->update([
+                'status' => $status, 'verified_by_staff_id' => null, 'verified_at' => null,
+                'notes' => $notes, 'updated_at' => date('Y-m-d H:i:s'),
+            ]) || $db->transStatus() === false) throw new \RuntimeException('Unable to save review.');
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            report($e);
+            return redirect()->back()->with('error', 'Review was not saved. Check that the job is unpaid, its accounting month is open, and you are not reviewing your own work.');
+        }
+        return redirect()->to(site_url('payments/cleaners/earnings').'?'.http_build_query([
+            'month' => $input['month'], 'staff_id' => $input['staff_id'] ?? '',
+        ]))->with('success', $status === 'disputed' ? 'Cleaning disputed. Reason recorded; verification and payment are blocked.' : 'Cleaning returned for verification. It has not been approved.');
+    }
+
     public function verifyFromEarnings()
     {
         $user = haven_auth()->user();
@@ -1596,6 +1658,13 @@ class Housekeeping extends BaseController
     /** Protect the month of an existing or newly completed cleaning expense. */
     private function guardCleaningChange($db, ?array $old, array $new): void
     {
+
+        $currentReview = ! empty($old['id'])
+            ? $db->query('SELECT status FROM housekeeping WHERE id = ? FOR UPDATE', [(int) $old['id']])->getRowArray()
+            : null;
+        if (($old['status'] ?? null) === 'disputed' || ($currentReview['status'] ?? null) === 'disputed') {
+            throw new \RuntimeException('Resolve this dispute from Cleaner Earnings before editing the cleaning.');
+        }
 
         $guard = new AccountingPeriodGuard($db);
 

@@ -87,6 +87,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
         <?php foreach ([
             ['Cleaning jobs', number_format((int) $totals['jobs'])],
             ['Awaiting verification', number_format((int) $totals['pending_jobs'])],
+            ['Disputed jobs', number_format((int) ($totals['disputed_jobs'] ?? 0))],
             ['Approved earnings', $money($totals['approved_earnings'])],
             ['Payments allocated', $money($totals['paid'])],
             ['Approved outstanding', $money($totals['outstanding'])],
@@ -113,7 +114,7 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
                         <tr>
                             <td class="fw-semibold"><?= esc($person['name'] ?? 'Unassigned') ?></td>
                             <td class="text-end"><?= number_format((int) ($person['jobs'] ?? 0)) ?></td>
-                            <td class="text-end"><?= number_format((int) ($person['pending'] ?? 0)) ?></td>
+                            <td class="text-end"><?= number_format((int) ($person['pending'] ?? 0)) ?><?php if (!empty($person['disputed'])): ?><div class="text-danger small"><?= (int) $person['disputed'] ?> disputed separately</div><?php endif; ?></td>
                             <td class="text-end"><?= number_format((int) ($person['approved'] ?? 0)) ?></td>
                             <td class="text-end"><?= esc($money($person['earned'] ?? 0)) ?></td>
                             <td class="text-end"><?= esc($money($person['paid'] ?? 0)) ?></td>
@@ -129,6 +130,15 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
     <div class="hs-card overflow-hidden">
         <div class="p-3 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h5 class="hs-heading mb-0">Cleaning job details</h5>
+            <?php if ($canVerify && (int) $totals['pending_jobs'] > 0 && haven_can_access(site_url('housekeeping/verify-from-earnings'), 'POST')): ?>
+                <form id="verifySelectedCleanings" method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
+                      onsubmit="const count = this.querySelectorAll('input[name=&quot;job_ids[]&quot;]:checked').length || document.querySelectorAll('input[form=&quot;verifySelectedCleanings&quot;]:checked').length; if (count < 1 || count > 100) { alert('Select between 1 and 100 pending cleaning jobs.'); return false; } return confirm('Verify the ' + count + ' selected cleaning job(s)?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="month" value="<?= esc($month, 'attr') ?>">
+                    <input type="hidden" name="staff_id" value="<?= esc((string) ($staffId ?? ''), 'attr') ?>">
+                    <button type="submit" class="btn hs-btn btn-sm">Verify Selected</button>
+                </form>
+            <?php endif; ?>
             <?php if ($canVerify && (int)$totals['pending_jobs'] > 0): ?>
                 <?php if (haven_can_access(site_url('housekeeping/verify-from-earnings'), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
                       onsubmit="return confirm('Verify all pending cleaning jobs currently displayed? This cannot be undone here.');">
@@ -149,20 +159,29 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
                 <thead><tr><th>Completed</th><?php if (!$isCleaner): ?><th>Cleaner</th><?php endif; ?><th>Apartment</th><th>Type</th><th class="text-end">Bedrooms</th><th>Status</th><th class="text-end">Fee</th><th class="text-end">Paid</th><th class="text-end">Balance</th><?php if ($canVerify): ?><th>Action</th><?php endif; ?></tr></thead>
                 <tbody>
                     <?php foreach ($jobs as $job): ?>
-                        <?php $approved = ($job['status'] ?? '') === 'verified'; ?>
+                        <?php $approved = ($job['status'] ?? '') === 'verified'; $disputed = ($job['status'] ?? '') === 'disputed'; ?>
                         <tr>
                             <td><?= esc(!empty($job['completed_at']) ? date('d M Y', strtotime($job['completed_at'])) : '—') ?></td>
                             <?php if (!$isCleaner): ?><td><?= esc($job['cleaner_name'] ?? 'Unassigned') ?></td><?php endif; ?>
                             <td><span class="fw-semibold"><?= esc($job['unit_number'] ?? '—') ?></span><div class="text-muted small"><?= esc($job['property_name'] ?? '') ?></div></td>
                             <td><?= esc(ucwords(str_replace('_', ' ', (string) ($job['cleaning_type'] ?? '')))) ?></td>
                             <td class="text-end"><?= esc((string) ($job['bedrooms_cleaned'] ?? '—')) ?></td>
-                            <td><span class="hs-pill <?= $approved ? 'hs-approved' : 'hs-pending' ?>"><?= $approved ? 'Verified' : 'Awaiting verification' ?></span></td>
+                            <td><span class="hs-pill <?= $approved ? 'hs-approved' : ($disputed ? 'bg-danger text-white' : 'hs-pending') ?>"><?= $approved ? 'Verified' : ($disputed ? 'Disputed' : 'Awaiting verification') ?></span>
+                                <?php if ($canVerify && ($job['status'] ?? '') === 'completed' && haven_can_access(site_url('housekeeping/verify-from-earnings'), 'POST')): ?>
+                                    <label class="d-flex align-items-center gap-2 small mt-2" for="selectCleaning<?= (int) $job['id'] ?>">
+                                        <input type="checkbox" class="form-check-input m-0" id="selectCleaning<?= (int) $job['id'] ?>"
+                                               form="verifySelectedCleanings" name="job_ids[]" value="<?= (int) $job['id'] ?>">
+                                        Select job #<?= (int) $job['id'] ?>
+                                    </label>
+                                <?php endif; ?>
+                                <?php if (!empty($job['notes'])): ?><details class="small mt-2"><summary>Notes and review history</summary><div style="white-space:pre-wrap"><?= esc($job['notes']) ?></div></details><?php endif; ?>
+                            </td>
                             <td class="text-end"><?= esc($money($job['cleaning_charge'] ?? 0)) ?></td>
                             <td class="text-end"><?= esc($money($job['paid_amount'] ?? 0)) ?></td>
                             <td class="text-end fw-semibold"><?= esc($approved ? $money(max(0, (float) ($job['balance'] ?? 0))) : '—') ?></td>
                            <?php if ($canVerify): ?>
                                <td>
-                                   <?php if (!$approved): ?>
+                                   <?php if (!$approved && !$disputed): ?>
                                        <?php if (haven_can_access(site_url('housekeeping/verify-from-earnings'), 'POST')): ?><form method="post" action="<?= site_url('housekeeping/verify-from-earnings') ?>"
                                              onsubmit="return confirm('Verify this completed cleaning job?');">
                                            <?= csrf_field() ?>
@@ -172,6 +191,21 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
                                            <button type="submit" class="btn btn-sm hs-btn">Verify</button>
                                        </form><?php endif; ?>
                                    <?php else: ?>—<?php endif; ?>
+                                   <?php if (haven_can_access(site_url('housekeeping/review-from-earnings'), 'POST')): ?>
+                                       <details class="mt-2">
+                                           <summary class="text-danger"><?= $disputed ? 'Return for verification' : 'Dispute' ?></summary>
+                                           <form method="post" action="<?= site_url('housekeeping/review-from-earnings') ?>" class="mt-2">
+                                               <?= csrf_field() ?>
+                                               <input type="hidden" name="job_id" value="<?= (int) $job['id'] ?>">
+                                               <input type="hidden" name="action" value="<?= $disputed ? 'resolve' : 'dispute' ?>">
+                                               <input type="hidden" name="month" value="<?= esc($month, 'attr') ?>">
+                                               <input type="hidden" name="staff_id" value="<?= esc((string) ($staffId ?? ''), 'attr') ?>">
+                                               <label for="reviewReason<?= (int) $job['id'] ?>" class="form-label small">Reason (visible to the cleaner)</label>
+                                               <textarea id="reviewReason<?= (int) $job['id'] ?>" name="reason" class="form-control" minlength="3" maxlength="1000" rows="3" required></textarea>
+                                               <button type="submit" class="btn btn-sm btn-outline-danger mt-2"><?= $disputed ? 'Return for verification' : 'Dispute cleaning' ?></button>
+                                           </form>
+                                       </details>
+                                   <?php endif; ?>
                                </td>
                            <?php endif; ?>
                         </tr>

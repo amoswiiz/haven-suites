@@ -588,6 +588,8 @@ Route::post('housekeeping/earnings-rates/preview', [Housekeeping::class, 'previe
     ->middleware(['auth', 'tenant.member', 'permission:settings.manage', 'permission:housekeeping.manage']);
 Route::post('housekeeping/earnings-rates/apply', [Housekeeping::class, 'applyEarningsRates'])
     ->middleware(['auth', 'tenant.member', 'permission:settings.manage', 'permission:housekeeping.manage']);
+Route::post('housekeeping/review-from-earnings', [Housekeeping::class, 'reviewFromEarnings'])
+    ->middleware(['auth', 'tenant.member', 'permission:housekeeping.manage', 'permission:housekeeping.verify']);
 Route::post('housekeeping/verify-from-earnings', [Housekeeping::class, 'verifyFromEarnings'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',

@@ -76,7 +76,7 @@ class CleanerEarnings extends BaseController
             ->join('units u', 'u.id = h.unit_id', 'left')
             ->join('properties p', 'p.id = u.property_id', 'left')
             ->join($allocations, 'allocations.housekeeping_id = h.id', 'left', false)
-            ->whereIn('h.status', ['completed', 'verified'])
+            ->whereIn('h.status', ['completed', 'verified', 'disputed'])
             ->where('h.completed_at >=', $start . ' 00:00:00')
             ->where('h.completed_at <', $end . ' 00:00:00');
 
@@ -86,7 +86,7 @@ class CleanerEarnings extends BaseController
         $jobs = $query->orderBy('h.completed_at', 'DESC')->get()->getResultArray();
 
         $totals = [
-            'jobs' => 0, 'pending_jobs' => 0, 'approved_jobs' => 0,
+            'jobs' => 0, 'pending_jobs' => 0, 'approved_jobs' => 0, 'disputed_jobs' => 0,
             'submitted_value' => 0.0, 'approved_earnings' => 0.0,
             'paid' => 0.0, 'outstanding' => 0.0,
         ];
@@ -104,6 +104,8 @@ class CleanerEarnings extends BaseController
                 $totals['approved_jobs']++;
                 $totals['approved_earnings'] += $charge;
                 $totals['outstanding'] += max(0, $job['balance']);
+            } elseif ($job['status'] === 'disputed') {
+                $totals['disputed_jobs']++;
             } else {
                 $totals['pending_jobs']++;
             }
@@ -112,7 +114,7 @@ class CleanerEarnings extends BaseController
             if (!isset($byCleaner[$key])) {
                 $byCleaner[$key] = [
                     'name' => $job['cleaner_name'] ?: 'Unassigned',
-                    'jobs' => 0, 'pending' => 0, 'approved' => 0,
+                    'jobs' => 0, 'pending' => 0, 'approved' => 0, 'disputed' => 0,
                     'submitted' => 0.0, 'earned' => 0.0, 'paid' => 0.0, 'outstanding' => 0.0,
                 ];
             }
@@ -123,6 +125,8 @@ class CleanerEarnings extends BaseController
                 $byCleaner[$key]['approved']++;
                 $byCleaner[$key]['earned'] += $charge;
                 $byCleaner[$key]['outstanding'] += max(0, $job['balance']);
+            } elseif ($job['status'] === 'disputed') {
+                $byCleaner[$key]['disputed']++;
             } else {
                 $byCleaner[$key]['pending']++;
             }

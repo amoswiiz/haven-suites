@@ -35,6 +35,6 @@ class HousekeepingModel extends Model
             'required|in_list[checkout,pre_checkin,routine,deep]',
         'scheduled_at' => 'required',
         'status' =>
-            'required|in_list[pending,assigned,in_progress,completed,verified,cancelled]',
+            'required|in_list[pending,assigned,in_progress,completed,verified,cancelled,disputed]',
     ];
 }
