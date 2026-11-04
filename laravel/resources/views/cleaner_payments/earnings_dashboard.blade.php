@@ -73,6 +73,16 @@ $monthLabel = DateTimeImmutable::createFromFormat('!Y-m', $month);
         </form><?php endif; ?>
     </div>
 
+    <?php if (!$isCleaner && haven_can_access(site_url('housekeeping/earnings-rates/preview'), 'POST')): ?>
+        <form method="post" action="<?= site_url('housekeeping/earnings-rates/preview') ?>" class="hs-card p-3 mb-4">
+            <?= csrf_field() ?>
+            <input type="hidden" name="month" value="<?= esc($month, 'attr') ?>">
+            <input type="hidden" name="staff_id" value="<?= esc((string) ($staffId ?? ''), 'attr') ?>">
+            <p class="text-muted small">Preview current cleaning rates for the selected month and cleaner. Paid jobs, manually adjusted fees and locked accounting months require separate review.</p>
+            <button class="btn btn-outline-primary" type="submit">Preview updated cleaning rates</button>
+        </form>
+    <?php endif; ?>
+
     <div class="row g-3 mb-4">
         <?php foreach ([
             ['Cleaning jobs', number_format((int) $totals['jobs'])],

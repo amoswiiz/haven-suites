@@ -1378,6 +1378,131 @@ class Housekeeping extends BaseController
     /** Serialize financial changes with statement approval (unit-row locks). */
 
     /** Verify one or more completed jobs from the earnings dashboard. */
+    public function previewEarningsRates()
+    {
+        abort_unless(haven_auth()->user() && ! $this->isCleaner()
+            && haven_auth()->user()->can('settings.manage') && $this->canManage(), 403);
+        $input = request()->validate([
+            'month' => ['required', 'date_format:Y-m'],
+            'staff_id' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $start = $input['month'].'-01';
+        $end = (new \DateTimeImmutable($start))->modify('+1 month')->format('Y-m-d');
+        $db = db_connect();
+        $query = $db->table('housekeeping')->whereIn('status', ['completed', 'verified'])
+            ->where('completed_at >=', $start.' 00:00:00')->where('completed_at <', $end.' 00:00:00');
+        if (! empty($input['staff_id'])) {
+            $query->where('assigned_staff_id', (int) $input['staff_id']);
+        }
+        $jobs = $query->orderBy('id', 'ASC')->get()->getResultArray();
+        $rows = [];
+        $changes = [];
+        foreach ($jobs as $job) {
+            $rate = $db->table('cleaning_rates')->where('bedrooms', (int) ($job['bedrooms_cleaned'] ?? 0))->get()->getRowArray();
+            $reason = $this->earningsRateBlock($db, $job);
+            if (! $rate || ! is_numeric($rate['amount']) || (float) $rate['amount'] < 0) {
+                $reason = 'No valid rate for the bedrooms cleaned.';
+            }
+            $newAmount = $rate ? number_format((float) $rate['amount'], 2, '.', '') : null;
+            if ($reason === null && $newAmount === number_format((float) $job['cleaning_charge'], 2, '.', '')) {
+                $reason = 'Already uses the current rate.';
+            }
+            $rows[] = ['job' => $job, 'new_amount' => $newAmount, 'reason' => $reason];
+            if ($reason === null) {
+                $changes[] = ['id' => (int) $job['id'], 'unit_id' => (int) $job['unit_id'],
+                    'fingerprint' => hash('sha256', serialize($job)), 'rate_id' => (int) $rate['id'],
+                    'amount' => $newAmount];
+            }
+        }
+        $token = bin2hex(random_bytes(24));
+        session()->put('cleaning_rate_preview', [
+            'token' => $token, 'actor' => auth()->id(), 'tenant' => app('currentTenant')->id,
+            'expires' => time() + 900, 'month' => $input['month'], 'staff_id' => $input['staff_id'] ?? '',
+            'changes' => $changes,
+        ]);
+        return haven_view('cleaner_payments/rate_preview', compact('rows', 'token', 'input', 'changes'));
+    }
+
+    private function earningsRateBlock($db, array $job): ?string
+    {
+        if (! in_array($job['status'], ['completed', 'verified'], true) || empty($job['completed_at'])
+            || empty($job['bedrooms_cleaned']) || $job['cleaning_charge'] === null) {
+            return 'Cleaning information is incomplete or its status has changed.';
+        }
+        if (! empty($job['charge_adjusted_by'])) {
+            return 'Manager-adjusted fee: review separately.';
+        }
+        if ($db->table('cleaner_payment_allocations')->where('housekeeping_id', $job['id'])->countAllResults() > 0) {
+            return 'Has payment allocations: review separately.';
+        }
+        $expense = $db->table('unit_expenses')->where('source_type', 'housekeeping')->where('source_id', $job['id'])->get()->getRowArray();
+        if ($expense && ((float) $expense['amount_paid'] != 0
+            || $db->table('expense_payments')->where('expense_id', $expense['id'])->countAllResults() > 0)) {
+            return 'Linked expense has payments: review separately.';
+        }
+        $guard = new AccountingPeriodGuard($db);
+        if ($guard->isLocked((int) $job['unit_id'], substr($job['completed_at'], 0, 10))
+            || ($expense && $guard->isLocked((int) $expense['unit_id'], $expense['expense_date']))) {
+            return 'Accounting month is locked.';
+        }
+        return null;
+    }
+
+    public function applyEarningsRates()
+    {
+        abort_unless(haven_auth()->user() && ! $this->isCleaner()
+            && haven_auth()->user()->can('settings.manage') && $this->canManage(), 403);
+        request()->validate(['preview_token' => ['required', 'string']]);
+        $preview = session()->get('cleaning_rate_preview');
+        abort_unless(is_array($preview) && hash_equals($preview['token'], request('preview_token'))
+            && $preview['actor'] === auth()->id() && $preview['tenant'] === app('currentTenant')->id
+            && $preview['expires'] >= time(), 409, 'Preview expired. Preview the current rates again.');
+        $db = db_connect();
+        $db->transBegin();
+        try {
+            $this->lockAccountingUnits($db, array_column($preview['changes'], 'unit_id'));
+            foreach ($preview['changes'] as $change) {
+                $job = $db->query('SELECT * FROM housekeeping WHERE id = ? FOR UPDATE', [$change['id']])->getRowArray();
+                if (! $job || hash('sha256', serialize($job)) !== $change['fingerprint']) {
+                    throw new \RuntimeException('A cleaning changed since the preview. Preview again.');
+                }
+                $reason = $this->earningsRateBlock($db, $job);
+                if ($reason !== null) {
+                    throw new \RuntimeException('Job #'.$job['id'].': '.$reason);
+                }
+                $rate = $db->query('SELECT * FROM cleaning_rates WHERE id = ? FOR UPDATE', [$change['rate_id']])->getRowArray();
+                if (! $rate || (int) $rate['bedrooms'] !== (int) $job['bedrooms_cleaned']
+                    || number_format((float) $rate['amount'], 2, '.', '') !== $change['amount']) {
+                    throw new \RuntimeException('Cleaning rates changed since the preview. Preview again.');
+                }
+                $this->guardCleaningChange($db, $job, $job);
+                $audit = sprintf('[Rate recalculation %s, login %s] %s -> %s; %s bedrooms cleaned.',
+                    date('Y-m-d H:i:s'), auth()->id(), $job['cleaning_charge'], $change['amount'], $job['bedrooms_cleaned']);
+                if (! $db->table('housekeeping')->where('id', $job['id'])->update([
+                    'cleaning_charge' => $change['amount'],
+                    'notes' => trim(($job['notes'] ?? '')."\n".$audit), 'updated_at' => date('Y-m-d H:i:s'),
+                ])) {
+                    throw new \RuntimeException('Unable to update cleaning fee.');
+                }
+                (new HousekeepingExpenseSync)->syncTask((int) $job['id']);
+            }
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Rate recalculation failed.');
+            }
+            $db->transCommit();
+            session()->forget('cleaning_rate_preview');
+        } catch (\Throwable $exception) {
+            $db->transRollback();
+            report($exception);
+            return redirect()->to(site_url('payments/cleaners/earnings').'?'.http_build_query([
+                'month' => $preview['month'], 'staff_id' => $preview['staff_id'],
+            ]))->with('error', 'No rates were applied. A record may have changed or accounting synchronization failed. Preview again; contact an administrator if this persists.');
+        }
+        return redirect()->to(site_url('payments/cleaners/earnings').'?'.http_build_query([
+            'month' => $preview['month'], 'staff_id' => $preview['staff_id'],
+        ]))->with('success', count($preview['changes']).' cleaning fees and linked expenses updated.');
+    }
+
     public function verifyFromEarnings()
     {
         $user = haven_auth()->user();

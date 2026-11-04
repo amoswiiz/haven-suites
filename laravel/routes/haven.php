@@ -584,6 +584,10 @@ Route::get('reservations/{id}', [Reservations::class, 'show'])->middleware([
     1 => 'tenant.member',
     2 => 'permission:reservations.view',
 ])->whereNumber('id');
+Route::post('housekeeping/earnings-rates/preview', [Housekeeping::class, 'previewEarningsRates'])
+    ->middleware(['auth', 'tenant.member', 'permission:settings.manage', 'permission:housekeeping.manage']);
+Route::post('housekeeping/earnings-rates/apply', [Housekeeping::class, 'applyEarningsRates'])
+    ->middleware(['auth', 'tenant.member', 'permission:settings.manage', 'permission:housekeeping.manage']);
 Route::post('housekeeping/verify-from-earnings', [Housekeeping::class, 'verifyFromEarnings'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
