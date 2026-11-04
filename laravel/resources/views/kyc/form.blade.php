@@ -26,12 +26,14 @@
 <header><h1>HAVEN SUITES</h1><p>BNBs AND STR HOMES</p></header>
 <main>
     <div class="card">
-        <h2>Guest KYC Registration</h2>
-        <p class="intro">Please provide your official contact and identification details for guest registration. These details will also be used for your booking and invoice when applicable.</p>
+        <h2>Welcome to Haven Suites!</h2>
+        <p class="intro">We're delighted to host you! Please take a moment to share your contact details and identification document to help us prepare for your stay.</p>
+        <h2>Guest Registration</h2>
+        <p class="intro">Thank you for choosing Haven Suites! This quick registration helps us make your booking process smooth and secure.</p>
 
         <div class="booking">
             <strong><?= !empty($reservation['id']) ? 'Reservation #'.esc((string) $reservation['id']) : 'Pre-booking guest registration' ?></strong>
-            <?php if (empty($reservation['id'])): ?>Submitting this form does not create or confirm a booking.<?php endif; ?>
+            <?php if (empty($reservation['id'])): ?><em>Please note: Registration does not confirm a booking.</em><?php endif; ?>
             <?php if (! empty($reservation['check_in']) && ! empty($reservation['check_out'])): ?>
                 Check-in: <?= esc((string) $reservation['check_in']) ?> &nbsp; | &nbsp; Check-out: <?= esc((string) $reservation['check_out']) ?>
             <?php endif; ?>
@@ -51,7 +53,7 @@
         <?php if (haven_can_access(esc(site_url('kyc/' . $token . '/submit'), 'attr'), 'POST')): ?><form method="post" action="<?= esc(site_url('kyc/' . $token . '/submit'), 'attr') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <div class="field">
-                <label for="full_name">Full name as shown on your ID <span class="required">*</span></label>
+                <label for="full_name">Full name (as shown on your ID) <span class="required">*</span></label>
                 <input id="full_name" name="full_name" type="text" maxlength="180" autocomplete="name" required value="<?= esc((string) old('full_name', ''), 'attr') ?>">
             </div>
             <div class="field">
@@ -59,35 +61,35 @@
                 <input id="email" name="email" type="email" maxlength="180" autocomplete="email" value="<?= esc((string) old('email', ''), 'attr') ?>">
             </div>
             <div class="field">
-                <label for="primary_phone">Primary phone number <span class="required">*</span></label>
+                <label for="primary_phone">Phone number <span class="required">*</span></label>
                 <input id="primary_phone" name="primary_phone" type="tel" maxlength="40" autocomplete="tel" placeholder="e.g. +254 7XX XXX XXX" required value="<?= esc((string) old('primary_phone', ''), 'attr') ?>">
             </div>
             <div class="field">
-                <label for="alternative_contact">Alternative contact / phone</label>
+                <label for="alternative_contact">Alternative phone number</label>
                 <input id="alternative_contact" name="alternative_contact" type="text" maxlength="180" value="<?= esc((string) old('alternative_contact', ''), 'attr') ?>">
             </div>
             <div class="field">
-                <label for="document_type">Identification document type <span class="required">*</span></label>
+                <label for="document_type">Identification document <span class="required">*</span></label>
                 <select id="document_type" name="document_type" required>
-                    <option value="">Select document type</option>
+                    <option value="">Select your ID type</option>
                     <?php foreach (['national_id' => 'National ID', 'passport' => 'Passport', 'alien_id' => 'Alien ID', 'driving_licence' => 'Driving licence'] as $value => $label): ?>
                         <option value="<?= esc($value, 'attr') ?>" <?= old('document_type') === $value ? 'selected' : '' ?>><?= esc($label) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
             <div class="field">
-                <label for="identity_document">Upload identification document <span class="required">*</span></label>
+                <label for="identity_document">Upload your ID document <span class="required">*</span></label>
                 <input id="identity_document" name="identity_document" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required>
-                <small>JPG, PNG or PDF only. Maximum file size: 5 MB. Please upload a clear, readable copy.</small>
+                <small>Please upload a clear photo or copy of your ID (JPG, PNG or PDF, max. 5 MB).</small>
             </div>
             <label class="consent" for="consent">
                 <input type="checkbox" id="consent" name="consent" value="1" required>
-                <span>I confirm that the information is accurate and understand it will be used for guest identification, reservation administration and invoicing.</span>
+                <span>I confirm that my details are correct and agree to their use for guest registration, booking administration and invoicing.</span>
             </label>
-            <button class="submit" type="submit">Submit Guest Registration</button>
+            <button class="submit" type="submit">Submit Registration</button>
         </form><?php endif; ?>
     </div>
-    <p class="foot">Haven Suites BNB &bull; Guest information is handled for reservation and identification purposes.</p>
+    <p class="foot">Thank you for choosing Haven Suites. Your information is handled securely and used only for authorized guest registration and booking purposes.</p>
 </main>
 </body>
 </html>
