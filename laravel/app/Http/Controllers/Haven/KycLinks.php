@@ -115,7 +115,9 @@ class KycLinks extends BaseController
                 ->with('kyc_invitation_error', 'Could not create the KYC link. Check that reservations.customer_id exists.');
         }
 
+        $invitation = $db->table('customer_kyc')->where('submission_token_hash', $hash)->get()->getRowArray();
+        $url = app(\App\Services\KycShortLinks::class)->create((int) app('currentTenant')->id, (int) $invitation['id'], $token, $now);
         return redirect()->to(site_url('reservations/' . $reservationId . '/kyc-link'))
-            ->with('kyc_invitation_url', site_url('kyc/' . $token));
+            ->with('kyc_invitation_url', $url);
     }
 }

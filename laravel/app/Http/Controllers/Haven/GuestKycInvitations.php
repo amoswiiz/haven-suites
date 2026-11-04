@@ -67,7 +67,7 @@ class GuestKycInvitations extends BaseController
         session()->put($this->sessionKey(), [
             'id' => $id, 'token' => $token, 'name' => trim($data['full_name']), 'phone' => $data['phone'],
             'send_token' => (string) Str::uuid(), 'expires' => strtotime($now) + KycInvitationValidity::HOURS * 3600,
-            'url' => rtrim(config('app.url'), '/').'/t/'.rawurlencode(app('currentTenant')->slug).'/kyc/'.$token,
+            'url' => app(\App\Services\KycShortLinks::class)->create((int) app('currentTenant')->id, (int) $id, $token, $now),
         ]);
         return redirect()->to(site_url('staff/kyc/invite'))->with('success', 'KYC link generated. No SMS has been sent.');
     }

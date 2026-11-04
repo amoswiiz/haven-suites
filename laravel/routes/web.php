@@ -1,5 +1,7 @@
 <?php
 
+require __DIR__.'/kyc_short.php';
+
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ExternalCalendarController;
 use App\Http\Controllers\ImpersonationController;

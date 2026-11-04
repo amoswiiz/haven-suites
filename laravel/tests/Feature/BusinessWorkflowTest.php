@@ -377,16 +377,25 @@ class BusinessWorkflowTest extends TestCase
         $this->post('/t/workflow/reservations/'.$id.'/kyc-link')->assertRedirect();
         $url = session('kyc_invitation_url');
         $this->assertNotEmpty($url);
-        $this->get($url)->assertOk()->assertSee('Guest');
+        $shortPath = parse_url($url, PHP_URL_PATH);
+        $this->assertMatchesRegularExpression('#^/k/[A-Za-z0-9_-]{16}$#', $shortPath);
+        $redirect = $this->get($shortPath);
+        $redirect->assertStatus(302);
+        $formUrl = $redirect->headers->get('Location');
+        $formPath = parse_url($formUrl, PHP_URL_PATH);
+        $this->assertMatchesRegularExpression('#^/t/workflow/kyc/[a-f0-9]{64}$#', $formPath);
+        $this->get($formPath)->assertOk()->assertSee('Guest');
         try {
-            $this->post($url.'/submit', [
+            $this->post($formPath.'/submit', [
                 'full_name' => 'Migration Verified Guest', 'primary_phone' => '0700000000', 'email' => 'kyc-test@example.test',
+                'consent' => '1',
                 'document_type' => 'national_id', 'identity_document' => UploadedFile::fake()->image('identity.png', 10, 10),
             ])->assertRedirect('/t/workflow/kyc/thank-you');
             $record = DB::connection('tenant')->table('customer_kyc')->where('reservation_id', $id)->first();
             $this->assertSame('pending', $record->status);
             $this->get('/t/workflow/staff/kyc/'.$record->id.'/document')->assertOk()->assertHeader('content-type', 'image/png');
-            $this->get($url)->assertNotFound();
+            $this->get($shortPath)->assertNotFound();
+            $this->get($formPath)->assertNotFound();
         } finally {
             $key = DB::connection('tenant')->table('customer_kyc')->where('reservation_id', $id)->value('document_storage_key');
             if ($key && preg_match('/^[a-f0-9]{48}\.png$/D', $key)) {
