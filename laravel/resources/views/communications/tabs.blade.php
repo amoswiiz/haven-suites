@@ -1,4 +1,5 @@
 <nav class="actions" aria-label="Communications">
+    <a href="{{ route('communications.due', app('currentTenant')->slug) }}">Due today</a>
     @if(auth()->user()->can('messaging.manage'))
         <a href="{{ route('communications.guests',app('currentTenant')->slug) }}">Guest messages</a>
     @endif

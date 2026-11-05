@@ -95,6 +95,9 @@ function haven_landing(): string
     if ($user?->can('sales.view')) {
         return site_url('sales');
     }
+    if ($user?->can('cleaner.dashboard')) {
+        return route('cleaner.dashboard', app('currentTenant')->slug);
+    }
     if ($user?->can('housekeeping.view')) {
         return site_url('housekeeping');
     }

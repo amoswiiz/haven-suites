@@ -42,7 +42,7 @@
         </div>
         <?php $currentStaff = haven_auth()->user(); ?>
         <div class="hs-topbar-meta">
-            <span class="hs-topbar-date"><?= esc(date('d M Y')) ?></span>
+            <span class="hs-topbar-date">{{ now(app('currentTenant')->timezone ?: config('app.timezone'))->format('d M Y') }}</span>
             <?php if ($currentStaff !== null): ?>
                 <span class="hs-topbar-staff">
                     <i data-lucide="user-round" aria-hidden="true"></i>

@@ -6,6 +6,7 @@ $taskUnread = $user && ($user->can('tasks.view') || $user->can('tasks.owner')) ?
 
 $groups = [
     ['label' => 'Communications', 'icon' => 'message-circle', 'items' => [
+        ['label' => 'Communications due today', 'path' => 'communications/due', 'permission' => 'messaging.view', 'icon' => 'calendar-clock'],
         ['label' => 'Guest messages', 'path' => 'communications/guests', 'permission' => 'messaging.manage', 'icon' => 'message-circle'],
         ['label' => 'Message templates', 'path' => 'communications/templates', 'permission' => 'messaging.view', 'icon' => 'file-text'],
         ['label' => 'Compose SMS', 'path' => 'communications/sms', 'permission' => 'messaging.view', 'icon' => 'mail'],
@@ -167,6 +168,7 @@ $activePath = match ($activePath) {
 };
 if (str_starts_with($currentPath, 'receipts/')) $activePath = 'invoices';
 if ($currentPath === 'dashboard') $activePath = 'dashboard';
+if ($currentPath === 'cleaner/dashboard') $activePath = 'cleaner/dashboard';
 if (str_starts_with($currentPath,'work')) $activePath = 'work';
 if ($currentPath === 'my-profile' || str_starts_with($currentPath, 'my-profile/')) $activePath = 'my-profile';
 $isActive = static fn (string $path): bool => $activePath === $path;
@@ -219,6 +221,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
     @endif
     @endif
     <nav id="sidebar-links" class="hs-nav" aria-label="Main navigation">
+        @if(!$investorNavigation && $user->can('cleaner.dashboard'))<a data-menu-item data-keywords="my dashboard summary today overview" class="hs-nav-link {{ $isActive('cleaner/dashboard') ? 'active' : '' }}" href="{{ route('cleaner.dashboard', app('currentTenant')->slug) }}" @if($isActive('cleaner/dashboard')) aria-current="page" @endif><i data-lucide="layout-dashboard"></i><span>My dashboard</span></a>@endif
         @if(!$investorNavigation && $user->can('tasks.view'))<a data-menu-item data-keywords="tasks assignments deadlines work" class="hs-nav-link {{ str_starts_with($currentPath,'tasks') ? 'active' : '' }}" href="{{ route('tasks.index',app('currentTenant')->slug) }}" @if(str_starts_with($currentPath,'tasks')) aria-current="page" @endif>Tasks @if($taskUnread)<span class="pill">{{ $taskUnread }} unread</span>@endif</a>@endif
         @if($user->can('staff-profile.self'))<a data-menu-item data-keywords="my profile biodata identification staff document" class="hs-nav-link {{ $isActive('my-profile') ? 'active' : '' }}" href="{{ route('staff-profile.edit', app('currentTenant')->slug) }}" @if($isActive('my-profile')) aria-current="page" @endif><i data-lucide="id-card"></i><span>My profile</span></a>@endif
 

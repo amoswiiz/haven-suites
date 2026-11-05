@@ -7,15 +7,18 @@ use App\Models\Haven\MaintenanceModel;
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\StaffModel;
 use App\Models\Haven\UnitModel;
+use App\Services\DueCommunications;
 use App\Services\OwnerRemittanceCalculator;
 use App\Services\UnitAccounting;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class Dashboard extends BaseController
 {
     public function index()
     {
-        $today = date('Y-m-d');
+        $day = CarbonImmutable::now(app('currentTenant')->timezone ?: config('app.timezone'))->startOfDay();
+        $today = $day->toDateString();
 
         $unitModel = new UnitModel;
         $reservationModel = new ReservationModel;
@@ -74,7 +77,7 @@ class Dashboard extends BaseController
 
             'todayCleaning' => $housekeepingModel
                 ->where('scheduled_at >=', $today.' 00:00:00')
-                ->where('scheduled_at <', date('Y-m-d', strtotime('+1 day')).' 00:00:00')
+                ->where('scheduled_at <', $day->addDay()->toDateString().' 00:00:00')
                 ->whereNotIn('status', ['cancelled'])
                 ->countAllResults(),
 
@@ -105,6 +108,10 @@ class Dashboard extends BaseController
         ];
 
         $data['pageTitle'] = 'Dashboard';
+        $data['todayLabel'] = $day->format('l, j F Y');
+        $data['communicationQueue'] = auth()->user()->can('messaging.view')
+            ? app(DueCommunications::class)->summary()
+            : null;
         $data['completedCheckouts'] = $reservationModel->where('check_out', $today)->where('status', 'checked_out')->countAllResults();
         $data['remainingCheckouts'] = $data['todayCheckouts'] - $data['completedCheckouts'];
         $data['departureTasks'] = $reservationModel

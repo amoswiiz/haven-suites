@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CleanerDashboardController;
 use App\Http\Controllers\ExpensePaymentCorrectionController;
 use App\Http\Controllers\ExternalCalendarController;
 use App\Http\Controllers\Haven\Availability;
@@ -414,6 +415,8 @@ Route::get('dashboard', [Dashboard::class, 'index'])->middleware([
     1 => 'tenant.member',
     2 => 'permission:dashboard.view',
 ]);
+Route::get('cleaner/dashboard', [CleanerDashboardController::class, 'index'])
+    ->middleware(['auth', 'tenant.member', 'permission:cleaner.dashboard'])->name('cleaner.dashboard');
 Route::get('availability', [Availability::class, 'index'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',

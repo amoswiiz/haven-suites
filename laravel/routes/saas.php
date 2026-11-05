@@ -4,6 +4,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanyInvitationController;
 use App\Http\Controllers\CompanySettingsController;
+use App\Http\Controllers\DueCommunicationController;
 use App\Http\Controllers\GuestCommunicationController;
 use App\Http\Controllers\InvestorController;
 use App\Http\Controllers\OnboardingController;
@@ -124,6 +125,7 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
 
 Route::get('investor-login', fn () => redirect('/login'))->name('investor.login');
 Route::prefix('t/{tenant}/communications')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::get('due', [DueCommunicationController::class, 'index'])->middleware('permission:messaging.view')->name('communications.due');
     Route::get('guests', [GuestCommunicationController::class, 'compose'])->middleware('permission:messaging.manage')->name('communications.guests');
     Route::post('guests/preview', [GuestCommunicationController::class, 'preview'])->middleware('permission:messaging.manage')->name('communications.preview');
     Route::get('templates', [GuestCommunicationController::class, 'index'])->middleware('permission:messaging.view')->name('communications.templates');

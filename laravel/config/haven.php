@@ -71,6 +71,7 @@ return ['roles' => [
 
     // Housekeeping team.
     'cleaner' => ['bills.submit', 'tasks.view',
+        'cleaner.dashboard',
         'staff-profile.self',
         'housekeeping.view',
         'housekeeping.manage',

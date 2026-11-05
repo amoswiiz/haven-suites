@@ -144,7 +144,7 @@ class RoleVisibilityTest extends TestCase
 
     public static function limitedRoles(): array
     {
-        return [['cleaner', 'housekeeping'], ['owner', 'home'], ['user', 'home']];
+        return [['cleaner', 'cleaner/dashboard'], ['owner', 'home'], ['user', 'home']];
     }
 
     #[DataProvider('limitedRoles')]

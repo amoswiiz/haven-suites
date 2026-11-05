@@ -31,7 +31,7 @@
 @section('content')
 <div class="hs-workspace">
     <div class="hs-actionbar">
-        <div><h2>Your day at a glance</h2><p>{{ date('l, j F Y') }} &middot; All apartments</p></div>
+        <div><h2>Your day at a glance</h2><p>{{ $todayLabel ?? date('l, j F Y') }} &middot; All apartments</p></div>
         <div class="hs-actions" aria-label="Quick actions">
             @foreach ([['reservations/create', 'New booking', true], ['availability', 'Check availability', false], ['maintenance/create', 'Report issue', false]] as [$path, $label, $primary])
                 @if (haven_can_access(site_url($path), 'GET'))
@@ -60,6 +60,7 @@
             @endforeach
         </div>
     </section>
+    @if($communicationQueue ?? null)@include('dashboard.communications')@endif
     <section aria-labelledby="attention-heading">
         <div class="hs-section-head"><div><h2 id="attention-heading">Tasks needing attention</h2><p class="mb-0 mt-1">Up to five records per list. Daily tasks are independent of reporting filters.</p></div></div>
         <div class="hs-task-grid">
