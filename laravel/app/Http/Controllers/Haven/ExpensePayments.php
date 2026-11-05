@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Haven;
 
 use App\Services\AccountingPeriodGuard;
+use App\Services\ExpenseCorrections;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class ExpensePayments extends BaseController
@@ -88,6 +90,12 @@ class ExpensePayments extends BaseController
 
         $totalCents = $this->cents($expense['amount']) ?? 0;
         $cachedPaidCents = $this->cents($expense['amount_paid']) ?? 0;
+        $historicalPaid = ! $housekeepingLinked && $payments === [] && $cachedPaidCents > 0;
+        $displayPaidCents = $historicalPaid ? $cachedPaidCents : $paidCents;
+        $nativeDb = DB::connection('tenant');
+        $correctionsInstalled = $nativeDb->getSchemaBuilder()->hasTable('expense_payment_corrections');
+        $canCorrectPayments = auth()->user()?->active && $this->allowed('finance.manage')
+            && app(ExpenseCorrections::class)->editable((object) $expense);
 
         $staffBill = ($expense['source_type'] ?? '') === 'staff_bill'
             ? $db->table('staff_bills b')->select('b.id, b.payer, s.full_name')
@@ -100,8 +108,15 @@ class ExpensePayments extends BaseController
             'expense' => $expense,
             'payments' => $payments,
             'total' => $this->money($totalCents),
-            'paid' => $this->money($paidCents),
-            'balance' => $this->money(max(0, $totalCents - $paidCents)),
+            'paid' => $this->money($displayPaidCents),
+            'balance' => $this->money(max(0, $totalCents - $displayPaidCents)),
+            'cachedPaid' => $this->money($cachedPaidCents),
+            'historicalPaid' => $historicalPaid,
+            'canCorrectPayments' => $canCorrectPayments,
+            'correctionsInstalled' => $correctionsInstalled,
+            'paymentCorrections' => $correctionsInstalled
+                ? $nativeDb->table('expense_payment_corrections')->where('expense_id', $id)->orderByDesc('id')->limit(20)->get()
+                : collect(),
             'reconciliationIssue' => $paidCents !== $cachedPaidCents || $paidCents > $totalCents,
             'canManage' => $this->allowed('finance.manage') && ! $housekeepingLinked,
             'housekeepingLinked' => $housekeepingLinked,

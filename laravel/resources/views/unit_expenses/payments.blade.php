@@ -19,7 +19,10 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
             <h3 class="mb-1">Expense Payments #<?= (int) $expense['id'] ?></h3>
             <div class="text-muted"><?= $e($expense['property_name']) ?> / <?= $e($expense['unit_number'] ?? 'General company expense') ?> — <?= $e($expense['category_name']) ?></div>
         </div>
-        <?php if (haven_can_access(site_url('expenses'), 'GET')): ?><a href="<?= site_url('expenses') ?>" class="btn btn-outline-secondary">Back to Expense Register</a><?php endif; ?>
+        <div class="d-flex gap-2 flex-wrap">
+            @if($canCorrectPayments)<a href="{{ route('expenses.edit', [app('currentTenant')->slug, $expense['id']]) }}" class="btn btn-outline-primary">Edit expense</a>@endif
+            <?php if (haven_can_access(site_url('expenses'), 'GET')): ?><a href="<?= site_url('expenses') ?>" class="btn btn-outline-secondary">Back to Expense Register</a><?php endif; ?>
+        </div>
     </div>
 
     <?php if (haven_session()->getFlashdata('success')): ?>
@@ -28,16 +31,21 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
     <?php if (haven_session()->getFlashdata('error')): ?>
         <div class="alert alert-danger"><?= esc(haven_session()->getFlashdata('error')) ?></div>
     <?php endif; ?>
-    <?php if ($reconciliationIssue): ?>
+    @if($historicalPaid)
+        <div class="alert alert-info">This expense has a historical paid balance of KES {{ number_format((float) $cachedPaid, 2) }} without individual payment entries. Further payments require reconciliation.
+            @if($canCorrectPayments && $correctionsInstalled)<a href="{{ route('expenses.payments.historical.edit', [app('currentTenant')->slug, $expense['id']]) }}" class="d-inline-block ms-2">Correct historical paid balance</a>@endif
+        </div>
+    @elseif($reconciliationIssue)
         <div class="alert alert-warning">Payment records do not match the expense's saved payment total, or payments exceed the expense. New payments are blocked until this is reconciled.</div>
-    <?php endif; ?>
+    @endif
+    @if($canCorrectPayments && !$correctionsInstalled)<div class="alert alert-info">Payment correction is not available for this company yet. Ask your administrator to complete the update.</div>@endif
 
     <div class="card shadow-sm mb-3"><div class="card-body">
         <h5><?= $e($expense['description']) ?></h5>
         <p class="text-muted mb-3">Expense date: <?= $e($expense['expense_date']) ?> | Supplier: <?= $e($expense['supplier_name'] ?: 'Not specified') ?></p>
         <div class="row g-3">
             <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted">Total Expense</div><h4>KES <?= number_format((float) $total, 2) ?></h4></div></div>
-            <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted">Payments Recorded</div><h4>KES <?= number_format((float) $paid, 2) ?></h4></div></div>
+            <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted">{{ $historicalPaid ? 'Historical paid balance' : 'Payments Recorded' }}</div><h4>KES <?= number_format((float) $paid, 2) ?></h4></div></div>
             <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted">Outstanding</div><h4>KES <?= number_format((float) $balance, 2) ?></h4></div></div>
         </div>
     </div></div>
@@ -62,14 +70,17 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
     <div class="card shadow-sm"><div class="card-body">
         <h5 class="mb-3">Payment History</h5>
         <div class="table-responsive"><table class="table table-striped align-middle">
-            <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th class="text-end">Amount (KES)</th></tr></thead>
+            <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th class="text-end">Amount (KES)</th>@if($canCorrectPayments && $correctionsInstalled)<th>Action</th>@endif</tr></thead>
             <tbody>
             <?php foreach ($payments as $payment): ?>
-                <tr><td><?= $e($payment['payment_date']) ?></td><td><?= $e(strtoupper($payment['payment_method'])) ?></td><td><?= $e($payment['reference'] ?: '-') ?></td><td><?= $e($payment['notes'] ?: '-') ?></td><td class="text-end"><?= number_format((float) $payment['amount'], 2) ?></td></tr>
+                <tr><td><?= $e($payment['payment_date']) ?></td><td><?= $e(strtoupper($payment['payment_method'])) ?></td><td><?= $e($payment['reference'] ?: '-') ?></td><td><?= $e($payment['notes'] ?: '-') ?></td><td class="text-end"><?= number_format((float) $payment['amount'], 2) ?></td>
+                    @if($canCorrectPayments && $correctionsInstalled)<td><a href="{{ route('expenses.payments.edit', [app('currentTenant')->slug, $expense['id'], $payment['id']]) }}" class="btn btn-sm btn-outline-primary">Correct payment</a></td>@endif
+                </tr>
             <?php endforeach; ?>
-            <?php if (!$payments): ?><tr><td colspan="5" class="text-center text-muted py-4">No payments recorded.</td></tr><?php endif; ?>
+            <?php if (!$payments): ?><tr><td colspan="{{ $canCorrectPayments && $correctionsInstalled ? 6 : 5 }}" class="text-center text-muted py-4">No payments recorded.</td></tr><?php endif; ?>
             </tbody>
         </table></div>
     </div></div>
+    @if($correctionsInstalled)@include('unit_expenses.payment_corrections')@endif
 </div>
 @endsection

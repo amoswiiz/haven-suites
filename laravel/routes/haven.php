@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ExpensePaymentCorrectionController;
 use App\Http\Controllers\ExternalCalendarController;
 use App\Http\Controllers\Haven\Availability;
 use App\Http\Controllers\Haven\CleanerBalances;
@@ -321,7 +322,15 @@ Route::get('expenses/{id}/payments', [ExpensePayments::class, 'show'])->middlewa
     0 => 'auth',
     1 => 'tenant.member',
     2 => 'permission:finance.view',
-])->whereNumber('id');
+])->whereNumber('id')->name('expenses.payments');
+Route::get('expenses/{id}/payments/historical/edit', [ExpensePaymentCorrectionController::class, 'editHistorical'])
+    ->whereNumber('id')->middleware(['auth', 'tenant.member', 'permission:finance.manage'])->name('expenses.payments.historical.edit');
+Route::post('expenses/{id}/payments/historical/edit', [ExpensePaymentCorrectionController::class, 'updateHistorical'])
+    ->whereNumber('id')->middleware(['auth', 'tenant.member', 'permission:finance.manage'])->name('expenses.payments.historical.update');
+Route::get('expenses/{id}/payments/{paymentId}/edit', [ExpensePaymentCorrectionController::class, 'edit'])
+    ->whereNumber(['id', 'paymentId'])->middleware(['auth', 'tenant.member', 'permission:finance.manage'])->name('expenses.payments.edit');
+Route::post('expenses/{id}/payments/{paymentId}/edit', [ExpensePaymentCorrectionController::class, 'update'])
+    ->whereNumber(['id', 'paymentId'])->middleware(['auth', 'tenant.member', 'permission:finance.manage'])->name('expenses.payments.update');
 Route::post('expenses/{id}/payments', [ExpensePayments::class, 'store'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',
