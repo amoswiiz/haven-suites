@@ -10,6 +10,7 @@ use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\SaasAccountController;
 use App\Http\Controllers\SalesController;
+use App\Http\Controllers\StaffBillController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UnitAccountingController;
@@ -47,6 +48,16 @@ Route::middleware('auth')->group(function (): void {
     });
 });
 Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::prefix('staff-bills')->name('staff-bills.')->group(function (): void {
+        Route::get('/', [StaffBillController::class, 'index'])->name('index');
+        Route::get('new', [StaffBillController::class, 'create'])->name('create');
+        Route::post('/', [StaffBillController::class, 'store'])->middleware('throttle:20,1')->name('store');
+        Route::get('{id}', [StaffBillController::class, 'show'])->whereNumber('id')->name('show');
+        Route::get('{id}/edit', [StaffBillController::class, 'edit'])->whereNumber('id')->name('edit');
+        Route::post('{id}', [StaffBillController::class, 'update'])->whereNumber('id')->name('update');
+        Route::post('{id}/review', [StaffBillController::class, 'review'])->whereNumber('id')->name('review');
+        Route::get('{id}/receipts/{event}', [StaffBillController::class, 'receipt'])->whereNumber(['id', 'event'])->name('receipt');
+    });
     Route::prefix('tasks')->name('tasks.')->group(function (): void {
         Route::get('/', [TaskController::class, 'index'])->name('index');
         Route::get('new', [TaskController::class, 'create'])->name('create');

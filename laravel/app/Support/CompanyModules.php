@@ -17,7 +17,7 @@ class CompanyModules
             'units', 'properties', 'availability', 'host-agreements' => 'properties',
             'investors', 'investor-portal' => 'investors',
             'investor-notifications' => 'notifications',
-            'housekeeping' => 'housekeeping',
+            'housekeeping', 'staff-bills' => 'housekeeping',
             'maintenance' => 'maintenance',
             'reports', 'earnings-dashboard' => 'reports',
             'accounting', 'invoices', 'receipts', 'payments', 'expenses', 'owner-remittances', 'owner-statement-closing', 'cleaner-payments', 'settings' => 'finance',

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CompanyMail;
 use App\Support\CompanyModules;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,7 +30,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function sendPasswordResetNotification($token): void
     {
-        if (!$this->active) {
+        if (! $this->active) {
             return;
         }
 
@@ -43,12 +44,13 @@ class User extends Authenticatable implements MustVerifyEmail
                 throw new \RuntimeException('Platform email delivery is not configured.');
             }
             parent::sendPasswordResetNotification($token);
+
             return;
         }
 
         $company = $companies->first();
-        $mail = app(\App\Services\CompanyMail::class);
-        if (!$mail->sendsExternally($company->id)) {
+        $mail = app(CompanyMail::class);
+        if (! $mail->sendsExternally($company->id)) {
             throw new \RuntimeException('Company email delivery is disabled.');
         }
 
@@ -60,7 +62,7 @@ class User extends Authenticatable implements MustVerifyEmail
         $minutes = (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60);
         $mail->send($company, $this->getEmailForPasswordReset(), 'Set or reset your password',
             "Use this secure link to set or reset your password:\n".$url.
-            "\n\nThis link expires in ".$minutes." minutes. If you did not request it, ignore this email.");
+            "\n\nThis link expires in ".$minutes.' minutes. If you did not request it, ignore this email.');
     }
 
     public function hasMultipleCompanies(): bool
@@ -90,7 +92,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 'tasks' => 'tasks', 'investors', 'investor' => 'investors', 'notifications' => 'notifications',
                 'sales' => 'sales', 'agents' => 'agents', 'messaging' => 'messaging',
                 'reservations' => 'reservations', 'units', 'properties', 'availability' => 'properties',
-                'housekeeping' => 'housekeeping', 'maintenance' => 'maintenance',
+                'housekeeping', 'bills' => 'housekeeping', 'maintenance' => 'maintenance',
                 'finance', 'invoices' => 'finance', 'reports' => 'reports', 'staff' => 'team', default => null,
             };
             if ($module !== null && ! CompanyModules::enabled($module)) {

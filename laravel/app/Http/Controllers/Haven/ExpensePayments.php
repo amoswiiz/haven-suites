@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Services\AccountingPeriodGuard;
 use Illuminate\Http\RedirectResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class ExpensePayments extends BaseController
 {
     private function allowed(string $permission): bool
     {
         $user = haven_auth()->user();
+
         return $user !== null && $user->can($permission);
     }
 
@@ -19,10 +22,11 @@ class ExpensePayments extends BaseController
 
     private function cents($value): ?int
     {
-        if (!is_scalar($value) || !preg_match('/^\d{1,10}(?:\.\d{1,2})?$/', trim((string) $value))) {
+        if (! is_scalar($value) || ! preg_match('/^\d{1,10}(?:\.\d{1,2})?$/', trim((string) $value))) {
             return null;
         }
         $parts = explode('.', trim((string) $value), 2);
+
         return ((int) $parts[0] * 100) + (int) str_pad($parts[1] ?? '', 2, '0');
     }
 
@@ -33,12 +37,12 @@ class ExpensePayments extends BaseController
 
     private function isHousekeepingExpense(array $expense): bool
     {
-        return ($expense['source_type'] ?? '') === 'housekeeping' && !empty($expense['source_id']);
+        return ($expense['source_type'] ?? '') === 'housekeeping' && ! empty($expense['source_id']);
     }
 
     public function show(int $id)
     {
-        if (!$this->allowed('finance.view')) {
+        if (! $this->allowed('finance.view')) {
             return $this->forbidden();
         }
 
@@ -51,7 +55,7 @@ class ExpensePayments extends BaseController
             ->where('e.id', $id)
             ->get()->getRowArray();
 
-        if (!$expense) {
+        if (! $expense) {
             return haven_service('response')->setStatusCode(404)->setContent('Expense not found.');
         }
 
@@ -85,7 +89,13 @@ class ExpensePayments extends BaseController
         $totalCents = $this->cents($expense['amount']) ?? 0;
         $cachedPaidCents = $this->cents($expense['amount_paid']) ?? 0;
 
+        $staffBill = ($expense['source_type'] ?? '') === 'staff_bill'
+            ? $db->table('staff_bills b')->select('b.id, b.payer, s.full_name')
+                ->join('staff s', 's.id = b.staff_id', 'left')->where('b.expense_id', $id)->get()->getRowArray()
+            : null;
+
         return haven_view('unit_expenses/payments', [
+            'staffBill' => $staffBill,
             'pageTitle' => 'Expense Payments',
             'expense' => $expense,
             'payments' => $payments,
@@ -93,14 +103,14 @@ class ExpensePayments extends BaseController
             'paid' => $this->money($paidCents),
             'balance' => $this->money(max(0, $totalCents - $paidCents)),
             'reconciliationIssue' => $paidCents !== $cachedPaidCents || $paidCents > $totalCents,
-            'canManage' => $this->allowed('finance.manage') && !$housekeepingLinked,
+            'canManage' => $this->allowed('finance.manage') && ! $housekeepingLinked,
             'housekeepingLinked' => $housekeepingLinked,
         ]);
     }
 
-    public function store(int $id): RedirectResponse|\Symfony\Component\HttpFoundation\Response
+    public function store(int $id): RedirectResponse|Response
     {
-        if (!$this->allowed('finance.manage')) {
+        if (! $this->allowed('finance.manage')) {
             return $this->forbidden();
         }
 
@@ -111,8 +121,8 @@ class ExpensePayments extends BaseController
         $amountCents = $this->cents($this->request->getPost('amount'));
         $dateObject = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
 
-        if (!$dateObject || $dateObject->format('Y-m-d') !== $date
-            || !in_array($method, ['mpesa', 'bank', 'cash'], true)
+        if (! $dateObject || $dateObject->format('Y-m-d') !== $date
+            || ! in_array($method, ['mpesa', 'bank', 'cash'], true)
             || $amountCents === null || $amountCents <= 0
             || strlen($reference) > 100 || strlen($notes) > 10000) {
             return redirect()->back()->withInput()->with('error', 'Please check the payment details.');
@@ -122,16 +132,16 @@ class ExpensePayments extends BaseController
         $db->transBegin();
         try {
             $expenseUnit = $db->table('unit_expenses')->select('unit_id')->where('id', $id)->get()->getRowArray();
-            if (!$expenseUnit) {
+            if (! $expenseUnit) {
                 throw new \RuntimeException('Expense not found.');
             }
             $unitId = (int) $expenseUnit['unit_id'];
-            if (!$db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
+            if (! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
                 throw new \RuntimeException('Expense unit not found.');
             }
-            (new \App\Services\AccountingPeriodGuard($db))->assertOpen($unitId, $date);
+            (new AccountingPeriodGuard($db))->assertOpen($unitId, $date);
             $expense = $db->query('SELECT id, amount, amount_paid, source_type, source_id, unit_id FROM unit_expenses WHERE id = ? FOR UPDATE', [$id])->getRowArray();
-            if (!$expense || (int)$expense['unit_id'] !== $unitId) {
+            if (! $expense || (int) $expense['unit_id'] !== $unitId) {
                 throw new \RuntimeException('Expense changed while processing. Please retry.');
             }
             if ($this->isHousekeepingExpense($expense)) {
@@ -166,7 +176,7 @@ class ExpensePayments extends BaseController
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
-            if (!$inserted) {
+            if (! $inserted) {
                 throw new \RuntimeException('Could not save payment.');
             }
 
@@ -179,17 +189,19 @@ class ExpensePayments extends BaseController
                 'payment_reference' => $reference !== '' ? $reference : null,
                 'updated_at' => $now,
             ]);
-            if (!$updated || $db->transStatus() === false) {
+            if (! $updated || $db->transStatus() === false) {
                 throw new \RuntimeException('Could not update expense balance.');
             }
 
             $db->transCommit();
-            return redirect()->to(site_url('expenses/' . $id . '/payments'))
+
+            return redirect()->to(site_url('expenses/'.$id.'/payments'))
                 ->with('success', 'Expense payment recorded successfully.');
         } catch (\Throwable $e) {
             $db->transRollback();
             log_message('error', 'Expense payment error: {message}', ['message' => $e->getMessage()]);
-            return redirect()->to(site_url('expenses/' . $id . '/payments'))
+
+            return redirect()->to(site_url('expenses/'.$id.'/payments'))
                 ->with('error', $e->getMessage());
         }
     }

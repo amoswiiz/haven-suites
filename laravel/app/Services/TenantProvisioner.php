@@ -27,6 +27,14 @@ class TenantProvisioner
             $server->exec('SET FOREIGN_KEY_CHECKS=0');
             $server->exec($schema);
             $server->exec('SET FOREIGN_KEY_CHECKS=1');
+            $billConfig = $config;
+            $billConfig['database'] = $database;
+            $billConnection = DB::build($billConfig);
+            try {
+                app(StaffBillSchema::class)->install($billConnection);
+            } finally {
+                $billConnection->disconnect();
+            }
 
             return DB::transaction(function () use ($user, $name, $slug, $database, $server, $options): Tenant {
                 if ($user) {

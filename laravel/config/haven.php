@@ -66,7 +66,7 @@ return ['roles' => [
     ],
 
     // Housekeeping team.
-    'cleaner' => ['tasks.view',
+    'cleaner' => ['bills.submit', 'tasks.view',
         'housekeeping.view',
         'housekeeping.manage',
     ],

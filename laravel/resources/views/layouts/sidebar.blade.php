@@ -35,12 +35,14 @@ $groups = [
         ['label' => 'Host Agreements', 'path' => 'host-agreements', 'icon' => 'handshake', 'permission' => 'finance.view'],
     ]],
     ['label' => 'Operations', 'icon' => 'clipboard-list', 'items' => [
+        ['label' => 'My Bills & Reimbursements', 'path' => 'staff-bills', 'icon' => 'receipt', 'permission' => 'bills.submit'],
         ['label' => 'Housekeeping', 'path' => 'housekeeping', 'icon' => 'clipboard-check', 'permission' => 'housekeeping.view'],
         ['label' => 'Record Cleaning', 'path' => 'housekeeping/my-cleanings/new', 'icon' => 'plus-circle', 'access' => 'cleaner_module'],
         ['label' => 'Cleaner Earnings', 'path' => 'payments/cleaners/earnings', 'icon' => 'wallet', 'access' => 'cleaner_module'],
         ['label' => 'Maintenance', 'path' => 'maintenance', 'icon' => 'wrench', 'permission' => 'maintenance.view'],
     ]],
     ['label' => 'Finance', 'icon' => 'wallet', 'items' => [
+        ['label' => 'Bill Approvals', 'path' => 'staff-bills', 'icon' => 'receipt', 'permission' => 'finance.manage'],
         ['label' => 'Unit accounting & rent', 'path' => 'accounting/units', 'icon' => 'receipt', 'permission' => 'finance.view'],
         ['label' => 'Invoices', 'path' => 'invoices', 'icon' => 'file-text', 'permission' => 'invoices.view'],
         ['label' => 'Guest Payments', 'path' => 'payments/guests', 'icon' => 'wallet', 'permission' => 'finance.view'],

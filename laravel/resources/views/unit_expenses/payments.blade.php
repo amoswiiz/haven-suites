@@ -4,6 +4,16 @@
 $e = static fn ($value) => esc((string) ($value ?? ''));
 ?>
 <div class="container-fluid py-4">
+    @if(!empty($staffBill))
+    <div class="alert alert-info">
+        @if($staffBill['payer'] === 'personal')
+            Reimburse {{ $staffBill['full_name'] }} for this purchase. This payment is separate from cleaning earnings.
+        @else
+            Pay the supplier for this bill.
+        @endif
+        <a href="{{ route('staff-bills.show', [app('currentTenant')->slug, $staffBill['id']]) }}">View bill and receipt</a>
+    </div>
+    @endif
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
             <h3 class="mb-1">Expense Payments #<?= (int) $expense['id'] ?></h3>
