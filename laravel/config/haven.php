@@ -4,6 +4,7 @@ return ['roles' => [
 
     // Complete system access.
     'superadmin' => ['invoices.*', 'tasks.*',
+        'staff-profile.self', 'staff-profile.review',
         'investors.*', 'notifications.*',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.*',
@@ -22,6 +23,7 @@ return ['roles' => [
 
     // Administrative operations.
     'admin' => ['invoices.*', 'staff.accounts.manage', 'tasks.*',
+        'staff-profile.self', 'staff-profile.review',
         'investors.*', 'notifications.*',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
@@ -38,6 +40,7 @@ return ['roles' => [
 
     // Property and operations management.
     'manager' => ['invoices.view', 'invoices.manage', 'tasks.*',
+        'staff-profile.self',
         'investors.view', 'notifications.view',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
@@ -54,6 +57,7 @@ return ['roles' => [
 
     // Daily operations.
     'operations' => ['invoices.view', 'invoices.manage', 'tasks.view',
+        'staff-profile.self',
         'sales.*', 'agents.*', 'messaging.*',
         'dashboard.view',
         'properties.view',
@@ -67,6 +71,7 @@ return ['roles' => [
 
     // Housekeeping team.
     'cleaner' => ['bills.submit', 'tasks.view',
+        'staff-profile.self',
         'housekeeping.view',
         'housekeeping.manage',
         'maintenance.view',
@@ -79,9 +84,9 @@ return ['roles' => [
         'reports.view',
     ],
 
-    'sales' => ['tasks.view', 'sales.*', 'agents.view', 'messaging.*', 'availability.view'],
+    'sales' => ['staff-profile.self', 'tasks.view', 'sales.*', 'agents.view', 'messaging.*', 'availability.view'],
 
     // No management permissions.
-    'user' => ['tasks.view'],
+    'user' => ['staff-profile.self', 'tasks.view'],
 
 ]];

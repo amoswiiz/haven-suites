@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\BookingCommunications;
 use App\Services\GuestMessageTemplates;
 use App\Services\RoyceTalkSms;
 use Illuminate\Database\Query\Builder;
@@ -91,24 +92,38 @@ class GuestCommunicationController extends Controller
 
     public function compose(Request $request): View
     {
-        $data = $request->validate(['reservation_id' => 'nullable|integer|min:1']);
+        $data = $request->validate(['reservation_id' => 'nullable|integer|min:1', 'communication_stage' => ['nullable', 'string', Rule::in(array_keys(BookingCommunications::STAGES))]]);
         $bookings = DB::connection('tenant')->table('reservations')->select('id', 'unit_id', 'guest_name', 'check_in', 'check_out')->orderByDesc('id')->limit(200)->get();
+        $chosen = null;
         if (! empty($data['reservation_id'])) {
-            $chosen = DB::connection('tenant')->table('reservations')->where('id', $data['reservation_id'])->firstOrFail();
+            $chosen = app(BookingCommunications::class)->booking((int) $data['reservation_id'], $data['communication_stage'] ?? null);
             if (! $bookings->contains('id', $chosen->id)) {
                 $bookings->prepend($chosen);
             }
         }
 
-        return view('communications.guests', ['bookings' => $bookings, 'units' => $this->units()->keyBy('id'), 'templates' => $this->templates()->where('active', true)->orderBy('name')->get()]);
+        $stage = $data['communication_stage'] ?? null;
+        if ($stage && ! $chosen) {
+            throw ValidationException::withMessages(['reservation_id' => 'Select a booking for this communication stage.']);
+        }
+        $templates = $this->templates()->where('active', true)
+            ->when($chosen, fn ($query) => $query->where(fn ($query) => $query->whereNull('unit_id')->orWhere('unit_id', $chosen->unit_id)))
+            ->orderBy('name')->get();
+        $matching = $stage ? $templates->where('purpose', $stage) : collect();
+        $selectedTemplate = $matching->firstWhere('unit_id', $chosen?->unit_id) ?? $matching->firstWhere('unit_id', null);
+
+        return view('communications.guests', ['bookings' => $bookings, 'units' => $this->units()->keyBy('id'), 'templates' => $templates,
+            'stages' => BookingCommunications::STAGES, 'stage' => $stage, 'selectedTemplate' => $selectedTemplate?->id,
+            'starter' => $stage ? (GuestMessageTemplates::STARTERS[$stage] ?? '') : '']);
     }
 
     public function preview(Request $request, GuestMessageTemplates $renderer, RoyceTalkSms $transport): View
     {
-        $data = $request->validate(['reservation_id' => 'nullable|integer|min:1', 'unit_id' => 'nullable|integer|min:1', 'template_id' => 'nullable|integer|min:1', 'body' => 'nullable|required_without:template_id|string|max:1600', 'phone' => 'nullable|string|max:40']);
-        $booking = ! empty($data['reservation_id']) ? DB::connection('tenant')->table('reservations')->where('id', $data['reservation_id'])->firstOrFail() : null;
+        $data = $request->validate(['reservation_id' => 'nullable|integer|min:1', 'unit_id' => 'nullable|integer|min:1', 'template_id' => 'nullable|integer|min:1', 'body' => 'nullable|required_without:template_id|string|max:1600', 'phone' => 'nullable|string|max:40',
+            'communication_stage' => ['nullable', 'string', Rule::in(array_keys(BookingCommunications::STAGES))]]);
+        $booking = app(BookingCommunications::class)->booking(! empty($data['reservation_id']) ? (int) $data['reservation_id'] : null, $data['communication_stage'] ?? null);
         $template = ! empty($data['template_id']) ? $this->templates()->where('id', $data['template_id'])->where('active', true)->firstOrFail() : null;
-        $unitId = $booking?->unit_id ?? ($data['unit_id'] ?? $template?->unit_id);
+        $unitId = $booking ? $booking->unit_id : ($data['unit_id'] ?? $template?->unit_id);
         if ($booking && ! empty($data['unit_id']) && (int) $data['unit_id'] !== (int) $booking->unit_id) {
             throw ValidationException::withMessages(['unit_id' => 'The selected apartment does not match this booking.']);
         }
@@ -117,6 +132,9 @@ class GuestCommunicationController extends Controller
         }
         $unit = $unitId ? $this->units()->firstWhere('id', (int) $unitId) : null;
         abort_if($unitId && ! $unit, 404);
+        $partner = $booking && ! $unitId && ! empty($booking->partner_apartment_id)
+            ? DB::connection('tenant')->table('partner_apartments')->where('id', $booking->partner_apartment_id)->first()
+            : null;
         $enteredPhone = trim((string) ($data['phone'] ?? ''));
         $phone = $renderer->phone($enteredPhone !== '' ? $enteredPhone : $booking?->guest_phone);
         if (! preg_match('/^\+[1-9][0-9]{7,14}$/D', $phone)) {
@@ -124,11 +142,13 @@ class GuestCommunicationController extends Controller
         }
         $body = $renderer->render($template?->body ?? $data['body'], [
             'company_name' => app('currentTenant')->name, 'guest_name' => $booking?->guest_name, 'reservation_id' => $booking?->id,
-            'apartment' => $unit?->unit_number, 'property_name' => $unit?->property_name,
+            'apartment' => $unit?->unit_number ?? ($partner?->unit_number ?: $partner?->apartment_name),
+            'property_name' => $unit?->property_name ?? ($partner?->building_name ?: $partner?->apartment_name),
             'check_in' => $booking?->check_in, 'check_out' => $booking?->check_out,
         ]);
 
         return view('communications.preview', ['body' => $body, 'phone' => $phone, 'booking' => $booking, 'template' => $template,
+            'communicationStage' => $booking ? ($data['communication_stage'] ?? 'custom') : null,
             'sendToken' => (string) Str::uuid(), 'ready' => config('services.roycetalk.manual_live') && $transport->configured()]);
     }
 }

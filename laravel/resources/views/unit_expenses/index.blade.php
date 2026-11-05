@@ -394,6 +394,9 @@ $f = $filters;
                                 <!-- Actions -->
                                 <td class="text-nowrap">
 
+                                    <?php if ($canManage && ($expense['source_type'] ?? '') === 'manual' && empty($expense['source_id'])): ?>
+                                        <a href="{{ route('expenses.edit', [app('currentTenant')->slug, $expenseId]) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                    <?php elseif ($canManage): ?><span class="small text-muted d-block">Edit in original record</span><?php endif; ?>
                                     <?php if (haven_can_access(site_url(
                                             'expenses/' .
                                             $expenseId .

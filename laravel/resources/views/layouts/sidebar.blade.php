@@ -69,6 +69,7 @@ $groups = [
         ['label' => 'Staff Management', 'path' => 'staff', 'icon' => 'users', 'permission' => 'staff.view'],
         ['label' => 'Owner Statement Closing', 'path' => 'owner-statement-closing', 'icon' => 'clipboard-check', 'permission' => 'finance.manage'],
         ['label' => 'Cleaning Rates', 'path' => 'settings/cleaning-rates', 'icon' => 'wallet', 'permission' => 'settings.manage'],
+        ['label' => 'Staff profiles & identification', 'path' => 'staff-profiles', 'icon' => 'id-card', 'permission' => 'staff-profile.review'],
     ]],
 ];
 
@@ -167,6 +168,7 @@ $activePath = match ($activePath) {
 if (str_starts_with($currentPath, 'receipts/')) $activePath = 'invoices';
 if ($currentPath === 'dashboard') $activePath = 'dashboard';
 if (str_starts_with($currentPath,'work')) $activePath = 'work';
+if ($currentPath === 'my-profile' || str_starts_with($currentPath, 'my-profile/')) $activePath = 'my-profile';
 $isActive = static fn (string $path): bool => $activePath === $path;
 ?>
 <style>
@@ -218,6 +220,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
     @endif
     <nav id="sidebar-links" class="hs-nav" aria-label="Main navigation">
         @if(!$investorNavigation && $user->can('tasks.view'))<a data-menu-item data-keywords="tasks assignments deadlines work" class="hs-nav-link {{ str_starts_with($currentPath,'tasks') ? 'active' : '' }}" href="{{ route('tasks.index',app('currentTenant')->slug) }}" @if(str_starts_with($currentPath,'tasks')) aria-current="page" @endif>Tasks @if($taskUnread)<span class="pill">{{ $taskUnread }} unread</span>@endif</a>@endif
+        @if($user->can('staff-profile.self'))<a data-menu-item data-keywords="my profile biodata identification staff document" class="hs-nav-link {{ $isActive('my-profile') ? 'active' : '' }}" href="{{ route('staff-profile.edit', app('currentTenant')->slug) }}" @if($isActive('my-profile')) aria-current="page" @endif><i data-lucide="id-card"></i><span>My profile</span></a>@endif
 
         <?php if (!$investorNavigation && $user !== null && $user->can('dashboard.view')): ?>
             <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" data-menu-item data-keywords="home overview today" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>" <?= $isActive('dashboard') ? 'aria-current="page"' : '' ?>>

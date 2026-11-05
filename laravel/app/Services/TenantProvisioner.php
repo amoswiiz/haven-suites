@@ -33,6 +33,7 @@ class TenantProvisioner
             try {
                 app(StaffBillSchema::class)->install($billConnection);
                 app(MaintenanceReportSchema::class)->install($billConnection);
+                app(ExpenseCorrectionSchema::class)->install($billConnection);
             } finally {
                 $billConnection->disconnect();
             }

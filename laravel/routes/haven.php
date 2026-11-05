@@ -342,6 +342,10 @@ Route::post('expenses', [UnitExpenses::class, 'store'])->middleware([
     1 => 'tenant.member',
     2 => 'permission:finance.manage',
 ]);
+Route::get('expenses/{id}/edit', [UnitExpenses::class, 'edit'])->whereNumber('id')
+    ->middleware(['auth', 'tenant.member', 'permission:finance.manage'])->name('expenses.edit');
+Route::post('expenses/{id}/edit', [UnitExpenses::class, 'update'])->whereNumber('id')
+    ->middleware(['auth', 'tenant.member', 'permission:finance.manage'])->name('expenses.update');
 Route::get('payments/cleaners/statements', [CleanerStatements::class, 'index'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',

@@ -33,6 +33,7 @@ $status = (string) ($r['status'] ?? 'pending');
     <div class="text-md-end"><span class="hs-status"><?= esc($statusLabels[$status] ?? ucfirst($status)) ?></span><div class="small mt-2" style="color:#e7eefb"><?= esc(ucfirst($r['booking_type'] ?? 'managed')) ?> Booking</div></div>
   </div>
   @include('reservations.workspace')
+  @if($communicationWorkflow ?? null)@include('reservations.communications', ['workflow' => $communicationWorkflow])@endif
   <div class="row g-3 mb-4">
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Booking Total</div><strong>KES <?= number_format($total,2) ?></strong></div></div>
     <div class="col-lg-4 col-md-6"><div class="hs-card hs-metric"><div class="hs-label">Recorded payments</div><strong>KES <?= number_format($recordedPayments,2) ?></strong></div></div>

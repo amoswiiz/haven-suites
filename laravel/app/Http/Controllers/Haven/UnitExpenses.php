@@ -4,10 +4,66 @@ namespace App\Http\Controllers\Haven;
 
 use App\Models\Haven\UnitExpenseModel;
 use App\Services\AccountingPeriodGuard;
+use App\Services\ExpenseCorrections;
 use App\Services\UnitAccounting;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class UnitExpenses extends BaseController
 {
+    public function edit(int $id)
+    {
+        if (! $this->allowed('finance.manage') || ! auth()->user()->active) {
+            return $this->forbidden();
+        }
+        $db = DB::connection('tenant');
+        $expense = $db->table('unit_expenses')->where('id', $id)->firstOrFail();
+        $corrections = app(ExpenseCorrections::class);
+        if (! $corrections->editable($expense)) {
+            return redirect()->to(site_url('expenses'))->with('error', 'This expense is linked to another workflow. Correct it in its original cleaning, rent or bill record.');
+        }
+        if (! $db->getSchemaBuilder()->hasTable('expense_corrections')) {
+            return redirect()->to(site_url('expenses'))->with('error', 'Expense corrections are not installed for this company. Ask your administrator to finish the update.');
+        }
+        $payments = $db->table('expense_payments')->where('expense_id', $id)->get();
+        $ledgerPaid = $payments->sum(fn ($payment) => $corrections->cents($payment->amount));
+        $cachedPaid = $corrections->cents($expense->amount_paid);
+        $legacyPaid = $payments->isEmpty() && $cachedPaid > 0;
+
+        return view('unit_expenses.edit', [
+            'pageTitle' => 'Edit expense', 'expense' => $expense, 'snapshot' => $corrections->snapshot($expense),
+            'units' => $db->table('units as u')->leftJoin('properties as p', 'p.id', '=', 'u.property_id')
+                ->select('u.id', 'u.unit_number', 'p.name as property_name')->orderBy('p.name')->orderBy('u.unit_number')->get(),
+            'categories' => $db->table('expense_categories')->orderBy('name')->get(),
+            'legacyPaid' => $legacyPaid,
+            'ledgerMismatch' => ! $legacyPaid && ($ledgerPaid !== $cachedPaid || $ledgerPaid > $corrections->cents($expense->amount)),
+            'history' => $db->table('expense_corrections')->where('expense_id', $id)->orderByDesc('id')->limit(20)->get(),
+        ]);
+    }
+
+    public function update(int $id): RedirectResponse
+    {
+        abort_unless(auth()->user()?->active && $this->allowed('finance.manage'), 403);
+        $data = request()->validate([
+            'unit_id' => ['nullable', 'integer', 'min:1', Rule::exists('tenant.units', 'id')],
+            'category_id' => ['required', 'integer', Rule::exists('tenant.expense_categories', 'id')],
+            'expense_date' => 'required|date_format:Y-m-d',
+            'description' => 'required|string|max:255', 'supplier_name' => 'nullable|string|max:150',
+            'notes' => 'nullable|string|max:10000',
+            'amount' => ['required', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/D'],
+            'reason' => 'required|string|min:3|max:1000', 'snapshot' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+        ]);
+        $db = DB::connection('tenant');
+        abort_unless($db->table('unit_expenses')->where('id', $id)->exists(), 404);
+        if (! $db->getSchemaBuilder()->hasTable('expense_corrections')) {
+            return back()->withInput()->with('error', 'Expense corrections are not installed for this company. Ask your administrator to finish the update.');
+        }
+        app(ExpenseCorrections::class)->correct($id, $data);
+
+        return redirect()->route('expenses.edit', [app('currentTenant')->slug, $id])->with('success', 'Expense corrected. Recorded payments were preserved.');
+    }
+
     private function allowed(string $permission): bool
     {
         $user = haven_auth()->user();

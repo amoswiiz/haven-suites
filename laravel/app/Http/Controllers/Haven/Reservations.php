@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Haven;
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\UnitModel;
 use App\Services\ApartmentReadiness;
+use App\Services\BookingCommunications;
 use App\Services\ExternalCalendars;
 use App\Support\Migration\PageNotFoundException;
 use DateTimeImmutable;
@@ -93,6 +94,7 @@ class Reservations extends BaseController
 
         return haven_view('reservations/show', [
             'pageTitle' => 'Booking #'.$id,
+            'communicationWorkflow' => auth()->user()->can('messaging.view') ? app(BookingCommunications::class)->overview($reservation) : null,
             'workspaceCleaning' => $workspaceCleaning, 'workspaceMaintenance' => $workspaceMaintenance, 'workspaceKyc' => $workspaceKyc, 'workspaceReceipts' => $workspaceReceipts, 'readiness' => $readiness,
             'paymentInvoice' => $paymentInvoice,
             'unallocatedPayments' => max(0, round($recordedTotal - $allocatedTotal, 2)),

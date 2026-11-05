@@ -12,6 +12,7 @@ use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\SaasAccountController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffBillController;
+use App\Http\Controllers\StaffProfileController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UnitAccountingController;
@@ -49,6 +50,12 @@ Route::middleware('auth')->group(function (): void {
     });
 });
 Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::get('my-profile', [StaffProfileController::class, 'edit'])->middleware('permission:staff-profile.self')->name('staff-profile.edit');
+    Route::post('my-profile', [StaffProfileController::class, 'update'])->middleware(['permission:staff-profile.self', 'throttle:10,1'])->name('staff-profile.update');
+    Route::get('my-profile/document', [StaffProfileController::class, 'document'])->middleware('permission:staff-profile.self')->name('staff-profile.document');
+    Route::get('staff-profiles', [StaffProfileController::class, 'index'])->middleware('permission:staff-profile.review')->name('staff-profile.index');
+    Route::get('staff-profiles/{id}', [StaffProfileController::class, 'show'])->whereNumber('id')->middleware('permission:staff-profile.review')->name('staff-profile.show');
+    Route::get('staff-profiles/{id}/document', [StaffProfileController::class, 'reviewDocument'])->whereNumber('id')->middleware('permission:staff-profile.review')->name('staff-profile.review-document');
     Route::prefix('staff-bills')->name('staff-bills.')->group(function (): void {
         Route::get('/', [StaffBillController::class, 'index'])->name('index');
         Route::get('new', [StaffBillController::class, 'create'])->name('create');
