@@ -7,7 +7,7 @@ use Illuminate\Validation\ValidationException;
 
 class StaffBills
 {
-    public const CATEGORIES = ['Drinking water', 'Soap and toiletries', 'Cleaning supplies', 'Electricity tokens', 'Gas', 'Other consumables'];
+    public const CATEGORIES = ['Drinking water', 'Soap and toiletries', 'Cleaning supplies', 'Other consumables', 'Equipment and tools', 'Repairs and replacements', 'Electricity tokens', 'Gas', 'Other purchases'];
 
     public function event(object $bill, int $actor, string $action, ?string $note = null): void
     {
@@ -23,7 +23,9 @@ class StaffBills
         $db->transaction(function () use ($db, $id, $actor, $data): void {
             $initial = $db->table('staff_bills')->find($id);
             abort_unless($initial, 404);
-            $db->table('units')->where('id', $initial->unit_id)->lockForUpdate()->firstOrFail();
+            if ($initial->unit_id !== null) {
+                $db->table('units')->where('id', $initial->unit_id)->lockForUpdate()->firstOrFail();
+            }
             $bill = $db->table('staff_bills')->where('id', $id)->lockForUpdate()->firstOrFail();
             abort_if((int) $bill->submitted_by === $actor, 403, 'You cannot review your own bill.');
             if ($bill->status !== 'pending' || (int) $bill->version !== (int) $data['version'] || $bill->unit_id !== $initial->unit_id) {
@@ -32,7 +34,9 @@ class StaffBills
             $changes = ['status' => $data['action'], 'version' => $bill->version + 1, 'updated_at' => now()];
             if ($data['action'] === 'approved') {
                 try {
-                    (new AccountingPeriodGuard)->assertOpen((int) $bill->unit_id, $bill->purchase_date);
+                    if ($bill->unit_id !== null) {
+                        (new AccountingPeriodGuard)->assertOpen((int) $bill->unit_id, $bill->purchase_date);
+                    }
                 } catch (\RuntimeException $e) {
                     throw ValidationException::withMessages(['bill' => $e->getMessage()]);
                 }

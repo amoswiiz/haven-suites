@@ -39,15 +39,8 @@ class StaffBillController extends Controller
 
     private function units(): Collection
     {
-        $staff = $this->staffId();
-
         return DB::connection('tenant')->table('units as u')->leftJoin('properties as p', 'p.id', '=', 'u.property_id')
-            ->whereExists(function ($q) use ($staff): void {
-                $q->selectRaw('1')->from('housekeeping as h')->whereColumn('h.unit_id', 'u.id')
-                    ->where('h.assigned_staff_id', $staff)->where('h.status', '!=', 'cancelled')
-                    ->where('h.scheduled_at', '>=', now()->subDays(90)->startOfDay())
-                    ->where('h.scheduled_at', '<=', now()->addDays(7)->endOfDay());
-            })->select('u.id', 'u.unit_number', 'p.name as property_name')->orderBy('u.unit_number')->get();
+            ->select('u.id', 'u.unit_number', 'p.name as property_name')->orderBy('u.unit_number')->get();
     }
 
     private function bill(int $id): object
@@ -110,7 +103,7 @@ class StaffBillController extends Controller
         $existing = $id ? $this->bill($id) : null;
         abort_if($existing && ((int) $existing->submitted_by !== (int) auth()->id() || $existing->status !== 'returned'), 403);
         $data = $request->validate([
-            'submission_token' => 'required|uuid', 'unit_id' => 'required|integer|min:1',
+            'submission_token' => 'required|uuid', 'unit_id' => 'nullable|integer|min:1',
             'purchase_date' => 'required|date_format:Y-m-d|before_or_equal:today',
             'category' => ['required', Rule::in(StaffBills::CATEGORIES)],
             'description' => 'required|string|max:255', 'supplier' => 'required|string|max:150',
@@ -120,7 +113,8 @@ class StaffBillController extends Controller
             'version' => $existing ? 'required|integer|min:1' : 'nullable',
         ]);
         $staff = $this->staffId();
-        abort_unless($this->units()->contains('id', (int) $data['unit_id']), 403, 'Choose an apartment assigned to you. Ask management to assign the refill task if it is missing.');
+        $data['unit_id'] = $data['unit_id'] ?? null;
+        abort_unless($data['unit_id'] === null || $this->units()->contains('id', (int) $data['unit_id']), 403, 'Choose an apartment belonging to your company.');
         $db = DB::connection('tenant');
         $path = null;
         try {
@@ -200,8 +194,8 @@ class StaffBillController extends Controller
         $this->bill($id);
         $row = DB::connection('tenant')->table('staff_bill_events')->where('bill_id', $id)->where('id', $event)->firstOrFail();
         $path = json_decode($row->snapshot, true, 512, JSON_THROW_ON_ERROR)['receipt_path'];
-        abort_unless(str_starts_with($path, 'staff-bills/'.app('currentTenant')->id.'/') && ! str_contains($path,'..') && Storage::disk('local')->exists($path), 404);
+        abort_unless(str_starts_with($path, 'staff-bills/'.app('currentTenant')->id.'/') && ! str_contains($path, '..') && Storage::disk('local')->exists($path), 404);
 
-        return Storage::disk('local')->download($path,'bill-'.$id.'.'.pathinfo($path,PATHINFO_EXTENSION),['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
+        return Storage::disk('local')->download($path, 'bill-'.$id.'.'.pathinfo($path, PATHINFO_EXTENSION), ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 }

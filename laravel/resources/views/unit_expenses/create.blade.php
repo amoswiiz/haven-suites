@@ -1,8 +1,8 @@
 @extends('layouts/main')
 @section('content')
 <div class="container-fluid py-3">
-    <h3 class="fw-bold mb-1">Record Unit Expense</h3>
-    <p class="text-muted">Record cleaning, maintenance, refills and other unit costs.</p>
+    <h3 class="fw-bold mb-1">Record Expense</h3>
+    <p class="text-muted">Record an apartment cost or a general company purchase.</p>
 
     <?php if (haven_session()->getFlashdata('error')): ?>
         <div class="alert alert-danger"><?= esc(haven_session()->getFlashdata('error')) ?></div>
@@ -16,9 +16,9 @@
             <?= csrf_field() ?>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label" for="unit_id">Unit *</label>
-                    <select class="form-select" id="unit_id" name="unit_id" required>
-                        <option value="">Select a unit</option>
+                    <label class="form-label" for="unit_id">Apartment (optional)</label>
+                    <select class="form-select" id="unit_id" name="unit_id">
+                        <option value="">General company expense — shared across apartments</option>
                         <?php foreach ($units as $unit): ?>
                             <option value="<?= (int) $unit['id'] ?>" <?= (string) old('unit_id') === (string) $unit['id'] ? 'selected' : '' ?>>
                                 <?= esc(($unit['property_name'] ?? 'Property') . ' — ' . ($unit['unit_number'] ?? 'Unit')) ?>

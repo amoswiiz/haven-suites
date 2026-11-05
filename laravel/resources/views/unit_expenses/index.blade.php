@@ -342,7 +342,7 @@ $f = $filters;
                                     <?= esc(
                                         ($expense['property_name'] ?? '-') .
                                         ' / ' .
-                                        ($expense['unit_number'] ?? '-')
+                                        ($expense['unit_number'] ?? 'General company expense')
                                     ) ?>
                                 </td>
 

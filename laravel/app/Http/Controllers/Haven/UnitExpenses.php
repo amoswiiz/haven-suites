@@ -67,7 +67,8 @@ class UnitExpenses extends BaseController
         if (! $this->allowed('finance.manage')) {
             return $this->forbidden();
         }
-        $unitId = filter_var($this->request->getPost('unit_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $unitInput = $this->request->getPost('unit_id');
+        $unitId = ($unitInput === null || $unitInput === '') ? null : filter_var($unitInput, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $categoryId = filter_var($this->request->getPost('category_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $date = trim((string) $this->request->getPost('expense_date'));
         $description = trim((string) $this->request->getPost('description'));
@@ -88,7 +89,7 @@ class UnitExpenses extends BaseController
             return redirect()->back()->withInput()->with('error', $message);
         };
 
-        if (! $unitId || ! $categoryId || ! $validDate($date) || $description === '' || mb_strlen($description) > 255
+        if ($unitId === false || ! $categoryId || ! $validDate($date) || $description === '' || mb_strlen($description) > 255
             || $amount === null || $amount <= 0 || $paid === null || $paid < 0 || $paid > $amount
             || mb_strlen($supplier) > 150 || mb_strlen($reference) > 100 || mb_strlen($notes) > 10000) {
             return $fail('Please check the expense date, description, amounts and other details.');
@@ -103,33 +104,35 @@ class UnitExpenses extends BaseController
         }
 
         $db = db_connect();
-        if (! $db->table('units')->where('id', $unitId)->countAllResults()) {
+        if ($unitId !== null && ! $db->table('units')->where('id', $unitId)->countAllResults()) {
             return $fail('The selected unit does not exist.');
         }
         if (! $db->table('expense_categories')->where('id', $categoryId)->where('is_active', 1)->countAllResults()) {
             return $fail('The selected expense category is unavailable.');
         }
         $category = $db->table('expense_categories')->where('id', $categoryId)->get()->getRowArray();
-        if (strcasecmp($category['name'] ?? '', 'Rent') === 0 && (new UnitAccounting)->mode((int) $unitId, $date) === 'leased') {
+        if ($unitId !== null && strcasecmp($category['name'] ?? '', 'Rent') === 0 && (new UnitAccounting)->mode((int) $unitId, $date) === 'leased') {
             return $fail('Post leased-unit rent from Unit Accounting & Rent. Record payment against that generated expense to avoid duplicate monthly rent.');
         }
 
         $db->transBegin();
         try {
-            if (! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [(int) $unitId])->getRowArray()) {
+            if ($unitId !== null && ! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [(int) $unitId])->getRowArray()) {
                 throw new \RuntimeException('Unit not found.');
             }
             $guard = new AccountingPeriodGuard($db);
-            $guard->assertOpen((int) $unitId, $date);
+            if ($unitId !== null) {
+                $guard->assertOpen((int) $unitId, $date);
+            }
             // A payment included with a new expense also affects its cash-payment month.
-            if ($paid > 0) {
+            if ($paid > 0 && $unitId !== null) {
                 $guard->assertOpen((int) $unitId, $paidAt);
             }
 
             $status = $paid === 0 ? 'unpaid' : ($paid === $amount ? 'paid' : 'partial');
             $model = new UnitExpenseModel;
             $saved = $model->insert([
-                'unit_id' => (int) $unitId,
+                'unit_id' => $unitId,
                 'category_id' => (int) $categoryId,
                 'expense_date' => $date,
                 'description' => $description,
@@ -147,6 +150,22 @@ class UnitExpenses extends BaseController
             ]);
             if (! $saved || $db->transStatus() === false) {
                 throw new \RuntimeException('Expense could not be saved.');
+            }
+            if ($paid > 0) {
+                $paymentSaved = $db->table('expense_payments')->insert([
+                    'expense_id' => $model->getInsertID(), 'payment_date' => $paidAt,
+                    'amount' => $this->centsToMoney($paid), 'payment_method' => $method,
+                    'reference' => $reference !== '' ? $reference : null,
+                    'notes' => 'Payment recorded with expense.',
+                    'recorded_by' => (int) haven_auth()->user()->id,
+                    'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+                if (! $paymentSaved) {
+                    throw new \RuntimeException('Expense payment could not be saved.');
+                }
+            }
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Expense transaction failed.');
             }
             $db->transCommit();
 

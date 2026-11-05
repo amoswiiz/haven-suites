@@ -3,7 +3,7 @@
 <div class="container py-3" style="max-width:900px">
 <a href="{{ route('staff-bills.index',app('currentTenant')->slug) }}">Back to bills</a>
 <h1>Bill #{{ $bill->id }} — {{ ucfirst($bill->status) }}</h1>
-<p>{{ $staff?->full_name }} · {{ $unit?->unit_number }} · {{ $bill->purchase_date }}</p>
+<p>{{ $staff?->full_name }} · {{ $unit?->unit_number ?? 'General company expense' }} · {{ $bill->purchase_date }}</p>
 <h2 class="h4">KES {{ number_format($bill->amount_minor/100,2) }}</h2>
 <p>{{ $bill->category }}: {{ $bill->description }}<br>Supplier: {{ $bill->supplier }}</p>
 <p>{{ ['personal'=>'Cleaner paid personally — reimburse the cleaner','company'=>'Paid using company funds — reconcile the existing expense','supplier'=>'Supplier has not been paid'][$bill->payer] }}</p>

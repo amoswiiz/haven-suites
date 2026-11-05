@@ -1,6 +1,7 @@
 @extends('saas.layout')
 @section('title','Compose SMS')
 @section('content')
+@include('communications.tabs')
 <h1>Compose SMS</h1><p class="muted">Send a personal message now. Messages on this page are sent only when you press Send SMS now.</p>
 <div class="split"><section class="card" style="flex:1;min-width:0"><h2>New message</h2><p><span class="pill">{{ $ready ? 'Ready for manual sending' : 'Sending unavailable' }}</span> &middot; Sender: <strong>{{ $sender ?: 'Not configured' }}</strong></p>
 @if(auth()->user()->can('messaging.manage'))

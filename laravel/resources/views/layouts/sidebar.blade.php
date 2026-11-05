@@ -5,6 +5,8 @@ $taskUnread = $user && ($user->can('tasks.view') || $user->can('tasks.owner')) ?
 
 $groups = [
     ['label' => 'Communications', 'icon' => 'message-circle', 'items' => [
+        ['label' => 'Guest messages', 'path' => 'communications/guests', 'permission' => 'messaging.manage', 'icon' => 'message-circle'],
+        ['label' => 'Message templates', 'path' => 'communications/templates', 'permission' => 'messaging.view', 'icon' => 'file-text'],
         ['label' => 'Compose SMS', 'path' => 'communications/sms', 'permission' => 'messaging.view', 'icon' => 'mail'],
         ['label' => 'Channel connections', 'path' => 'sales/connections', 'permission' => 'messaging.view', 'icon' => 'message-circle'],
         ['label' => 'System notifications', 'path' => 'investor-notifications', 'permission' => 'notifications.view', 'icon' => 'mail'],

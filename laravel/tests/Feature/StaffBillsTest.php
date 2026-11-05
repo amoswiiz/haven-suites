@@ -155,7 +155,7 @@ class StaffBillsTest extends TestCase
 
     public function test_apartment_and_upload_validation(): void
     {
-        $this->post('/t/bills/staff-bills', $this->payload(['unit_id' => 2]))->assertForbidden();
+        $this->post('/t/bills/staff-bills', $this->payload(['unit_id' => 999]))->assertForbidden();
         $this->post('/t/bills/staff-bills', $this->payload(['receipt' => UploadedFile::fake()->create('bad.html', 2, 'text/html')]))->assertSessionHasErrors('receipt');
         $this->post('/t/bills/staff-bills', $this->payload(['amount' => '-1']))->assertSessionHasErrors('amount');
         $this->get('/t/bills/staff-bills/new')->assertOk()->assertSee('Submit a bill');
@@ -241,6 +241,45 @@ class StaffBillsTest extends TestCase
         $this->assertSame(1, DB::connection('tenant')->table('staff_bills')->count());
     }
 
+    public function test_any_company_apartment_can_be_used_without_assignment(): void
+    {
+        DB::connection('tenant')->table('housekeeping')->delete();
+        $bill = $this->submit(['unit_id' => 2, 'category' => 'Repairs and replacements']);
+        $this->assertEquals(2, $bill->unit_id);
+        $this->get('/t/bills/staff-bills/new')->assertOk()->assertSee('A2')->assertDontSee('No assigned apartments');
+    }
+
+    public function test_company_bill_can_be_approved_and_reimbursed_without_apartments(): void
+    {
+        DB::connection('tenant')->table('housekeeping')->delete();
+        DB::connection('tenant')->table('units')->delete();
+        $this->get('/t/bills/staff-bills/new')->assertOk()->assertSee('General company expense');
+        $bill = $this->submit(['unit_id' => '', 'description' => 'Shared bucket', 'category' => 'Equipment and tools']);
+        $this->assertNull($bill->unit_id);
+        $this->approve($bill);
+        $expense = DB::connection('tenant')->table('unit_expenses')->first();
+        $this->assertNull($expense->unit_id);
+        $this->get('/t/bills/expenses/'.$expense->id.'/payments')->assertOk()->assertSee('General company expense');
+        $this->post('/t/bills/expenses/'.$expense->id.'/payments', ['amount' => '500', 'payment_date' => now()->toDateString(), 'payment_method' => 'cash'])->assertSessionHas('success');
+        $this->actingAs($this->cleaner)->get('/t/bills/staff-bills/'.$bill->id)->assertOk()->assertSee('Reimbursed')->assertSee('General company expense');
+    }
+
+    public function test_company_funded_general_bill_links_only_general_expense(): void
+    {
+        $bill = $this->submit(['unit_id' => null, 'payer' => 'company']);
+        $this->actingAs($this->reviewer)->post('/t/bills/expenses', [
+            'unit_id' => '', 'category_id' => 1, 'expense_date' => now()->toDateString(),
+            'description' => 'Shared bucket', 'supplier_name' => 'Shop', 'notes' => '',
+            'amount' => '500', 'amount_paid' => '500', 'payment_method' => 'cash',
+            'payment_reference' => '', 'paid_at' => now()->toDateString(),
+        ])->assertSessionHas('success');
+        $expense = DB::connection('tenant')->table('unit_expenses')->first();
+        $this->assertNull($expense->unit_id);
+        $this->assertEquals(500, DB::connection('tenant')->table('expense_payments')->sum('amount'));
+        $this->post('/t/bills/staff-bills/'.$bill->id.'/review', ['version' => 1, 'action' => 'approved', 'expense_id' => $expense->id])->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::connection('tenant')->table('unit_expenses')->count());
+    }
+
     public function test_review_screen_and_reimbursement_payee_are_visible(): void
     {
         $bill = $this->submit();
@@ -268,7 +307,7 @@ class StaffBillsTest extends TestCase
         $two = $this->submit(['payer' => 'company']);
         $id = DB::connection('tenant')->table('unit_expenses')->insertGetId(['unit_id' => 1, 'category_id' => 1, 'expense_date' => now()->toDateString(), 'description' => 'Water', 'amount' => 500, 'amount_paid' => 500, 'payment_status' => 'paid', 'source_type' => 'manual']);
         $this->actingAs($this->reviewer)->post('/t/bills/staff-bills/'.$one->id.'/review', ['version' => 1, 'action' => 'approved', 'expense_id' => $id])->assertSessionHasNoErrors();
-        $this->post('/t/bills/staff-bills/'.$two->id.'/review',['version' => 1, 'action' => 'approved', 'expense_id' => $id])->assertSessionHasErrors('expense_id');
-        $this->assertSame(1,DB::connection('tenant')->table('unit_expenses')->count());
+        $this->post('/t/bills/staff-bills/'.$two->id.'/review', ['version' => 1, 'action' => 'approved', 'expense_id' => $id])->assertSessionHasErrors('expense_id');
+        $this->assertSame(1, DB::connection('tenant')->table('unit_expenses')->count());
     }
 }

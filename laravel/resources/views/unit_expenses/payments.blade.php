@@ -17,7 +17,7 @@ $e = static fn ($value) => esc((string) ($value ?? ''));
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
             <h3 class="mb-1">Expense Payments #<?= (int) $expense['id'] ?></h3>
-            <div class="text-muted"><?= $e($expense['property_name']) ?> / <?= $e($expense['unit_number']) ?> — <?= $e($expense['category_name']) ?></div>
+            <div class="text-muted"><?= $e($expense['property_name']) ?> / <?= $e($expense['unit_number'] ?? 'General company expense') ?> — <?= $e($expense['category_name']) ?></div>
         </div>
         <?php if (haven_can_access(site_url('expenses'), 'GET')): ?><a href="<?= site_url('expenses') ?>" class="btn btn-outline-secondary">Back to Expense Register</a><?php endif; ?>
     </div>

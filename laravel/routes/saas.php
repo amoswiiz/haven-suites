@@ -4,6 +4,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CommunicationController;
 use App\Http\Controllers\CompanyInvitationController;
 use App\Http\Controllers\CompanySettingsController;
+use App\Http\Controllers\GuestCommunicationController;
 use App\Http\Controllers\InvestorController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PasswordRecoveryController;
@@ -116,6 +117,13 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
 
 Route::get('investor-login', fn () => redirect('/login'))->name('investor.login');
 Route::prefix('t/{tenant}/communications')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::get('guests', [GuestCommunicationController::class, 'compose'])->middleware('permission:messaging.manage')->name('communications.guests');
+    Route::post('guests/preview', [GuestCommunicationController::class, 'preview'])->middleware('permission:messaging.manage')->name('communications.preview');
+    Route::get('templates', [GuestCommunicationController::class, 'index'])->middleware('permission:messaging.view')->name('communications.templates');
+    Route::get('templates/new', [GuestCommunicationController::class, 'create'])->middleware('permission:messaging.manage')->name('communications.templates.create');
+    Route::post('templates', [GuestCommunicationController::class, 'store'])->middleware('permission:messaging.manage')->name('communications.templates.store');
+    Route::get('templates/{id}/edit', [GuestCommunicationController::class, 'edit'])->whereNumber('id')->middleware('permission:messaging.manage')->name('communications.templates.edit');
+    Route::post('templates/{id}', [GuestCommunicationController::class, 'update'])->whereNumber('id')->middleware('permission:messaging.manage')->name('communications.templates.update');
     Route::get('sms', [CommunicationController::class, 'index'])->middleware('permission:messaging.view')->name('communications.sms');
     Route::post('sms', [CommunicationController::class, 'send'])->middleware(['permission:messaging.manage', 'throttle:10,1'])->name('communications.sms.send');
 });

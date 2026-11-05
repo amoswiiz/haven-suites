@@ -15,7 +15,7 @@ class StaffBillSchema
                 $t->id();
                 $t->unsignedBigInteger('submitted_by');
                 $t->unsignedInteger('staff_id');
-                $t->unsignedInteger('unit_id');
+                $t->unsignedInteger('unit_id')->nullable();
                 $t->uuid('submission_token')->unique();
                 $t->date('purchase_date');
                 $t->string('category', 50);
@@ -30,6 +30,14 @@ class StaffBillSchema
                 $t->timestamps();
                 $t->index(['submitted_by', 'status']);
             });
+        }
+        foreach (['staff_bills', 'unit_expenses'] as $table) {
+            $column = collect($schema->getColumns($table))->firstWhere('name', 'unit_id');
+            if ($column && ! $column['nullable']) {
+                $schema->table($table, function (Blueprint $t): void {
+                    $t->unsignedInteger('unit_id')->nullable()->change();
+                });
+            }
         }
         if (! $schema->hasTable('staff_bill_events')) {
             $schema->create('staff_bill_events', function (Blueprint $t): void {

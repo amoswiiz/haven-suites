@@ -136,10 +136,12 @@ class ExpensePayments extends BaseController
                 throw new \RuntimeException('Expense not found.');
             }
             $unitId = (int) $expenseUnit['unit_id'];
-            if (! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
+            if ($expenseUnit['unit_id'] !== null && ! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
                 throw new \RuntimeException('Expense unit not found.');
             }
-            (new AccountingPeriodGuard($db))->assertOpen($unitId, $date);
+            if ($expenseUnit['unit_id'] !== null) {
+                (new AccountingPeriodGuard($db))->assertOpen($unitId, $date);
+            }
             $expense = $db->query('SELECT id, amount, amount_paid, source_type, source_id, unit_id FROM unit_expenses WHERE id = ? FOR UPDATE', [$id])->getRowArray();
             if (! $expense || (int) $expense['unit_id'] !== $unitId) {
                 throw new \RuntimeException('Expense changed while processing. Please retry.');

@@ -41,7 +41,7 @@
         <div class="table-responsive"><table class="table table-striped align-middle"><thead><tr><th>Date</th><th>Property / Unit</th><th>Category</th><th>Description</th><th class="text-end">Incurred</th><th class="text-end">Paid by Month-End</th><th class="text-end">Balance at Month-End</th><th class="d-print-none">Action</th></tr></thead><tbody>
             <?php foreach ($expenses as $expense): ?><tr>
                 <td class="text-nowrap"><?= esc($expense['expense_date']) ?></td>
-                <td><?= esc(($expense['property_name'] ?? '-') . ' / ' . ($expense['unit_number'] ?? '-')) ?></td>
+                <td><?= esc($expense['unit_number'] === null ? 'General company expense' : (($expense['property_name'] ?? '-') . ' / ' . $expense['unit_number'])) ?></td>
                 <td><?= esc($expense['category_name'] ?? '-') ?></td>
                 <td><?= esc($expense['description']) ?></td>
                 <td class="text-end"><?= number_format((float) $expense['amount'], 2) ?></td>
