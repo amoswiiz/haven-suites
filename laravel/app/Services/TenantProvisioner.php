@@ -32,6 +32,7 @@ class TenantProvisioner
             $billConnection = DB::build($billConfig);
             try {
                 app(StaffBillSchema::class)->install($billConnection);
+                app(MaintenanceReportSchema::class)->install($billConnection);
             } finally {
                 $billConnection->disconnect();
             }

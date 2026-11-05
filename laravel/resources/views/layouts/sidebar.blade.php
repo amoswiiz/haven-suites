@@ -1,6 +1,7 @@
 <?php
 $currentPath = trim(uri_string(), '/');
 $user = haven_auth()->user();
+$cleanerNavigation = $user !== null && $user->inGroup('cleaner') && ! array_diff(auth()->user()->roles(), ['cleaner', 'user']);
 $taskUnread = $user && ($user->can('tasks.view') || $user->can('tasks.owner')) ? \Illuminate\Support\Facades\DB::table('task_notices')->where('tenant_id',app('currentTenant')->id)->where('user_id',auth()->id())->whereNull('read_at')->count() : 0;
 
 $groups = [
@@ -125,6 +126,17 @@ if ($investorNavigation) {
     ]]];
 }
 
+if ($cleanerNavigation) {
+    $groups = [['label' => 'My work', 'icon' => 'clipboard-list', 'items' => [
+        ['label' => 'My cleanings', 'path' => 'housekeeping', 'icon' => 'clipboard-check', 'permission' => 'housekeeping.view'],
+        ['label' => 'Record cleaning', 'path' => 'housekeeping/my-cleanings/new', 'icon' => 'plus-circle', 'access' => 'cleaner_module'],
+        ['label' => 'Maintenance issues', 'path' => 'maintenance', 'icon' => 'wrench', 'permission' => 'maintenance.view'],
+        ['label' => 'Report maintenance', 'path' => 'maintenance/report', 'icon' => 'plus-circle', 'permission' => 'maintenance.report'],
+        ['label' => 'My bills & reimbursements', 'path' => 'staff-bills', 'icon' => 'receipt', 'permission' => 'bills.submit'],
+        ['label' => 'My earnings', 'path' => 'payments/cleaners/earnings', 'icon' => 'wallet', 'access' => 'cleaner_module'],
+    ]]];
+}
+
 $canAccess = static function (array $item) use ($user): bool {
     if ($user === null) return false;
     if (($item['access'] ?? '') === 'daily_work') { return $user->can('units.view') && $user->can('reservations.view'); }
@@ -194,7 +206,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
     @elseif(auth()->user()->hasMultipleCompanies())
     <a class="hs-nav-link" href="{{ url('/') }}">Switch company</a>
     @endif
-    <label for="menu-search" class="form-label mt-2">Find a page</label><input id="menu-search" type="search" class="form-control" placeholder="Booking, rent, receipt" autocomplete="off" aria-controls="sidebar-links"><p id="menu-search-status" class="small mt-2" role="status" aria-live="polite"></p></div><div class="hs-menu-heading">MAIN MENU</div>
+    <label for="menu-search" class="form-label mt-2">Find a page</label><input id="menu-search" type="search" class="form-control" placeholder="{{ $cleanerNavigation ? 'Cleaning, maintenance, bills' : 'Booking, rent, receipt' }}" autocomplete="off" aria-controls="sidebar-links"><p id="menu-search-status" class="small mt-2" role="status" aria-live="polite"></p></div><div class="hs-menu-heading">MAIN MENU</div>
     @if(!$investorNavigation)
     @php($createActions = ['reservations/create' => 'New booking', 'sales/new' => 'New enquiry', 'quotations/create' => 'New quotation', 'invoices/create' => 'New invoice', 'communications/sms' => 'Send SMS'])
     @php($createActions = array_filter($createActions, static fn (string $path): bool => haven_can_access(site_url($path), 'GET'), ARRAY_FILTER_USE_KEY))
@@ -223,7 +235,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
                 }
                 if ($group['label'] === 'Finance' && $isActive('receipts')) $groupActive = true;
             ?>
-            <details class="hs-nav-group" data-group="<?= esc($group['label'], 'attr') ?>" <?= $groupActive ? 'open' : '' ?>>
+            <details class="hs-nav-group" data-group="<?= esc($group['label'], 'attr') ?>" <?= $groupActive || $cleanerNavigation ? 'open' : '' ?>>
                 <summary aria-label="<?= esc($group['label'], 'attr') ?> submenu">
                     <i data-lucide="<?= esc($group['icon'], 'attr') ?>"></i>
                     <span><?= esc($group['label']) ?></span>

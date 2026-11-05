@@ -363,6 +363,9 @@ $priorityLabels = [
                                         strtotime($issue['reported_at'])
                                     ))
                                     : '-' ?>
+                                <?php if (!empty($issue['reported_by_name'])): ?>
+                                    <div class="small text-muted">Reported by <?= esc($issue['reported_by_name']) ?></div>
+                                <?php endif; ?>
                             </td>
 
                             <td>

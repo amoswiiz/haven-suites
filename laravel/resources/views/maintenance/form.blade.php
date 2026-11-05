@@ -73,6 +73,9 @@ $statuses = [
                 ? 'Update issue progress, staff assignment, service provider and repair costs.'
                 : 'Record a new apartment maintenance issue and assign responsibility.' ?>
         </p>
+        <?php if ($isEdit && !empty($issue['reported_by_name'])): ?>
+            <p class="text-muted small">Reported by <?= esc($issue['reported_by_name']) ?></p>
+        <?php endif; ?>
 
     </div>
 

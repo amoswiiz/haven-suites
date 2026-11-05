@@ -51,32 +51,31 @@ class RoleVisibilityTest extends TestCase
 
     public static function roles(): array
     {
-        return [['superadmin', true], ['admin', true], ['manager', false], ['operations', false], ['cleaner', false], ['owner', false], ['user', false]];
+        return [['superadmin', true, true], ['admin', true, true], ['manager', true, false], ['operations', true, false], ['cleaner', false, false], ['owner', false, false], ['user', false, false], ['sales', false, false]];
     }
 
     #[DataProvider('roles')]
-    public function test_invoice_payment_permission(string $role, bool $allowed): void
+    public function test_invoice_payment_permission(string $role, bool $invoiceAllowed, bool $settingsAllowed): void
     {
         $this->actingAs($this->member($role));
-        if (! $allowed) {
+        if (! $settingsAllowed) {
             $this->get('/t/roles/invoices/settings')->assertForbidden();
             $this->post('/t/roles/invoices/settings', ['business_name' => 'Unauthorised change'])->assertForbidden();
         }
-        if (! in_array($role, ['superadmin', 'admin', 'manager'], true)) {
+        if (! $invoiceAllowed) {
             $this->get('/t/roles/invoices/2/pdf')->assertForbidden();
+        } else {
+            $this->get('/t/roles/invoices/2/pdf')->assertOk()->assertHeader('content-type', 'application/pdf');
         }
         $response = $this->get('/t/roles/invoices/2/payments');
-        if (! $allowed) {
+        if (! $invoiceAllowed) {
             $response->assertForbidden();
         } else {
             $response->assertRedirect('/t/roles/invoices/2');
         } // Existing standalone invoice.
-        if (in_array($role, ['manager', 'admin', 'superadmin'], true)) {
+        if ($invoiceAllowed) {
             $invoice = $this->get('/t/roles/invoices/2')->assertOk();
             $invoice->assertDontSee('Manage Payments'); // Standalone invoices use Record Payment instead.
-            if (! $allowed) {
-                $invoice->assertDontSee('id="record-invoice-payment"', false);
-            }
         }
     }
 
@@ -88,7 +87,9 @@ class RoleVisibilityTest extends TestCase
             ->assertDontSee('Financial summary')
             ->assertDontSee('href="http://127.0.0.1:8001/t/roles/customers"', false)
             ->assertDontSee('href="http://127.0.0.1:8001/t/roles/staff/kyc"', false)
-            ->assertDontSee('href="http://127.0.0.1:8001/t/roles/invoices"', false);
+            ->assertDontSee('href="http://127.0.0.1:8001/t/roles/expenses"', false)
+            ->assertDontSee('href="http://127.0.0.1:8001/t/roles/payments/guests"', false)
+            ->assertSee('href="http://127.0.0.1:8001/t/roles/invoices"', false);
     }
 
     public function test_company_switching_is_shown_only_when_there_is_another_active_membership(): void

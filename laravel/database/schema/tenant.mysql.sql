@@ -397,6 +397,8 @@ CREATE TABLE `maintenance` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `unit_id` int(10) unsigned NOT NULL,
   `assigned_staff_id` int(10) unsigned DEFAULT NULL,
+  `reported_by_user_id` bigint(20) unsigned DEFAULT NULL,
+  `reported_by_name` varchar(255) DEFAULT NULL,
   `title` varchar(180) NOT NULL,
   `category` varchar(50) NOT NULL,
   `description` text NOT NULL,

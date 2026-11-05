@@ -7,9 +7,13 @@ use App\Support\Migration\Model;
 class MaintenanceModel extends Model
 {
     protected $table = 'maintenance';
+
     protected $primaryKey = 'id';
+
     protected $returnType = 'array';
+
     protected $useAutoIncrement = true;
+
     protected $useTimestamps = true;
 
     protected $allowedFields = [
@@ -25,6 +29,8 @@ class MaintenanceModel extends Model
         'work_notes',
         'cost',
         'reported_at',
+        'reported_by_user_id',
+        'reported_by_name',
         'completed_at',
     ];
 

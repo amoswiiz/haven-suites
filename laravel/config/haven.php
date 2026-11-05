@@ -69,6 +69,8 @@ return ['roles' => [
     'cleaner' => ['bills.submit', 'tasks.view',
         'housekeeping.view',
         'housekeeping.manage',
+        'maintenance.view',
+        'maintenance.report',
     ],
 
     // Property investors and owners.
