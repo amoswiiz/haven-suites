@@ -14,7 +14,7 @@ class CompanyModules
             'tasks' => 'tasks', 'communications' => 'messaging',
             'sales' => str_starts_with($path, 'sales/agents') ? 'agents' : (str_starts_with($path, 'sales/connections') ? 'messaging' : 'sales'),
             'reservations', 'quotations', 'q', 'kyc' => 'reservations',
-            'units', 'properties', 'availability', 'host-agreements' => 'properties',
+            'units', 'properties', 'availability', 'host-agreements', 'public-listings' => 'properties',
             'investors', 'investor-portal' => 'investors',
             'investor-notifications' => 'notifications',
             'housekeeping', 'staff-bills' => 'housekeeping',

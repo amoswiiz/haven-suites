@@ -445,6 +445,17 @@ class BookingAmendmentsTest extends TestCase
         $this->assertRejected(fn () => $this->save(['unit_id' => 2]));
     }
 
+    public function test_owner_and_maintenance_blocks_prevent_stay_amendment(): void
+    {
+        $this->invoice();
+        DB::table('public_unit_closures')->insert([
+            'tenant_id' => $this->company->id, 'unit_id' => 2, 'start_date' => '2026-11-04', 'end_date' => '2026-11-07',
+            'kind' => 'maintenance', 'reason' => 'Private repair note', 'created_by' => $this->admin->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->assertRejected(fn () => $this->save(['unit_id' => 2]));
+    }
+
     public function test_audit_write_failure_rolls_back_every_financial_change(): void
     {
         $id = $this->invoice();

@@ -86,8 +86,13 @@ class Availability extends BaseController
             ->where(function ($query): void {
                 $query->whereNull('last_synced_at')->orWhere('last_synced_at', '<', now()->subMinutes(30))->orWhereNotNull('last_error');
             })->exists();
+        $unitClosures = DB::getSchemaBuilder()->hasTable('public_unit_closures')
+            ? DB::table('public_unit_closures')->where('tenant_id', app('currentTenant')->id)->whereIn('unit_id', $validUnitIds)
+                ->where('start_date', '<', $monthEnd)->where('end_date', '>', $monthStart)
+                ->get(['unit_id', 'start_date', 'end_date'])->groupBy('unit_id') : collect();
 
         return haven_view('availability/index', [
+            'unitClosures' => $unitClosures,
             'units' => $units,
             'externalBlocks' => $externalBlocks,
             'externalSyncWarning' => $externalSyncWarning,

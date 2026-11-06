@@ -30,6 +30,17 @@ class UnitCalendarExport
                     'DTEND;VALUE=DATE:'.str_replace('-', '', $booking->check_out),
                     'SUMMARY:Unavailable', 'STATUS:CONFIRMED', 'TRANSP:OPAQUE', 'END:VEVENT');
             }
+            if (DB::getSchemaBuilder()->hasTable('public_unit_closures')) {
+                $closures = DB::table('public_unit_closures')->where('tenant_id', $tenant->id)->where('unit_id', $unitId)->orderBy('id')->get();
+                foreach ($closures as $closure) {
+                    $uid = substr(hash('sha256', $tenant->id.':'.$unitId.':closure:'.$closure->id), 0, 40).'@haven-suites';
+                    $stamp = CarbonImmutable::parse($closure->updated_at ?? $closure->created_at ?? '2000-01-01', config('app.timezone'))->utc()->format('Ymd\THis\Z');
+                    array_push($lines, 'BEGIN:VEVENT', 'UID:'.$uid, 'DTSTAMP:'.$stamp,
+                        'DTSTART;VALUE=DATE:'.str_replace('-', '', $closure->start_date),
+                        'DTEND;VALUE=DATE:'.str_replace('-', '', $closure->end_date),
+                        'SUMMARY:Unavailable', 'STATUS:CONFIRMED', 'TRANSP:OPAQUE', 'END:VEVENT');
+                }
+            }
             $lines[] = 'END:VCALENDAR';
 
             return implode("\r\n", $lines)."\r\n";

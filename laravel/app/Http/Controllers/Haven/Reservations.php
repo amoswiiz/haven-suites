@@ -8,6 +8,7 @@ use App\Services\ApartmentReadiness;
 use App\Services\BookingAmendments;
 use App\Services\BookingCommunications;
 use App\Services\ExternalCalendars;
+use App\Services\UnitAvailability;
 use App\Support\Migration\PageNotFoundException;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
@@ -125,7 +126,10 @@ class Reservations extends BaseController
             ->where('status', 'active')
             ->orderBy('apartment_name', 'ASC')->get()->getResultArray();
 
-        return haven_view('reservations/form', ['pageTitle' => 'New booking', 'units' => $units, 'partners' => $partners, 'salesLead' => $salesLead]);
+        $selectedPublicUnitId = ($salesLead->public_origin ?? null) === 'website'
+            ? (collect($units)->firstWhere('id', (int) $salesLead->public_unit_id)['id'] ?? null) : null;
+
+        return haven_view('reservations/form', ['pageTitle' => 'New booking', 'units' => $units, 'partners' => $partners, 'salesLead' => $salesLead, 'selectedPublicUnitId' => $selectedPublicUnitId]);
     }
 
     public function store()
@@ -297,6 +301,14 @@ class Reservations extends BaseController
             }
             // Only confirmed/checked-in reservations block dates, consistent with existing logic.
             if (in_array($status, ['confirmed', 'checked_in'], true)) {
+                if ($type === 'managed') {
+                    if (! $db->query('SELECT id FROM units WHERE id = ? FOR UPDATE', [$unitId])->getRowArray()) {
+                        throw new \RuntimeException('The apartment is no longer available.');
+                    }
+                    if (app(UnitAvailability::class)->closureOverlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
+                        throw new \RuntimeException('This apartment is blocked for owner use or repairs during those dates.');
+                    }
+                }
                 if ($type === 'managed' && app(ExternalCalendars::class)->overlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
                     throw new \RuntimeException('This apartment is blocked by an external calendar for those dates.');
                 }

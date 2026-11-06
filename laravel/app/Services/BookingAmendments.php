@@ -109,6 +109,9 @@ class BookingAmendments
             }
             if (in_array($data['status'], ['confirmed', 'checked_in'], true)) {
                 $partner = ($booking->booking_type ?? 'managed') === 'partner';
+                if (! $partner && app(UnitAvailability::class)->closureOverlaps(app('currentTenant')->id, (int) $data['unit_id'], $data['check_in'], $data['check_out'])) {
+                    $this->fail('This apartment is blocked for owner use or repairs during those dates.');
+                }
                 if (! $partner && app(ExternalCalendars::class)->overlaps(app('currentTenant')->id, (int) $data['unit_id'], $data['check_in'], $data['check_out'])) {
                     $this->fail('This apartment is blocked by an external calendar for those dates.');
                 }

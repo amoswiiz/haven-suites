@@ -6,6 +6,9 @@
 $unitList = $units ?? [];
 
 $leadDefaults = isset($salesLead) ? ['guest_name' => $salesLead->name, 'guest_phone' => $salesLead->phone, 'guest_email' => $salesLead->email, 'check_in' => $salesLead->check_in, 'check_out' => $salesLead->check_out, 'adults' => $salesLead->guests, 'notes' => 'Sales enquiry #'.$salesLead->id] : [];
+if (isset($selectedPublicUnitId)) {
+    $leadDefaults['unit_id'] = $selectedPublicUnitId;
+}
 $value = static function ($field, $default = '') use ($leadDefaults) {
     return old($field, $leadDefaults[$field] ?? $default);
 };
@@ -19,6 +22,7 @@ $partnerChoice = (string) $value('partner_choice', 'existing');
 <div style="max-width:1100px">
     @if(isset($salesLead))
         <div class="alert alert-info">Guest details copied from enquiry #{{ $salesLead->id }}. After saving, use the booking workspace to finish linking this booking to <a href="{{ route('sales.show',[app('currentTenant')->slug,$salesLead->id]) }}">the enquiry</a> to link the reservation and verify the deposit.</div>
+        @if(($salesLead->public_origin ?? null) === 'website')<p class="text-muted">The guest’s requested apartment is preselected when it is still active. Review availability and agree the final price before confirming the booking.</p>@endif
     @endif
 
     <div class="mb-4">

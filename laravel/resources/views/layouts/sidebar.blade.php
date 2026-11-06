@@ -35,6 +35,8 @@ $groups = [
         ['label' => 'Send guest KYC link', 'path' => 'staff/kyc/invite', 'icon' => 'mail', 'permission' => 'finance.manage'],
     ]],
     ['label' => 'Properties', 'icon' => 'building-2', 'items' => [
+        ['label' => 'Public listings & website', 'path' => 'public-listings', 'icon' => 'globe', 'permission' => 'properties.manage'],
+        ['label' => 'Apartment closures', 'path' => 'availability/closures', 'icon' => 'calendar-off', 'permission' => 'properties.manage'],
         ['label' => 'Apartment Units', 'path' => 'units', 'icon' => 'house', 'permission' => 'units.view'],
         ['label' => 'Host Agreements', 'path' => 'host-agreements', 'icon' => 'handshake', 'permission' => 'finance.view'],
     ]],

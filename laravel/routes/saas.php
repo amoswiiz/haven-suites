@@ -11,6 +11,8 @@ use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PlatformController;
+use App\Http\Controllers\PublicListingController;
+use App\Http\Controllers\PublicStayController;
 use App\Http\Controllers\SaasAccountController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffBillController;
@@ -18,6 +20,7 @@ use App\Http\Controllers\StaffProfileController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UnitAccountingController;
+use App\Http\Controllers\UnitClosureController;
 use App\Http\Controllers\WorkCentreController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +57,19 @@ Route::middleware('auth')->group(function (): void {
     });
 });
 Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::prefix('public-listings')->middleware('permission:properties.manage')->name('public-listings.')->group(function (): void {
+        Route::get('/', [PublicListingController::class, 'index'])->name('index');
+        Route::get('new', [PublicListingController::class, 'create'])->name('create');
+        Route::post('/', [PublicListingController::class, 'store'])->middleware('throttle:20,1')->name('store');
+        Route::post('site', [PublicListingController::class, 'site'])->name('site.update');
+        Route::get('{id}/edit', [PublicListingController::class, 'edit'])->whereNumber('id')->name('edit');
+        Route::post('{id}', [PublicListingController::class, 'update'])->whereNumber('id')->middleware('throttle:20,1')->name('update');
+        Route::get('{id}/preview', [PublicStayController::class, 'preview'])->whereNumber('id')->name('preview');
+        Route::get('{id}/photos/{photo}', [PublicListingController::class, 'photo'])->whereNumber(['id', 'photo'])->name('photo');
+    });
+    Route::get('availability/closures', [UnitClosureController::class, 'index'])->middleware('permission:properties.manage')->name('unit-closures.index');
+    Route::post('availability/closures', [UnitClosureController::class, 'store'])->middleware(['permission:properties.manage', 'throttle:20,1'])->name('unit-closures.store');
+    Route::post('availability/closures/{id}/delete', [UnitClosureController::class, 'destroy'])->whereNumber('id')->middleware('permission:properties.manage')->name('unit-closures.destroy');
     Route::get('my-profile', [StaffProfileController::class, 'edit'])->middleware('permission:staff-profile.self')->name('staff-profile.edit');
     Route::post('my-profile', [StaffProfileController::class, 'update'])->middleware(['permission:staff-profile.self', 'throttle:10,1'])->name('staff-profile.update');
     Route::get('my-profile/document', [StaffProfileController::class, 'document'])->middleware('permission:staff-profile.self')->name('staff-profile.document');

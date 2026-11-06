@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__.'/kyc_short.php';
+require __DIR__.'/public_stays.php';
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ExternalCalendarController;

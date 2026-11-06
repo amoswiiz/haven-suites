@@ -64,6 +64,7 @@
 }
 
 .availability-table .external { background: #e9e2fa; color: #643b94; }
+.availability-table .closed { background: #f5e8ce; color: #795319; }
 
 .availability-table .inactive {
     background: #edf0f3;
@@ -212,8 +213,17 @@ foreach ($units as $unit) {
                 }
             }
 
+            foreach (($unitClosures ?? collect())->get($id, collect()) as $block) {
+                if ($block->start_date <= $date && $block->end_date > $date && $cell['status'] === 'available') {
+                    $cell['status'] = 'closed';
+                    break;
+                }
+            }
+
             if (in_array($cell['status'], ['booked', 'external'], true)) {
                 $bookedNights++;
+            } elseif ($cell['status'] === 'closed') {
+                $maintenanceNights++;
             } else {
                 $availableNights++;
             }
@@ -241,6 +251,7 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
 <div class="alert alert-warning">An external calendar has failed or has not synced in the last 30 minutes. Dates may be outdated. <a href="{{ site_url('availability/external') }}">Review external calendars</a>.</div>
 @endif
 <div class="mb-3"><a class="btn btn-outline-primary" href="{{ site_url('availability/external') }}">External calendars</a> <span class="text-muted small">Purple dates are blocked by an external calendar.</span></div>
+@if(auth()->user()?->can('properties.manage'))<p><a class="btn btn-outline-primary" href="{{ route('unit-closures.index', app('currentTenant')->slug) }}">Owner and maintenance blocks</a></p>@endif
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
 
     <div>
@@ -266,7 +277,7 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
         ['Apartments', $unitCount, 'building-2'],
         ['Booked Nights', $bookedNights, 'calendar-check'],
         ['Available Nights', $availableNights, 'calendar-days'],
-        ['Maintenance Nights', $maintenanceNights, 'wrench']
+        ['Maintenance / Blocked Nights', $maintenanceNights, 'wrench']
     ];
     ?>
 
@@ -401,6 +412,7 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
                       style="background:#fff3d8"></span>
                 Maintenance
             </span>
+            <span class="availability-legend"><span class="availability-dot" style="background:#f5e8ce"></span>Owner / repair block</span>
 
             <span class="availability-legend">
                 <span class="availability-dot"
@@ -496,6 +508,7 @@ $nextUrl = site_url('availability') . '?' . http_build_query(
                                     'booked' => 'Booked: ' .
                                         ($reservation['guest_name'] ?? ''),
                                     'maintenance' => 'Under maintenance',
+                                    'closed' => 'Apartment block',
                                     'inactive' => 'Inactive apartment',
                                     default => 'Available'
                                 };

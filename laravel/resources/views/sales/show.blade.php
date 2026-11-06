@@ -3,6 +3,16 @@
 @section('content')
 <p><a href="{{ route('sales.index',app('currentTenant')->slug) }}">&larr; Sales pipeline</a></p>
 <div class="split"><div><h1>{{ $lead->name }}</h1><p>{{ $lead->phone }} {{ $lead->email }}</p></div><span class="pill">{{ config('sales.stages.'.$lead->stage) }}</span></div>
+@if(($lead->public_origin ?? null) === 'website')
+<section class="card" aria-labelledby="website-enquiry-heading">
+<h2 id="website-enquiry-heading">Website enquiry</h2>
+<p>The guest enquired about <strong>{{ $lead->unit_preference }}</strong>. Availability and the final price need staff confirmation.</p>
+@if($publicRequestedUnit)<p>Requested apartment: {{ $publicRequestedUnit->property_name }} / {{ $publicRequestedUnit->unit_number }} @if($publicRequestedUnit->status !== 'active')<span class="pill">Currently inactive — choose an alternative</span>@endif</p>@endif
+<div class="actions">
+@if($publicListing)<a href="{{ route('public-stays.show', [app('currentTenant')->slug, $publicListing['slug']]) }}" target="_blank" rel="noopener">View public listing</a>@else<span class="muted">The listing is not currently published.</span>@endif
+@if($publicFollowupTask)<a href="{{ route('tasks.show', [app('currentTenant')->slug, $publicFollowupTask->id]) }}">View follow-up task</a>@endif
+</div></section>
+@endif
 <section class="card" aria-labelledby="enquiry-acknowledgement-heading">
 <h2 id="enquiry-acknowledgement-heading">Enquiry acknowledgement SMS</h2>
 @if($acknowledgement)
