@@ -8,6 +8,12 @@ $unitList = $units ?? [];
 $leadDefaults = isset($salesLead) ? ['guest_name' => $salesLead->name, 'guest_phone' => $salesLead->phone, 'guest_email' => $salesLead->email, 'check_in' => $salesLead->check_in, 'check_out' => $salesLead->check_out, 'adults' => $salesLead->guests, 'notes' => 'Sales enquiry #'.$salesLead->id] : [];
 if (isset($selectedPublicUnitId)) {
     $leadDefaults['unit_id'] = $selectedPublicUnitId;
+    $leadDefaults['booking_type'] = 'managed';
+}
+if (isset($selectedPublicPartnerId)) {
+    $leadDefaults['partner_apartment_id'] = $selectedPublicPartnerId;
+    $leadDefaults['booking_type'] = 'partner';
+    $leadDefaults['partner_choice'] = 'existing';
 }
 $value = static function ($field, $default = '') use ($leadDefaults) {
     return old($field, $leadDefaults[$field] ?? $default);

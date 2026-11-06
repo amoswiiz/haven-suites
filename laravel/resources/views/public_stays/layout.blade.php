@@ -25,6 +25,6 @@
         @yield('content')
     </main>
     <footer class="stay-footer" id="stay-contact"><div class="stay-container stay-footer-grid"><div><strong>{{ $tenant->name }}</strong><p>A comfortable place. A thoughtful welcome.<br>Find your next stay with us.</p></div><div><strong>Let's plan your stay</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif<p>Your contact details are used to respond to your enquiry and help arrange your stay.</p></div></div><div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><a href="{{ route('login') }}">Staff sign in</a></div></footer>
-    <script src="{{ asset('assets/js/public-stays.js') }}?v=1" defer></script>
+    <script src="{{ asset('assets/js/public-stays.js') }}?v=2" defer></script>
 </body>
 </html>

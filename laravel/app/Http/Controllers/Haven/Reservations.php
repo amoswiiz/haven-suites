@@ -126,10 +126,12 @@ class Reservations extends BaseController
             ->where('status', 'active')
             ->orderBy('apartment_name', 'ASC')->get()->getResultArray();
 
-        $selectedPublicUnitId = ($salesLead->public_origin ?? null) === 'website'
+        $selectedPublicUnitId = ($salesLead->public_origin ?? null) === 'website' && empty($salesLead->public_partner_apartment_id)
             ? (collect($units)->firstWhere('id', (int) $salesLead->public_unit_id)['id'] ?? null) : null;
+        $selectedPublicPartnerId = ($salesLead->public_origin ?? null) === 'website' && empty($salesLead->public_unit_id)
+            ? (collect($partners)->firstWhere('id', (int) ($salesLead->public_partner_apartment_id ?? 0))['id'] ?? null) : null;
 
-        return haven_view('reservations/form', ['pageTitle' => 'New booking', 'units' => $units, 'partners' => $partners, 'salesLead' => $salesLead, 'selectedPublicUnitId' => $selectedPublicUnitId]);
+        return haven_view('reservations/form', ['pageTitle' => 'New booking', 'units' => $units, 'partners' => $partners, 'salesLead' => $salesLead, 'selectedPublicUnitId' => $selectedPublicUnitId, 'selectedPublicPartnerId' => $selectedPublicPartnerId]);
     }
 
     public function store()

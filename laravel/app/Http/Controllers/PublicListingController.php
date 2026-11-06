@@ -6,6 +6,7 @@ use App\Services\PublicListingCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -28,7 +29,7 @@ class PublicListingController extends Controller
         return view('public_listings.index', [
             'listings' => DB::table('public_listings')->where('tenant_id', $tenant->id)->orderBy('title')->get(),
             'site' => $catalog->settings($tenant), 'members' => $catalog->assignees($tenant),
-            'units' => $catalog->units($tenant)->keyBy('id'),
+            'apartments' => $catalog->apartments($tenant)->keyBy('reference'),
         ]);
     }
 
@@ -36,7 +37,7 @@ class PublicListingController extends Controller
     {
         $this->authorizeAccess();
 
-        return view('public_listings.form', ['listing' => null, 'units' => $catalog->units(app('currentTenant')), 'photos' => collect(), 'amenities' => PublicListingCatalog::AMENITIES]);
+        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'amenities' => PublicListingCatalog::AMENITIES]);
     }
 
     public function edit(string $tenant, int $id, PublicListingCatalog $catalog): View
@@ -45,7 +46,7 @@ class PublicListingController extends Controller
         $listing = $this->listing($id);
 
         return view('public_listings.form', [
-            'listing' => $listing, 'units' => $catalog->units(app('currentTenant')),
+            'listing' => $listing, 'apartments' => $catalog->apartments(app('currentTenant')),
             'photos' => DB::table('public_listing_photos')->where('tenant_id', app('currentTenant')->id)->where('listing_id', $id)->orderBy('sort_order')->orderBy('id')->get(),
             'amenities' => PublicListingCatalog::AMENITIES,
         ]);
@@ -59,6 +60,18 @@ class PublicListingController extends Controller
     public function update(string $tenant, int $id, Request $request, PublicListingCatalog $catalog): RedirectResponse
     {
         return $this->save($request, $catalog, $id);
+    }
+
+    public function prepare(Request $request): RedirectResponse
+    {
+        $this->authorizeAccess();
+        $tenant = app('currentTenant');
+        $exitCode = Artisan::call('haven:prepare-public-catalogue', ['tenant' => $tenant->slug, '--actor' => (string) auth()->id()]);
+        if ($exitCode !== 0) {
+            return redirect()->route('public-listings.index', $tenant->slug)->withErrors(['listings' => 'Drafts could not be prepared. Check that your company is active and you are an administrator for it. No public site settings were changed.']);
+        }
+
+        return redirect()->route('public-listings.index', $tenant->slug)->with('success', 'Missing apartment listings have been prepared as private drafts. Existing listings remain unchanged. Add the guest details and photos before publishing.');
     }
 
     public function site(Request $request, PublicListingCatalog $catalog): RedirectResponse
@@ -115,9 +128,22 @@ class PublicListingController extends Controller
         $tenant = app('currentTenant');
         $before = $id ? $this->listing($id) : null;
         $request->merge(['amenities' => $request->input('amenities', [])]);
+        if ($request->filled('apartment_ref')) {
+            $reference = $request->input('apartment_ref');
+            if (! is_string($reference) || ! preg_match('/^(unit|partner):([1-9][0-9]{0,9})$/D', $reference, $parts) || (int) $parts[2] > 4294967295) {
+                throw ValidationException::withMessages(['apartment_ref' => 'Choose an existing managed or partner apartment.']);
+            }
+            $source = $parts[1] === 'unit' ? 'unit_id' : 'partner_apartment_id';
+            $other = $parts[1] === 'unit' ? 'partner_apartment_id' : 'unit_id';
+            if ($request->filled($other) || ($request->filled($source) && (string) $request->input($source) !== $parts[2])) {
+                throw ValidationException::withMessages(['apartment_ref' => 'Choose one apartment. Conflicting apartment references cannot be saved.']);
+            }
+            $request->merge([$source => (int) $parts[2], $other => null]);
+        }
         $data = $request->validate([
             'version' => $id ? 'required|integer|min:1' : 'nullable|integer',
-            'unit_id' => 'required|integer|min:1',
+            'unit_id' => 'nullable|integer|min:1|max:4294967295',
+            'partner_apartment_id' => 'nullable|integer|min:1|max:4294967295',
             'slug' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', Rule::unique('public_listings')->where('tenant_id', $tenant->id)->ignore($id)],
             'title' => 'required|string|min:3|max:180', 'description' => 'required|string|min:30|max:15000',
             'city' => 'required|string|max:100', 'neighbourhood' => 'nullable|string|max:150', 'public_location' => 'nullable|string|max:255',
@@ -131,15 +157,23 @@ class PublicListingController extends Controller
             'photo_order' => 'nullable|array|max:30', 'photo_order.*' => 'required|integer|min:0|max:1000',
             'photo_captions' => 'nullable|array|max:30', 'photo_captions.*' => 'nullable|string|max:180',
         ]);
-        $unit = $catalog->units($tenant)->firstWhere('id', (int) $data['unit_id']);
-        if (! $unit || ($unit->status !== 'active' && (int) $unit->id !== (int) ($before->unit_id ?? 0))) {
-            throw ValidationException::withMessages(['unit_id' => 'Choose an active apartment belonging to this company.']);
+        if (empty($data['unit_id']) === empty($data['partner_apartment_id'])) {
+            throw ValidationException::withMessages(['unit_id' => 'Choose exactly one existing managed or partner apartment.', 'apartment_ref' => 'Choose exactly one existing managed or partner apartment.']);
         }
-        if ($data['status'] === 'published' && (float) ($data['starting_price'] ?? $unit->nightly_rate) <= 0) {
+        $source = ! empty($data['unit_id']) ? 'unit_id' : 'partner_apartment_id';
+        $data += ['unit_id' => null, 'partner_apartment_id' => null];
+        $reference = ($source === 'unit_id' ? 'unit:' : 'partner:').$data[$source];
+        $errorField = $request->filled('apartment_ref') ? 'apartment_ref' : $source;
+        $unit = $catalog->apartments($tenant)->firstWhere('reference', $reference);
+        $sameApartment = $before && (int) ($before->{$source} ?? 0) === (int) $data[$source];
+        if (! $unit || ($unit->status !== 'active' && ! $sameApartment)) {
+            throw ValidationException::withMessages([$errorField => 'Choose an active apartment belonging to this company.']);
+        }
+        if ($data['status'] === 'published' && $unit->kind === 'managed' && (float) ($data['starting_price'] ?? $unit->nightly_rate) <= 0) {
             throw ValidationException::withMessages(['starting_price' => 'Enter a positive public starting price before publishing. This apartment does not have a positive nightly rate to use.']);
         }
-        if (DB::table('public_listings')->where('tenant_id', $tenant->id)->where('unit_id', $data['unit_id'])->when($id, fn ($query) => $query->where('id', '!=', $id))->exists()) {
-            throw ValidationException::withMessages(['unit_id' => 'This apartment already has a public listing. Edit that listing instead.']);
+        if (DB::table('public_listings')->where('tenant_id', $tenant->id)->where($source, $data[$source])->when($id, fn ($query) => $query->where('id', '!=', $id))->exists()) {
+            throw ValidationException::withMessages([$errorField => 'This apartment already has a public listing. Edit that listing instead.']);
         }
         $encoded = array_map(fn (UploadedFile $file): array => $this->encode($file), $request->file('photos', []));
         $stored = [];
@@ -162,7 +196,7 @@ class PublicListingController extends Controller
                 if ($photoCount > 30 || ($data['status'] === 'published' && ($photoCount < 1 || $unit->status !== 'active'))) {
                     throw ValidationException::withMessages(['photos' => 'A published listing needs an active apartment and at least one photo. Keep at most 30 photos.']);
                 }
-                $changes = array_intersect_key($data, array_flip(['unit_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status']));
+                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status']));
                 $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null];
                 $changes['amenities'] = json_encode(array_values(array_unique($data['amenities'] ?? [])), JSON_THROW_ON_ERROR);
                 $changes['featured'] = (bool) ($data['featured'] ?? false);

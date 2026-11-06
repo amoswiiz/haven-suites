@@ -64,7 +64,7 @@ class PublicEnquiries
         if ((int) $data['guests'] > (int) $listing['max_guests']) {
             throw ValidationException::withMessages(['guests' => 'The guest count exceeds this apartment’s capacity.']);
         }
-        $availability = app(UnitAvailability::class)->calendar($tenant, (int) $listing['unit_id'], $data['check_in'], $data['check_out']);
+        $availability = app(ListingAvailability::class)->calendar($tenant, $listing, $data['check_in'], $data['check_out']);
         $blocked = $availability['blocked'] !== [];
         if ($blocked && ! $request->boolean('flexible_dates')) {
             throw ValidationException::withMessages(['check_in' => 'These dates are unavailable. Choose different dates or select flexible dates so our team can suggest alternatives.']);
@@ -82,13 +82,15 @@ class PublicEnquiries
                 $current = DB::table('public_listings')->where('tenant_id', $tenant->id)->where('id', $listing['id'])->lockForUpdate()->first();
                 abort_unless($tenant->active && $site?->enabled && $current?->status === 'published'
                     && ($tenant->modules['properties'] ?? true) && ($tenant->modules['sales'] ?? true), 404);
-                if ((int) $current->unit_id !== (int) $listing['unit_id'] || (int) $current->max_guests !== (int) $listing['max_guests']
+                if ((int) $current->unit_id !== (int) ($listing['unit_id'] ?? null)
+                    || (int) ($current->partner_apartment_id ?? null) !== (int) ($listing['partner_apartment_id'] ?? null)
+                    || (int) $current->max_guests !== (int) $listing['max_guests']
                     || (int) $current->min_nights !== (int) $listing['min_nights'] || $current->slug !== $listing['slug']
                     || $current->title !== $listing['title'] || $current->city !== $listing['city']
                     || (string) $current->updated_at !== (string) $listing['updated_at']) {
                     throw ValidationException::withMessages(['enquiry' => 'This apartment listing changed. Refresh the listing and review your stay details before submitting again.']);
                 }
-                $availability = app(UnitAvailability::class)->calendar($tenant, (int) $current->unit_id, $data['check_in'], $data['check_out']);
+                $availability = app(ListingAvailability::class)->calendar($tenant, (array) $current, $data['check_in'], $data['check_out']);
                 $blocked = $availability['blocked'] !== [];
                 if ($blocked && ! $request->boolean('flexible_dates')) {
                     throw ValidationException::withMessages(['check_in' => 'These dates became unavailable. Choose different dates or select flexible dates for alternatives.']);
@@ -100,7 +102,9 @@ class PublicEnquiries
                 $deadline = now()->addHours(max(1, min(168, (int) ($site->response_hours ?? 24))));
                 $notes = 'Website enquiry for '.$listing['title'].'. Availability must be confirmed by staff.';
                 $notes .= $blocked ? "\nSelected dates currently unavailable; guest accepts alternative dates." : '';
-                $notes .= ! $availability['fresh'] ? "\nExternal calendar availability needs a fresh check." : '';
+                $notes .= ! $availability['fresh'] ? (empty($listing['partner_apartment_id'])
+                    ? "\nExternal calendar availability needs a fresh check."
+                    : "\nPartner availability must be confirmed with the host; an owner calendar is not connected.") : '';
                 $notes .= $request->boolean('flexible_dates') ? "\nGuest is flexible on dates." : '';
                 $notes .= ! empty($data['message']) ? "\nGuest message: ".trim($data['message']) : '';
                 $id = DB::table('sales_leads')->insertGetId([
@@ -111,7 +115,9 @@ class PublicEnquiries
                     'guests' => (int) $data['guests'], 'location' => $listing['city'], 'unit_preference' => $listing['title'],
                     'stage' => 'new', 'next_action' => 'Review website enquiry and confirm availability', 'follow_up_at' => $deadline,
                     'notes' => $notes, 'capture_token' => $data['capture_token'], 'public_listing_id' => $listing['id'],
-                    'public_unit_id' => $listing['unit_id'], 'public_origin' => 'website', 'public_consented_at' => now(),
+                    'public_unit_id' => $listing['unit_id'] ?? null,
+                    'public_partner_apartment_id' => $listing['partner_apartment_id'] ?? null,
+                    'public_origin' => 'website', 'public_consented_at' => now(),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
                 DB::table('sales_activities')->insert([
@@ -128,7 +134,7 @@ class PublicEnquiries
                         'tenant_id' => $tenant->id, 'title' => 'Follow up website enquiry: '.mb_substr(trim($data['full_name']), 0, 105),
                         'description' => 'Review the enquiry for '.$listing['title'].' and confirm availability and pricing. '.
                             rtrim(config('app.url'), '/').route('sales.show', [$tenant->slug, $id], false),
-                        'unit_id' => $listing['unit_id'], 'created_by' => null, 'assigned_to' => $assignee->id,
+                        'unit_id' => $listing['unit_id'] ?? null, 'created_by' => null, 'assigned_to' => $assignee->id,
                         'due_date' => $deadline->copy()->timezone($tenant->timezone ?: config('app.timezone'))->toDateString(),
                         'priority' => 'normal', 'status' => 'todo', 'owner_visible' => false, 'share_cost' => false,
                         'kind' => 'routine', 'cost_status' => 'none', 'created_at' => now(), 'updated_at' => now(),

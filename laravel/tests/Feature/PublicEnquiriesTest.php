@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\EnquiryAcknowledgements;
+use App\Services\PartnerAvailability;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
 use App\Services\UnitAvailability;
@@ -66,7 +67,9 @@ class PublicEnquiriesTest extends TestCase
         });
         $schema->create('reservations', function (Blueprint $table): void {
             $table->id();
-            $table->integer('unit_id');
+            $table->integer('unit_id')->nullable();
+            $table->integer('partner_apartment_id')->nullable();
+            $table->string('booking_type')->default('managed');
             $table->string('guest_name')->nullable();
             $table->date('check_in');
             $table->date('check_out');
@@ -75,6 +78,13 @@ class PublicEnquiriesTest extends TestCase
         $schema->create('partner_apartments', function (Blueprint $table): void {
             $table->id();
             $table->string('apartment_name');
+            $table->string('building_name')->nullable();
+            $table->string('unit_number')->nullable();
+            $table->string('location')->nullable();
+            $table->integer('bedrooms')->default(1);
+            $table->integer('bathrooms')->nullable();
+            $table->string('owner_name')->nullable();
+            $table->string('owner_phone')->nullable();
             $table->string('status');
         });
         $this->inventory->table('properties')->insert(['id' => 1, 'name' => 'Coral Gables']);
@@ -125,6 +135,18 @@ class PublicEnquiriesTest extends TestCase
             'check_in' => '2026-11-20', 'check_out' => '2026-11-23', 'guests' => 2, 'message' => 'We would love a quiet stay.',
             'consent' => '1', 'website' => '', ...$context,
         ], $overrides);
+    }
+
+    private function usePartnerListing(): void
+    {
+        $this->inventory->table('partner_apartments')->insert([
+            'id' => 1, 'apartment_name' => 'Amalia Apartments', 'building_name' => 'Amalia Building',
+            'unit_number' => 'A1.9', 'location' => 'Syokimau', 'bedrooms' => 2, 'bathrooms' => 2,
+            'status' => 'active', 'owner_name' => 'Private Host', 'owner_phone' => 'SECRET-PARTNER-PHONE',
+        ]);
+        DB::table('public_listings')->where('id', $this->listingId)->update([
+            'unit_id' => null, 'partner_apartment_id' => 1, 'title' => 'Amalia partner apartment', 'city' => 'Syokimau',
+        ]);
     }
 
     public function test_public_guest_enquiry_creates_pipeline_sms_and_follow_up_without_faking_a_staff_actor(): void
@@ -388,5 +410,107 @@ class PublicEnquiriesTest extends TestCase
         @$document->loadHTML($response->getContent());
         $nodes = (new \DOMXPath($document))->query('//select[@id="unit_id"]/option[@selected]');
         $this->assertSame(0, $nodes->length);
+    }
+
+    public function test_partner_enquiry_preserves_its_source_identity_without_linking_a_managed_unit_with_the_same_id(): void
+    {
+        $this->usePartnerListing();
+        $this->inventory->table('reservations')->insert([
+            'unit_id' => 1, 'booking_type' => 'managed', 'guest_name' => 'Unrelated managed guest',
+            'check_in' => '2026-11-20', 'check_out' => '2026-11-23', 'status' => 'confirmed',
+        ]);
+
+        $this->post($this->url(), $this->payload(['unit_id' => 1, 'partner_apartment_id' => 999]))
+            ->assertSessionHasNoErrors()->assertRedirect();
+
+        $lead = DB::table('sales_leads')->first();
+        $this->assertNull($lead->public_unit_id);
+        $this->assertEquals(1, $lead->public_partner_apartment_id);
+        $this->assertStringContainsString('Partner availability must be confirmed with the host', $lead->notes);
+        $this->assertDatabaseHas('task_items', ['id' => $lead->public_task_id, 'unit_id' => null]);
+        $this->assertSame(1, $this->inventory->table('reservations')->count());
+        $this->assertSame(0, $this->inventory->table('reservations')->where('partner_apartment_id', 1)->count());
+        Http::assertSentCount(1);
+    }
+
+    public function test_partner_enquiry_rejects_dates_blocked_by_a_partner_booking(): void
+    {
+        $this->usePartnerListing();
+        $this->inventory->table('reservations')->insert([
+            'partner_apartment_id' => 1, 'booking_type' => 'partner',
+            'check_in' => '2026-11-20', 'check_out' => '2026-11-23', 'status' => 'confirmed',
+        ]);
+
+        $this->post($this->url(), $this->payload())->assertSessionHasErrors('check_in');
+
+        $this->assertDatabaseCount('sales_leads', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_partner_changed_to_a_managed_unit_during_capture_requires_a_fresh_form(): void
+    {
+        $this->usePartnerListing();
+        $real = new PartnerAvailability;
+        $availability = $this->mock(PartnerAvailability::class);
+        $availability->shouldReceive('calendar')->once()->andReturnUsing(function ($tenant, $partnerId, $from, $to) use ($real): array {
+            $result = $real->calendar($tenant, $partnerId, $from, $to);
+            DB::table('public_listings')->where('id', $this->listingId)->update(['unit_id' => 1, 'partner_apartment_id' => null]);
+
+            return $result;
+        });
+
+        $this->post($this->url(), $this->payload())->assertSessionHasErrors('enquiry');
+        $this->assertDatabaseCount('sales_leads', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_partner_deactivated_during_capture_cannot_accept_the_enquiry(): void
+    {
+        $this->usePartnerListing();
+        $real = new PartnerAvailability;
+        $calls = 0;
+        $availability = $this->mock(PartnerAvailability::class);
+        $availability->shouldReceive('calendar')->twice()->andReturnUsing(function ($tenant, $partnerId, $from, $to) use ($real, &$calls): array {
+            $result = $real->calendar($tenant, $partnerId, $from, $to);
+            if (++$calls === 1) {
+                $this->inventory->table('partner_apartments')->where('id', 1)->update(['status' => 'inactive']);
+            }
+
+            return $result;
+        });
+
+        $this->post($this->url(), $this->payload())->assertNotFound();
+        $this->assertDatabaseCount('sales_leads', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_partner_source_is_visible_to_staff_and_preselected_only_while_active_in_the_booking_form(): void
+    {
+        $this->usePartnerListing();
+        $this->post($this->url(), $this->payload())->assertSessionHasNoErrors();
+        $lead = DB::table('sales_leads')->first();
+        $this->actingAs($this->salesperson)->get('/t/'.$this->company->slug.'/sales/'.$lead->id)
+            ->assertOk()->assertSee('Requested partner apartment: Amalia Apartments / A1.9')
+            ->assertSee('Confirm availability with the host')->assertDontSee('SECRET-PARTNER-PHONE')
+            ->assertDontSee('Requested apartment: Coral Gables / F5');
+
+        $this->salesperson->tenants()->updateExistingPivot($this->company->id, ['roles' => json_encode(['manager'])]);
+        $this->company->forceFill(['modules' => ['finance' => false]])->save();
+        $url = '/t/'.$this->company->slug.'/reservations/create?lead_id='.$lead->id;
+        $response = $this->get($url)->assertOk()->assertSee('Amina Website Guest')->assertSee('2026-11-20');
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+        $this->assertSame('partner', $xpath->query('//input[@name="booking_type"][@checked]')->item(0)->getAttribute('value'));
+        $nodes = $xpath->query('//select[@id="partner_apartment_id"]/option[@selected]');
+        $this->assertSame(1, $nodes->length);
+        $this->assertSame('1', $nodes->item(0)->getAttribute('value'));
+        $this->assertSame(0, $xpath->query('//select[@id="unit_id"]/option[@selected]')->length);
+
+        $this->inventory->table('partner_apartments')->where('id', 1)->update(['status' => 'inactive']);
+        $response = $this->get($url)->assertOk();
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+        $this->assertSame(0, $xpath->query('//select[@id="partner_apartment_id"]/option[@selected]')->length);
     }
 }

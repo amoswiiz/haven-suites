@@ -1,6 +1,6 @@
 # Public listings implementation checkpoint
 
-Updated: 6 November 2026. Status: code and mapping review deployed as `67392b3`; approved content import remains.
+Updated: 6 November 2026. Status: `67392b3` is live; the 11-apartment pilot follow-up is complete and verified, ready for GitHub push/deployment.
 
 ## Objective
 
@@ -8,6 +8,10 @@ Add a public accommodation catalogue backed by existing physical unit records,
 shared availability and website enquiries that enter the sales pipeline and
 receive acknowledgement SMS. Keep the current WordPress website running until
 listings have been mapped and reviewed.
+
+Latest user scope: work only with the **11 existing app apartments** (eight
+managed and three partner apartments). The 108-listing WordPress import is set
+aside for this pilot. Do not create or map extra inventory from those listings.
 
 ## Starting point
 
@@ -67,6 +71,12 @@ listings have been mapped and reviewed.
 
 Verification completed:
 
+- 11-apartment pilot follow-up: **177 tests, 1,422 assertions passed** together
+  across public admin/partner publishing, visitor pages, enquiry capture, partner
+  availability, imports, managed availability, calendar sync/export, booking
+  amendments, sales pipeline, enquiry SMS, guest communications, manual SMS and
+  role visibility. Pint passed. Bash deployment and browser JavaScript syntax
+  checks passed. No real messages or live inventory changes were made.
 - Mapping follow-up: WebsiteListingSourceTest, PlanPublicListingsTest,
   PublicListingUnitMatcherTest and existing ImportPublicListingsTest passed
   together: **34 tests, 251 assertions**. Pint and `git diff --check` passed.
@@ -105,18 +115,60 @@ and `git status` to identify the exact commit and any later changes when resumin
 
 ## Exact stopping point / next work
 
+The user verified live inventory, then requested that the pilot use only these:
+
+- Managed: 557 F2 / Coral Gables; 558 F5 / Coral Gables; 559 R92 and 560 R61 /
+  Third Avenue Beach Apt; 561 A1503 / Winchester Garden Apt; 562 A110 / Pinecrest
+  View; 563 Q103 and 564 Q93 / Third Avenue Beach Apt.
+- Partners: 2 A1.9 / Amalia Apartments (Syokimau); 3 B09 / Baharini Cottages
+  (Diani); 4 PH56 / Nursan Homes Muthaiga (Nanyuki).
+
+Partner support is now implemented across catalogue editing/public pages,
+calendar queries, enquiry capture, pipeline identity and booking preselection.
+Managed unit IDs and partner IDs remain separate, including when integer IDs
+collide. Owner contacts and internal notes are never projected publicly.
+Partner calendars show app-recorded booked nights and require owner confirmation;
+there is no connected owner iCal feed, so they are never advertised as freshly
+verified availability. Their public rate may be "Price on request".
+
+New central migration:
+`2026_11_06_142451_extend_public_listings_for_partner_apartments.php`.
+It adds partner source references and permits incomplete private capacity/stay
+fields. Publication still requires explicit guest details and a photograph.
+Rollback refuses to discard partner enquiry identity or incomplete drafts.
+
+`Prepare listings from existing apartments` on `/t/haven/public-listings` creates
+only missing active apartment drafts using the logged-in administrator as the
+audit actor. It is idempotent and changes no inventory, existing listings, prices,
+site enablement or messages. Descriptions, city, capacity, minimum nights and
+photos must be supplied/reviewed before publication. CLI equivalent:
+`php artisan haven:prepare-public-catalogue haven --actor=USER_ID --dry-run`.
+Remove `--dry-run` to prepare missing private drafts.
+
+Deployment helper `deploy-haven.sh` is in the repository root. Run the existing
+`haven-prepare`, then run this helper from `/home/deploy/haven-repository/` with
+the expected new commit hash. It validates the checkout, takes file/central
+SQLite backups, copies code, installs dependencies, migrates and refreshes PHP.
+It never prepares or publishes the apartment drafts automatically.
+
+Next: push this follow-up, deploy its central
+migration, then use the prepare button and complete/review the 11 private drafts.
+The public site and individual listings still need to be explicitly enabled.
+
+Earlier deployment/mapping evidence (historical; the 108-listing import is no
+longer the pilot task):
+
 The user confirmed successful live deployment of `67392b3` on 6 November 2026.
 Application is online. File backup: `/root/haven-deploy-Xr6tSa9O`.
 The live planning command completed with 108 rows: missing_code 2, unmatched 98,
 candidate_only 6, duplicate_code 2, and no exact matches. Private server review:
 `/var/www/haven-suites/storage/app/private/listing-imports/1/20261106-141037-Cta2ccDI/review.csv`.
 No listings were imported/published and no rates/messages were changed by planning.
-Next inspect the live apartment numbers and six candidate mappings before importing.
+The subsequent inventory audit led to the 11-apartment scope above.
 
 Code, tests and private-preview workflows are complete. The user confirmed that
-old website listing codes such as 064/101 match app unit numbers. The next work is
-reviewing the live mapping results and resolving missing or ambiguous entries,
-then a small publishing pilot. The app schema has `unit_number` but no separate
+old website listing codes such as 064/101 match app unit numbers, but the actual
+live inventory had no full-code matches. The app schema has `unit_number` but no separate
 website listing-code field; do not substitute numeric database IDs for codes.
 
 The local database contains only four apartments (F5, F6, Q 103 and R61), so it is
@@ -138,6 +190,7 @@ Central migrations (copy the new code before running migrations):
 
 - `2026_11_06_100045_create_public_listing_tables.php`
 - `2026_11_06_100537_add_public_enquiry_capture.php`
+- `2026_11_06_142451_extend_public_listings_for_partner_apartments.php` (pilot follow-up)
 
 Deploy with the existing prepare/copy/maintenance workflow and a central database
 backup, run `php artisan migrate --force --no-interaction`, compile views, reload

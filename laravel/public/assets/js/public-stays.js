@@ -103,7 +103,7 @@
                 if (!Array.isArray(data.blocked) || data.blocked.some(range => !/^\d{4}-\d{2}-\d{2}$/.test(range.start) || !/^\d{4}-\d{2}-\d{2}$/.test(range.end))) throw new Error('Calendar unavailable');
                 draw(selected, data.blocked);
                 month = selected;
-                status.textContent = data.fresh ? 'Availability is subject to confirmation. Check-out dates do not count as an additional night.' : 'The external calendar needs confirmation. Our team will verify your dates.';
+                status.textContent = data.fresh ? 'Availability is subject to confirmation. Check-out dates do not count as an additional night.' : (calendar.dataset.unconfirmedMessage || 'The external calendar needs confirmation. Our team will verify your dates.');
             } catch (_) {
                 status.textContent = 'We could not refresh the calendar. Your current calendar is still shown; please enquire so our team can confirm your dates.';
             } finally {

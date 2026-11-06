@@ -8,6 +8,7 @@
 <h2 id="website-enquiry-heading">Website enquiry</h2>
 <p>The guest enquired about <strong>{{ $lead->unit_preference }}</strong>. Availability and the final price need staff confirmation.</p>
 @if($publicRequestedUnit)<p>Requested apartment: {{ $publicRequestedUnit->property_name }} / {{ $publicRequestedUnit->unit_number }} @if($publicRequestedUnit->status !== 'active')<span class="pill">Currently inactive — choose an alternative</span>@endif</p>@endif
+@if($publicRequestedPartner)<p>Requested partner apartment: {{ $publicRequestedPartner->apartment_name }} / {{ $publicRequestedPartner->unit_number }} · {{ $publicRequestedPartner->location }} @if($publicRequestedPartner->status !== 'active')<span class="pill">Currently inactive — choose an alternative</span>@endif</p><p class="muted">Confirm availability with the host before confirming this booking.</p>@endif
 <div class="actions">
 @if($publicListing)<a href="{{ route('public-stays.show', [app('currentTenant')->slug, $publicListing['slug']]) }}" target="_blank" rel="noopener">View public listing</a>@else<span class="muted">The listing is not currently published.</span>@endif
 @if($publicFollowupTask)<a href="{{ route('tasks.show', [app('currentTenant')->slug, $publicFollowupTask->id]) }}">View follow-up task</a>@endif

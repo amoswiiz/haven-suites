@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Services\ListingAvailability;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
-use App\Services\UnitAvailability;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PublicStayController extends Controller
 {
-    public function index(Request $request, string $company, PublicListingCatalog $catalog, UnitAvailability $availability): Response
+    public function index(Request $request, string $company, PublicListingCatalog $catalog, ListingAvailability $availability): Response
     {
         [$tenant, $site] = $this->company($company, $catalog);
         $today = CarbonImmutable::now($tenant->timezone)->toDateString();
@@ -57,12 +57,12 @@ class PublicStayController extends Controller
         })->values();
         $states = [];
         if ($nights !== null && $listings->isNotEmpty()) {
-            foreach ($listings->pluck('unit_id')->chunk(500) as $unitIds) {
-                $states += $availability->availabilityForUnits($tenant, $unitIds->all(), $filters['check_in'], $filters['check_out']);
+            foreach ($listings->chunk(500) as $batch) {
+                $states += $availability->availabilityForListings($tenant, $batch->all(), $filters['check_in'], $filters['check_out']);
             }
         }
         $listings = $listings->map(function (array $listing) use ($states): array {
-            $listing['availability'] = $states[$listing['unit_id']] ?? null;
+            $listing['availability'] = $states[$listing['id']] ?? null;
 
             return $listing;
         })->filter(fn (array $listing): bool => empty($filters['available_only']) || $nights === null
@@ -84,7 +84,7 @@ class PublicStayController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $company, string $slug, PublicListingCatalog $catalog, UnitAvailability $availability, PublicEnquiries $enquiries): Response
+    public function show(Request $request, string $company, string $slug, PublicListingCatalog $catalog, ListingAvailability $availability, PublicEnquiries $enquiries): Response
     {
         [$tenant, $site] = $this->company($company, $catalog);
         $listing = $catalog->findPublished($tenant, $slug);
@@ -92,7 +92,7 @@ class PublicStayController extends Controller
         return $this->listingPage($request, $tenant, $site, $listing, $availability, $enquiries);
     }
 
-    public function preview(Request $request, string $tenant, int $id, PublicListingCatalog $catalog, UnitAvailability $availability, PublicEnquiries $enquiries): Response
+    public function preview(Request $request, string $tenant, int $id, PublicListingCatalog $catalog, ListingAvailability $availability, PublicEnquiries $enquiries): Response
     {
         abort_unless(auth()->user()?->active && auth()->user()->can('properties.manage'), 403);
         $company = app('currentTenant');
@@ -101,13 +101,13 @@ class PublicStayController extends Controller
         return $this->listingPage($request, $company, $site, $catalog->preview($company, $id), $availability, $enquiries, true);
     }
 
-    public function calendar(Request $request, string $company, string $slug, PublicListingCatalog $catalog, UnitAvailability $availability): JsonResponse
+    public function calendar(Request $request, string $company, string $slug, PublicListingCatalog $catalog, ListingAvailability $availability): JsonResponse
     {
         [$tenant] = $this->company($company, $catalog);
         $listing = $catalog->findPublished($tenant, $slug);
         $data = $request->validate(['from' => 'required|date_format:Y-m-d', 'to' => 'required|date_format:Y-m-d|after:from']);
 
-        return response()->json($availability->calendar($tenant, $listing['unit_id'], $data['from'], $data['to']))
+        return response()->json($availability->calendar($tenant, $listing, $data['from'], $data['to']))
             ->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff');
     }
 
@@ -143,11 +143,11 @@ class PublicStayController extends Controller
         return [$tenant, $site];
     }
 
-    private function listingPage(Request $request, Tenant $tenant, object $site, array $listing, UnitAvailability $availability, PublicEnquiries $enquiries, bool $preview = false): Response
+    private function listingPage(Request $request, Tenant $tenant, object $site, array $listing, ListingAvailability $availability, PublicEnquiries $enquiries, bool $preview = false): Response
     {
         $today = CarbonImmutable::now($tenant->timezone)->startOfDay();
         $month = $today->startOfMonth();
-        $calendar = $availability->calendar($tenant, $listing['unit_id'], $month->toDateString(), $month->addMonth()->toDateString());
+        $calendar = $availability->calendar($tenant, $listing, $month->toDateString(), $month->addMonth()->toDateString());
         $days = [];
         for ($date = $month; $date < $month->addMonth(); $date = $date->addDay()) {
             $blocked = collect($calendar['blocked'])->contains(fn (array $range): bool => $date->toDateString() >= $range['start'] && $date->toDateString() < $range['end']);

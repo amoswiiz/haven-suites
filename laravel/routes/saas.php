@@ -62,6 +62,7 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
         Route::get('new', [PublicListingController::class, 'create'])->name('create');
         Route::post('/', [PublicListingController::class, 'store'])->middleware('throttle:20,1')->name('store');
         Route::post('site', [PublicListingController::class, 'site'])->name('site.update');
+        Route::post('prepare', [PublicListingController::class, 'prepare'])->middleware('throttle:5,1')->name('prepare');
         Route::get('{id}/edit', [PublicListingController::class, 'edit'])->whereNumber('id')->name('edit');
         Route::post('{id}', [PublicListingController::class, 'update'])->whereNumber('id')->middleware('throttle:20,1')->name('update');
         Route::get('{id}/preview', [PublicStayController::class, 'preview'])->whereNumber('id')->name('preview');
