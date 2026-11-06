@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\PublicListingCatalog;
+use App\Services\YouTubeListingVideos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -37,7 +38,7 @@ class PublicListingController extends Controller
     {
         $this->authorizeAccess();
 
-        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'amenities' => PublicListingCatalog::AMENITIES]);
+        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'videos' => [], 'amenities' => PublicListingCatalog::AMENITIES]);
     }
 
     public function edit(string $tenant, int $id, PublicListingCatalog $catalog): View
@@ -49,6 +50,7 @@ class PublicListingController extends Controller
             'listing' => $listing, 'apartments' => $catalog->apartments(app('currentTenant')),
             'photos' => DB::table('public_listing_photos')->where('tenant_id', app('currentTenant')->id)->where('listing_id', $id)->orderBy('sort_order')->orderBy('id')->get(),
             'amenities' => PublicListingCatalog::AMENITIES,
+            'videos' => app(YouTubeListingVideos::class)->forForm($listing->youtube_videos ?? null),
         ]);
     }
 
@@ -156,7 +158,12 @@ class PublicListingController extends Controller
             'remove_photos' => 'nullable|array|max:30', 'remove_photos.*' => 'required|integer',
             'photo_order' => 'nullable|array|max:30', 'photo_order.*' => 'required|integer|min:0|max:1000',
             'photo_captions' => 'nullable|array|max:30', 'photo_captions.*' => 'nullable|string|max:180',
+            'youtube_videos' => 'sometimes|array|max:2', 'youtube_videos.*' => 'required|array:url,title',
+            'youtube_videos.*.url' => 'nullable|string|max:2048', 'youtube_videos.*.title' => 'nullable|string|max:120',
         ]);
+        if (array_key_exists('youtube_videos', $data)) {
+            $data['youtube_videos'] = app(YouTubeListingVideos::class)->normalize($data['youtube_videos']);
+        }
         if (empty($data['unit_id']) === empty($data['partner_apartment_id'])) {
             throw ValidationException::withMessages(['unit_id' => 'Choose exactly one existing managed or partner apartment.', 'apartment_ref' => 'Choose exactly one existing managed or partner apartment.']);
         }
@@ -199,6 +206,9 @@ class PublicListingController extends Controller
                 $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status']));
                 $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null];
                 $changes['amenities'] = json_encode(array_values(array_unique($data['amenities'] ?? [])), JSON_THROW_ON_ERROR);
+                if (array_key_exists('youtube_videos', $data)) {
+                    $changes['youtube_videos'] = json_encode($data['youtube_videos'], JSON_THROW_ON_ERROR);
+                }
                 $changes['featured'] = (bool) ($data['featured'] ?? false);
                 $changes['version'] = (int) ($latest->version ?? 0) + 1;
                 $changes['updated_at'] = now();

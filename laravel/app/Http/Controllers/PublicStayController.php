@@ -7,6 +7,8 @@ use App\Services\ListingAvailability;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
 use Carbon\CarbonImmutable;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -75,12 +77,20 @@ class PublicStayController extends Controller
         $page = LengthAwarePaginator::resolveCurrentPage();
         $stays = new LengthAwarePaginator($listings->forPage($page, 12)->values(), $listings->count(), 12, $page,
             ['path' => route('public-stays.index', $tenant->slug), 'query' => $request->query()]);
+        abort_if($page > $stays->lastPage(), 404);
+        $filtered = collect($filters)->contains(fn ($value, $key): bool => match ($key) {
+            'sort' => ! in_array($value, [null, '', 'recommended'], true),
+            'available_only' => (bool) $value,
+            default => ! in_array($value, [null, '', []], true),
+        });
+        $canonicalUrl = $this->publicUrl('public-stays.index', ['company' => $tenant->slug], ! $filtered && $page > 1 ? ['page' => $page] : []);
 
         return $this->page('public_stays.index', compact('tenant', 'site', 'stays', 'cities', 'filters', 'hero') + [
             'amenities' => PublicListingCatalog::AMENITIES, 'today' => $today,
-            'pageTitle' => $tenant->name.' | Find your next stay',
-            'pageDescription' => $site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.',
-            'canonicalUrl' => route('public-stays.index', $tenant->slug),
+            'pageTitle' => $this->plainText($tenant->name, 100).' | Find your next stay'.($page > 1 ? ' | Page '.$page : ''),
+            'pageDescription' => $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
+            'canonicalUrl' => $canonicalUrl, 'robotsContent' => $filtered ? 'noindex, follow' : 'index, follow, max-image-preview:large',
+            'socialImage' => $this->socialImage($hero['photos'][0] ?? null),
         ]);
     }
 
@@ -122,13 +132,32 @@ class PublicStayController extends Controller
     public function sitemap(string $company, PublicListingCatalog $catalog): Response
     {
         [$tenant] = $this->company($company, $catalog);
-        $urls = [route('public-stays.index', $tenant->slug)];
+        $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])]];
         foreach ($catalog->published($tenant) as $listing) {
-            $urls[] = route('public-stays.show', [$tenant->slug, $listing['slug']]);
+            $entry = ['url' => $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]), 'photos' => array_column($listing['photos'], 'url')];
+            try {
+                if (! empty($listing['updated_at'])) {
+                    $modified = CarbonImmutable::parse($listing['updated_at'], config('app.timezone'));
+                    if ($modified <= now()) {
+                        $entry['lastmod'] = $modified->toAtomString();
+                    }
+                }
+            } catch (\Throwable) {
+                // Invalid legacy timestamps must not generate an invented modification date.
+            }
+            $entries[] = $entry;
         }
-        $xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
-        foreach ($urls as $url) {
-            $xml .= '<url><loc>'.htmlspecialchars($url, ENT_XML1 | ENT_QUOTES, 'UTF-8').'</loc></url>';
+        $escape = fn (string $value): string => htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">';
+        foreach ($entries as $entry) {
+            $xml .= '<url><loc>'.$escape($entry['url']).'</loc>';
+            if (isset($entry['lastmod'])) {
+                $xml .= '<lastmod>'.$escape($entry['lastmod']).'</lastmod>';
+            }
+            foreach ($entry['photos'] ?? [] as $photo) {
+                $xml .= '<image:image><image:loc>'.$escape($photo).'</image:loc></image:image>';
+            }
+            $xml .= '</url>';
         }
 
         return response($xml.'</urlset>', 200, ['Content-Type' => 'application/xml; charset=UTF-8']);
@@ -162,18 +191,69 @@ class PublicStayController extends Controller
         $formContext = $canEnquire ? $enquiries->formContext($tenant, $listing) : [];
         $alternatives = $preview ? collect() : app(PublicListingCatalog::class)->published($tenant)
             ->filter(fn (array $other): bool => $other['id'] !== $listing['id'] && $other['city'] === $listing['city'])->take(3);
-        $canonicalUrl = route('public-stays.show', [$tenant->slug, $listing['slug']]);
-        $structuredData = [
-            '@context' => 'https://schema.org', '@type' => 'LodgingBusiness', 'name' => $listing['title'],
-            'description' => Str::limit($listing['description'], 400), 'url' => $canonicalUrl,
-            'image' => array_column($listing['photos'], 'url'),
-            'address' => ['@type' => 'PostalAddress', 'addressLocality' => $listing['city']],
-        ];
+        $canonicalUrl = $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]);
+        $listingTitle = $this->plainText($listing['title'], 180);
+        $destination = $this->plainText(implode(', ', array_filter([$listing['neighbourhood'], $listing['city']])), 150);
+        $pageTitle = implode(' | ', array_unique(array_filter([$listingTitle, $destination, $this->plainText($tenant->name, 100)])));
+        $pageDescription = $this->plainText($listing['description'], 160);
+        $structuredData = $preview ? null : $this->listingSchema($tenant, $listing, $canonicalUrl);
 
         return $this->page('public_stays.show', compact('tenant', 'site', 'listing', 'calendar', 'month', 'weeks', 'canEnquire', 'formContext', 'alternatives', 'preview', 'canonicalUrl', 'structuredData') + [
-            'today' => $today->toDateString(), 'pageTitle' => $listing['title'].' | '.$tenant->name,
-            'pageDescription' => Str::limit($listing['description'], 155),
+            'today' => $today->toDateString(), 'pageTitle' => $pageTitle, 'pageDescription' => $pageDescription,
+            'robotsContent' => $preview ? 'noindex, nofollow' : 'index, follow, max-image-preview:large',
+            'socialImage' => $preview ? null : $this->socialImage($listing['photos'][0] ?? null),
         ], $preview);
+    }
+
+    private function listingSchema(Tenant $tenant, array $listing, string $canonicalUrl): array
+    {
+        $images = [];
+        foreach ($listing['photos'] as $index => $photo) {
+            $images[] = ['@type' => 'ImageObject', '@id' => $canonicalUrl.'#photo-'.($index + 1),
+                'contentUrl' => $photo['url'], 'caption' => $this->plainText($photo['caption'], 180)];
+        }
+        $accommodation = [
+            '@type' => 'LodgingBusiness', '@id' => $canonicalUrl.'#accommodation',
+            'name' => $this->plainText($listing['title'], 180),
+            'description' => $this->plainText($listing['description'], 400), 'url' => $canonicalUrl,
+            'image' => array_map(fn (array $image): array => ['@id' => $image['@id']], $images),
+            'address' => ['@type' => 'PostalAddress', 'addressLocality' => $this->plainText($listing['city'], 100)],
+            'amenityFeature' => array_map(fn (string $label): array => ['@type' => 'LocationFeatureSpecification', 'name' => $this->plainText($label, 100), 'value' => true], $listing['amenity_labels']),
+        ];
+        $breadcrumbs = ['@type' => 'BreadcrumbList', '@id' => $canonicalUrl.'#breadcrumbs', 'itemListElement' => [
+            ['@type' => 'ListItem', 'position' => 1, 'name' => 'Find a stay', 'item' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])],
+            ['@type' => 'ListItem', 'position' => 2, 'name' => $this->plainText($listing['title'], 180), 'item' => $canonicalUrl],
+        ]];
+
+        return ['@context' => 'https://schema.org', '@graph' => [$accommodation, $breadcrumbs, ...$images]];
+    }
+
+    private function publicUrl(string $route, array $parameters, array $query = []): string
+    {
+        $url = rtrim(config('app.url'), '/').route($route, $parameters, false);
+
+        return $query === [] ? $url : $url.'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function plainText(string $html, int $limit): string
+    {
+        $document = new DOMDocument;
+        $document->loadHTML('<!doctype html><html><head><meta charset="utf-8"></head><body>'.$html.'</body></html>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        foreach ((new DOMXPath($document))->query('//script|//style|//iframe|//object|//embed|//noscript|//template|//svg|//form') as $node) {
+            $node->parentNode?->removeChild($node);
+        }
+        foreach ((new DOMXPath($document))->query('//p|//div|//li|//br|//h1|//h2|//h3|//h4|//h5|//h6') as $node) {
+            $node->appendChild($document->createTextNode(' '));
+        }
+        $body = $document->getElementsByTagName('body')->item(0);
+        $text = preg_replace('/\s+/u', ' ', $body?->textContent ?? '');
+
+        return Str::limit(trim($text ?? ''), $limit, '…');
+    }
+
+    private function socialImage(?array $photo): ?array
+    {
+        return $photo ? ['url' => $photo['url'], 'caption' => $this->plainText($photo['caption'] ?? '', 180)] : null;
     }
 
     private function page(string $view, array $data, bool $preview = false): Response
@@ -182,6 +262,8 @@ class PublicStayController extends Controller
             ->header('Referrer-Policy', 'strict-origin-when-cross-origin')->header('X-Content-Type-Options', 'nosniff');
         if ($preview) {
             $response->header('X-Robots-Tag', 'noindex, nofollow');
+        } elseif (($data['robotsContent'] ?? null) === 'noindex, follow') {
+            $response->header('X-Robots-Tag', 'noindex, follow');
         }
 
         return $response;

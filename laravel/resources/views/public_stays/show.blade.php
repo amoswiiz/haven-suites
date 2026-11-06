@@ -9,22 +9,14 @@
 <div class="stay-container">
     <p class="stay-breadcrumb"><a href="{{ $preview ? route('public-listings.index', $tenant->slug) : route('public-stays.index', $tenant->slug) }}">{{ $preview ? 'All listings' : 'All stays' }}</a> &nbsp;/&nbsp; {{ $listing['city'] }}</p>
     <div class="stay-detail-heading"><span class="stay-eyebrow">{{ $listing['neighbourhood'] ?: $listing['city'] }}</span><h1>{{ $listing['title'] }}</h1><p>{{ $listing['public_location'] ?: $listing['city'] }} &middot; {{ $listing['max_guests'] ? 'Up to '.$listing['max_guests'].' guests' : 'Guest capacity to be confirmed' }} &middot; {{ $bedroomLabel }} &middot; {{ $bathroomLabel }}</p></div>
-    @if($listing['photos'])
-        <div class="stay-gallery {{ count($listing['photos']) === 1 ? 'single' : (count($listing['photos']) === 2 ? 'two' : '') }}">
-            @foreach(array_slice($listing['photos'],0,3) as $photo)
-                <a href="{{ $photo['url'] }}" data-gallery-photo aria-label="View photo: {{ $photo['caption'] }}"><img src="{{ $photo['url'] }}" alt="{{ $photo['caption'] }}" width="900" height="650" @if($loop->first) fetchpriority="high" @else loading="lazy" @endif></a>
-            @endforeach
-        </div>
-    @else
-        <div class="stay-gallery-missing">Upload apartment photos in the listing editor to complete this preview.</div>
-    @endif
-    @if(count($listing['photos'])>3)
-        <details style="margin:0 0 30px"><summary>See all {{ count($listing['photos']) }} photos</summary><div class="stay-grid" style="margin-top:20px">@foreach(array_slice($listing['photos'],3) as $photo)<a href="{{ $photo['url'] }}" data-gallery-photo><img src="{{ $photo['url'] }}" alt="{{ $photo['caption'] }}" loading="lazy" width="700" height="480" style="border-radius:14px;aspect-ratio:1.45"></a>@endforeach</div></details>
-    @endif
+    <div class="stay-summary-price"><div>@if((float)$listing['starting_price'] > 0)<span>From</span> <strong>{{ $listing['currency'] }} {{ number_format((float)$listing['starting_price'], (float)$listing['starting_price'] == floor((float)$listing['starting_price']) ? 0 : 2) }}</strong> <span>per night</span>@else<strong>Price on request</strong>@endif</div><a href="#stay-availability">Explore your dates &darr;</a></div>
+    @include('public_stays.media')
+    <nav class="stay-section-nav" aria-label="Explore this apartment"><a href="#stay-overview">About the stay</a>@if(!empty($listing['videos']))<a href="#stay-videos">Video tours</a>@endif @if($listing['amenity_labels'])<a href="#stay-amenities">Amenities</a>@endif<a href="#stay-availability">Availability</a><a href="#stay-rules">Before you arrive</a>@if($listing['public_location'])<a href="#stay-location">Location</a>@endif</nav>
     <div class="stay-detail-grid"><div>
-        <section class="stay-detail-section"><h2>Make yourself at home</h2><p class="stay-description">{{ $listing['description'] }}</p></section>
-        <section class="stay-detail-section"><h2>What this stay offers</h2><ul class="stay-amenities">@foreach($listing['amenity_labels'] as $amenity)<li>{{ $amenity }}</li>@endforeach</ul></section>
-        <section class="stay-detail-section" aria-labelledby="public-calendar-heading"><h2 id="public-calendar-heading">Explore your dates</h2><p class="stay-muted">Choose your preferred arrival and departure dates in the enquiry form. Our team checks availability again before confirming your booking.</p>
+        <section class="stay-detail-section" id="stay-overview"><h2>Make yourself at home</h2><p class="stay-description">{{ $listing['description'] ?: 'Add a description in the listing editor to complete this preview.' }}</p></section>
+        @include('public_stays.videos')
+        @if($listing['amenity_labels'])<section class="stay-detail-section" id="stay-amenities"><h2>What this stay offers</h2><ul class="stay-amenities">@foreach($listing['amenity_labels'] as $amenity)<li>{{ $amenity }}</li>@endforeach</ul></section>@endif
+        <section class="stay-detail-section" id="stay-availability" aria-labelledby="public-calendar-heading"><h2 id="public-calendar-heading">Explore your dates</h2><p class="stay-muted">Choose your preferred arrival and departure dates in the enquiry form. Our team checks availability again before confirming your booking.</p>
             <div data-stay-calendar data-calendar-url="{{ $preview ? '' : route('public-stays.calendar', [$tenant->slug, $listing['slug']]) }}" data-month="{{ $month->format('Y-m') }}" data-today="{{ $today }}" data-unconfirmed-message="{{ $unconfirmedMessage }}" data-maximum="{{ \Carbon\CarbonImmutable::parse($today)->addYears(2)->subMonth()->format('Y-m') }}">
                 <div class="stay-calendar-head"><button type="button" data-calendar-prev aria-label="Previous month" @disabled($preview)>&larr;</button><h3 data-calendar-label>{{ $month->format('F Y') }}</h3><button type="button" data-calendar-next aria-label="Next month" @disabled($preview)>&rarr;</button></div>
                 <table class="stay-calendar" aria-label="Apartment availability"><thead><tr>@foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $weekday)<th scope="col">{{ $weekday }}</th>@endforeach</tr></thead><tbody data-calendar-grid>
@@ -35,9 +27,9 @@
                 <div class="stay-calendar-legend"><span>No recorded block</span><span>Unavailable night</span></div><p class="stay-calendar-status" data-calendar-status aria-live="polite">{{ !$calendar['fresh'] ? $unconfirmedMessage : 'Availability is subject to confirmation. Check-out dates do not count as an additional night.' }}</p>
             </div>
         </section>
-        <section class="stay-detail-section"><h2>Before you arrive</h2><div class="stay-times"><div><small>Check-in from</small><strong>{{ substr($listing['check_in_time'],0,5) }}</strong></div><div><small>Check-out by</small><strong>{{ substr($listing['check_out_time'],0,5) }}</strong></div><div><small>Minimum stay</small><strong>{{ $listing['min_nights'] ? $listing['min_nights'].' night'.($listing['min_nights'] === 1 ? '' : 's') : 'To be confirmed' }}</strong></div></div><p class="stay-description">{{ $listing['house_rules'] ?: 'Please contact our team with any questions about your stay.' }}</p></section>
+        <section class="stay-detail-section" id="stay-rules"><h2>Before you arrive</h2><div class="stay-times"><div><small>Check-in from</small><strong>{{ substr($listing['check_in_time'],0,5) }}</strong></div><div><small>Check-out by</small><strong>{{ substr($listing['check_out_time'],0,5) }}</strong></div><div><small>Minimum stay</small><strong>{{ $listing['min_nights'] ? $listing['min_nights'].' night'.($listing['min_nights'] === 1 ? '' : 's') : 'To be confirmed' }}</strong></div></div><p class="stay-description">{{ $listing['house_rules'] ?: 'Please contact our team with any questions about your stay.' }}</p></section>
         @if($listing['public_location'])
-            <section class="stay-detail-section"><h2>Your neighbourhood</h2><p class="stay-muted">{{ $listing['public_location'] }}</p><a href="https://www.google.com/maps/search/?api=1&amp;query={{ rawurlencode($listing['public_location'].' '.$listing['city']) }}" target="_blank" rel="noopener noreferrer">Explore the area on a map &nearr;</a></section>
+            <section class="stay-detail-section" id="stay-location"><h2>Your neighbourhood</h2><p class="stay-muted">{{ $listing['public_location'] }}</p><a href="https://www.google.com/maps/search/?api=1&amp;query={{ rawurlencode($listing['public_location'].' '.$listing['city']) }}" target="_blank" rel="noopener noreferrer">Explore the area on a map &nearr;</a></section>
         @endif
     </div><aside class="stay-enquiry" id="enquire"><div class="stay-price">
         @if((float)$listing['starting_price'] > 0)<small>From</small><strong>{{ $listing['currency'] }} {{ number_format((float)$listing['starting_price'], (float)$listing['starting_price'] == floor((float)$listing['starting_price']) ? 0 : 2) }}</strong><small>per night &middot; Final price confirmed by our team</small>@else<strong>Price on request</strong><small>Our team will prepare your quote.</small>@endif
@@ -65,8 +57,7 @@
         <section class="stay-section"><span class="stay-eyebrow">Keep exploring</span><h2>More stays in {{ $listing['city'] }}</h2><div class="stay-grid">@foreach($alternatives as $stay)@include('public_stays.card')@endforeach</div></section>
     @endif
 </div>
-<dialog class="stay-photo-dialog" data-photo-dialog aria-label="Apartment photo"><button type="button" data-close-photo>Close photo &times;</button><img alt=""></dialog>
 @if($canEnquire)
-    <a href="#enquire" class="stay-button stay-mobile-enquire" data-mobile-enquire>Enquire about these dates &rarr;</a>
+    <a href="#enquire" class="stay-button stay-mobile-enquire" data-mobile-enquire hidden>Enquire about these dates &rarr;</a>
 @endif
 @endsection

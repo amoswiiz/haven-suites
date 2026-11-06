@@ -26,10 +26,17 @@
     const originalStatus = enquiry?.querySelector('[data-enquiry-status]')?.textContent;
     const mobileEnquire = document.querySelector('[data-mobile-enquire]');
     if (enquiry && mobileEnquire && 'IntersectionObserver' in window) {
+        const visibleMedia = new Set();
         const observer = new IntersectionObserver(entries => {
-            mobileEnquire.hidden = entries[0].isIntersecting;
+            entries.forEach(entry => {
+                if (entry.isIntersecting) visibleMedia.add(entry.target);
+                else visibleMedia.delete(entry.target);
+            });
+            mobileEnquire.hidden = visibleMedia.size > 0;
         }, { threshold: 0 });
+        mobileEnquire.hidden = false;
         observer.observe(enquiry);
+        document.querySelectorAll('.stay-media-actions, [data-video-player]').forEach(element => observer.observe(element));
     }
     enquiry?.addEventListener('submit', () => {
         enquiry.querySelector('button[type="submit"]').disabled = true;
@@ -116,21 +123,137 @@
         next.addEventListener('click', () => move(1));
         buttons();
     }
+    const videoPosters = new Map();
+    document.querySelectorAll('[data-video-card]').forEach(card => {
+        const poster = card.querySelector('[data-play-video]');
+        if (poster) videoPosters.set(card, poster);
+    });
+    function stopVideos(except) {
+        videoPosters.forEach((poster, card) => {
+            if (card !== except && card.querySelector('iframe')) {
+                card.querySelector('[data-video-player]').replaceChildren(poster);
+                card.querySelector('[data-video-status]').textContent = 'Hosted on YouTube.';
+            }
+        });
+    }
+    document.querySelectorAll('[data-video-poster-fallback]').forEach(poster => {
+        const fallback = () => {
+            if (!poster.dataset.videoPosterFallback) return;
+            const url = poster.dataset.videoPosterFallback;
+            delete poster.dataset.videoPosterFallback;
+            poster.src = url;
+        };
+        poster.addEventListener('error', fallback, { once: true });
+        if (poster.complete && !poster.naturalWidth) fallback();
+    });
+    document.addEventListener('click', event => {
+        const preview = event.target.closest?.('[data-play-video]');
+        if (!preview || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        let url;
+        try {
+            url = new URL(preview.dataset.videoUrl);
+            if (url.protocol !== 'https:' || url.hostname !== 'www.youtube-nocookie.com' || url.port || url.username || url.password || !/^\/embed\/[a-zA-Z0-9_-]{11}$/.test(url.pathname)) return;
+        } catch (_) { return; }
+        event.preventDefault();
+        const card = preview.closest('[data-video-card]');
+        const player = card?.querySelector('[data-video-player]');
+        if (!player) return;
+        stopVideos(card);
+        url.searchParams.set('autoplay', '1');
+        const frame = document.createElement('iframe');
+        frame.src = url.href;
+        frame.title = (preview.dataset.videoTitle || 'Apartment video tour') + ' — YouTube video';
+        frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+        frame.allowFullscreen = true;
+        frame.referrerPolicy = 'strict-origin-when-cross-origin';
+        player.replaceChildren(frame);
+        card.querySelector('[data-video-status]').textContent = 'Video player opened. If it cannot play, use Watch on YouTube.';
+        frame.focus();
+    });
+
     const dialog = document.querySelector('[data-photo-dialog]');
-    if (dialog && typeof dialog.showModal === 'function') {
+    const photoLinks = Array.from(document.querySelectorAll('[data-gallery-photo]'));
+    const photoEntries = new Map();
+    photoLinks.forEach(link => {
+        const index = Number(link.dataset.photoIndex);
+        if (Number.isInteger(index) && index >= 0 && !photoEntries.has(index)) {
+            photoEntries.set(index, { url: link.href, caption: link.dataset.photoCaption || link.querySelector('img')?.alt || 'Apartment photo' });
+        }
+    });
+    const photos = Array.from(photoEntries.entries()).sort((left, right) => left[0] - right[0]).map(entry => entry[1]);
+    const collection = document.getElementById('all-photos');
+    if (dialog && photos.length && typeof dialog.showModal === 'function') {
         let opener;
-        document.querySelectorAll('[data-gallery-photo]').forEach(link => link.addEventListener('click', event => {
-            event.preventDefault();
-            opener = link;
-            const photo = link.querySelector('img');
-            const target = dialog.querySelector('img');
-            target.src = link.href;
-            target.alt = photo?.alt || 'Apartment photo';
+        let active = 0;
+        let touchStart;
+        const image = dialog.querySelector('[data-current-photo]');
+        const caption = dialog.querySelector('[data-photo-caption]');
+        const counter = dialog.querySelector('[data-photo-count]');
+        const previous = dialog.querySelector('[data-photo-prev]');
+        const next = dialog.querySelector('[data-photo-next]');
+        const thumbnails = Array.from(dialog.querySelectorAll('[data-photo-go]'));
+        const show = index => {
+            active = (index + photos.length) % photos.length;
+            image.src = photos[active].url;
+            image.alt = photos[active].caption;
+            caption.textContent = photos[active].caption;
+            counter.textContent = 'Photo ' + (active + 1) + ' of ' + photos.length;
+            thumbnails.forEach((button, position) => {
+                if (position === active) button.setAttribute('aria-current', 'true');
+                else button.removeAttribute('aria-current');
+            });
+            thumbnails[active]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            previous.disabled = next.disabled = photos.length === 1;
+        };
+        const open = (index, trigger) => {
+            opener = trigger;
+            stopVideos();
             dialog.showModal();
-            dialog.querySelector('button').focus();
+            document.body.classList.add('stay-media-open');
+            show(index);
+            dialog.querySelector('[data-close-photo]').focus();
+        };
+        photoLinks.forEach(link => link.addEventListener('click', event => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            event.preventDefault();
+            open(Number(link.dataset.photoIndex), link);
         }));
+        document.querySelector('[data-open-gallery]')?.addEventListener('click', event => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            event.preventDefault();
+            open(0, event.currentTarget);
+        });
         dialog.querySelector('[data-close-photo]').addEventListener('click', () => dialog.close());
-        dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
-        dialog.addEventListener('close', () => opener?.focus());
+        previous.addEventListener('click', () => show(active - 1));
+        next.addEventListener('click', () => show(active + 1));
+        thumbnails.forEach(button => button.addEventListener('click', () => show(Number(button.dataset.photoGo))));
+        dialog.addEventListener('keydown', event => {
+            const movement = { ArrowLeft: active - 1, ArrowRight: active + 1, Home: 0, End: photos.length - 1 };
+            if (Object.prototype.hasOwnProperty.call(movement, event.key)) {
+                event.preventDefault();
+                show(movement[event.key]);
+            }
+        });
+        dialog.addEventListener('click', event => {
+            if (event.target !== dialog) return;
+            const bounds = dialog.getBoundingClientRect();
+            if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+        });
+        image.addEventListener('touchstart', event => {
+            touchStart = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+        }, { passive: true });
+        image.addEventListener('touchend', event => {
+            if (!touchStart || event.changedTouches.length !== 1) return;
+            const x = event.changedTouches[0].clientX - touchStart.x;
+            const y = event.changedTouches[0].clientY - touchStart.y;
+            if (Math.abs(x) > 50 && Math.abs(x) > Math.abs(y) * 1.3) show(active + (x < 0 ? 1 : -1));
+            touchStart = null;
+        }, { passive: true });
+        dialog.addEventListener('close', () => {
+            document.body.classList.remove('stay-media-open');
+            opener?.focus({ preventScroll: true });
+        });
+    } else {
+        document.querySelector('[data-open-gallery]')?.addEventListener('click', () => { if (collection) collection.open = true; });
     }
 })();

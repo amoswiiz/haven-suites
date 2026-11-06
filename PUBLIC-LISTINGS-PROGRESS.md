@@ -1,6 +1,6 @@
 # Public listings implementation checkpoint
 
-Updated: 6 November 2026. Status: `67392b3` is live; the 11-apartment pilot follow-up is complete and verified, ready for GitHub push/deployment.
+Updated: 7 November 2026. Status: the 11-apartment pilot was pushed as `810ab8f`; its deployment has not been confirmed. Listing media/UX/SEO follow-up is implemented and verified, ready for push/deployment.
 
 ## Objective
 
@@ -12,6 +12,53 @@ listings have been mapped and reviewed.
 Latest user scope: work only with the **11 existing app apartments** (eight
 managed and three partner apartments). The 108-listing WordPress import is set
 aside for this pilot. Do not create or map extra inventory from those listings.
+
+## 7 November: listing media, usability and SEO
+
+- User requested a professional review of listing content/UX/SEO, a photo gallery
+  and one or two YouTube-hosted video previews per listing.
+- Fixed the mobile bug that hid photos 2/3 without a way to open them. All photos
+  now have a visible gallery entry point, sequential modal navigation, count,
+  captions, thumbnails, keyboard/Home/End/Escape controls, swipe support and focus
+  restoration. Native photo links and an all-photo grid remain usable without JS.
+- Added two optional YouTube URL/title slots in the staff listing editor.
+  Canonical IDs/titles are stored in nullable `public_listings.youtube_videos`;
+  untrusted hosts, embed HTML, playlists, malformed URLs and duplicate IDs fail
+  validation. Requests omitting the field preserve existing videos; explicit
+  empty slots remove them. Audit snapshots include video changes.
+- Public video previews use click-to-load privacy-enhanced YouTube players,
+  direct YouTube fallback links, lazy thumbnails, minimum 200px player height
+  and only one active player. The gallery stops active video playback. No API
+  credentials or metadata requests are needed. Real playback depends on a public
+  or unlisted video with embedding allowed; no guest videos have been added.
+- Added starting prices near the heading, section navigation and conditional
+  amenities/video sections, retaining the existing enquiry and calendar flows.
+  The floating mobile enquiry action hides while gallery/video controls or the
+  form are visible, and is a JS enhancement so it cannot cover no-JS controls.
+- Improved clean canonical URLs, filtered catalogue noindex, pagination URLs,
+  plain-text descriptions, Open Graph/Twitter share cards, accommodation/image/
+  breadcrumb JSON-LD, and published-only image sitemaps with real modification
+  dates. Private previews omit public share images/schema. VideoObject markup
+  is intentionally omitted because verified upload dates are unavailable; no
+  rich-video search eligibility, fabricated ratings or firm offers are claimed.
+- New migration: `2026_11_07_011234_add_youtube_videos_to_public_listings.php`.
+- Verification: **144 tests / 951 assertions passed** in the coordinated media,
+  SEO, publishing, public pages, enquiry, partner, import and availability run.
+  After the final heading/contrast adjustments, public rendering/SEO tests passed
+  again: **28 tests / 282 assertions**. Pint and JS syntax checks passed.
+- Browser review: **29 media checks plus 11 final layout checks passed** at
+  desktop 1440px and mobile 390px/320px,
+  including gallery input methods, focus restoration, zero iframes before user
+  selection, player replacement and no-JS fallbacks. YouTube network playback was
+  blocked in the isolated browser fixture. No real records or messages changed.
+- Screenshots/report: local TEMP directory
+  `haven-media-review-30a491556df5441ca257585cf078c38e`.
+- Current live public catalogue returned HTTP 404 during this review. Review used
+  actual Blade/CSS/JS with isolated fake inventory, not live guest/company data.
+- Next: deploy the new commit with `haven-prepare` followed by
+  `bash /home/deploy/haven-repository/deploy-haven.sh EXPECTED_COMMIT`, then add
+  actual apartment photos/captions and optional YouTube tours in the editor.
+  Public site/listings still need explicit enabling/publication if not done yet.
 
 ## Starting point
 
