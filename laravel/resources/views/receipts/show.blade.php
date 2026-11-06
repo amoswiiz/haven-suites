@@ -89,10 +89,13 @@ $logoUrl = base_url('assets/images/haven-suites-logo.png');
                 <tbody><tr><td>Payment applied to invoice <strong><?= esc($r['invoice_number'] ?: ('#' . $r['invoice_id'])) ?></strong><div class="hs-receipt-muted">Reservation #<?= (int) $r['reservation_id'] ?> · Guest payment #<?= (int) $r['guest_payment_id'] ?></div></td><td class="text-end fw-bold"><?= $currency ?> <?= $money($r['receipt_amount']) ?></td></tr></tbody>
             </table></div>
             <div class="hs-receipt-total">
-                <div class="d-flex justify-content-between gap-2 mb-2"><span>Original invoice total</span><strong><?= $currency ?> <?= $money($r['invoice_total']) ?></strong></div>
+                <div class="d-flex justify-content-between gap-2 mb-2"><span>Invoice total at this payment</span><strong><?= $currency ?> <?= $money($r['invoice_total']) ?></strong></div>
                 <div class="d-flex justify-content-between gap-2 mb-2"><span>This receipt</span><strong><?= $currency ?> <?= $money($r['receipt_amount']) ?></strong></div>
                 <div class="d-flex justify-content-between gap-2 pt-2 border-top"><span class="fw-bold">Invoice balance after this payment</span><strong><?= $currency ?> <?= $money($balanceAfterAllocation) ?></strong></div>
             </div>
+            <?php if ($invoiceAmendedAfterPayment): ?>
+                <p class="hs-receipt-muted mt-3 mb-0">This invoice was amended after this payment. The figures above reflect the invoice at the time of this receipt. Current invoice total: <?= $currency ?> <?= $money($currentInvoiceTotal) ?>. Current balance: <?= $currency ?> <?= $money($currentInvoiceBalance) ?>.</p>
+            <?php endif; ?>
             <p class="hs-receipt-muted mt-3 mb-0">This receipt acknowledges only the payment amount shown above. It does not indicate that the entire invoice is paid unless the balance after this payment is zero.</p>
             <div class="hs-receipt-footer text-center">Thank you for choosing <?= esc($businessName) ?>.<div class="mt-1">Generated from an existing recorded guest payment; no additional payment was created.</div></div>
         </div>

@@ -108,6 +108,21 @@ CREATE TABLE `auth_token_logins` (
   KEY `user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE `booking_amendments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `reservation_id` int unsigned NOT NULL,
+  `invoice_id` int unsigned DEFAULT NULL,
+  `actor_id` bigint unsigned NOT NULL,
+  `actor_name` varchar(255) NOT NULL,
+  `reason` text NOT NULL,
+  `before_snapshot` text NOT NULL,
+  `after_snapshot` text NOT NULL,
+  `created_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `booking_amendments_reservation_id_index` (`reservation_id`),
+  KEY `booking_amendments_invoice_id_index` (`invoice_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `booking_financials` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `reservation_id` int(10) unsigned NOT NULL,

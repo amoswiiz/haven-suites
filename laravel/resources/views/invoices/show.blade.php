@@ -11,6 +11,7 @@
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 no-print">
  <?php if (haven_can_access(site_url('invoices'), 'GET')): ?><a href="<?= site_url('invoices') ?>" class="text-decoration-none">&larr; All Invoices</a><?php endif; ?>
  <div class="d-flex gap-2 flex-wrap">
+  <?php if (in_array($invoice['status'], ['draft', 'issued'], true) && !empty($invoice['reservation_id']) && $canManage && haven_can_access(site_url('reservations/'.(int) $invoice['reservation_id'].'/edit'), 'GET')): ?><a class="btn btn-outline-primary" href="<?= site_url('reservations/'.(int) $invoice['reservation_id'].'/edit') ?>#invoice-amendment">Amend stay &amp; invoice</a><?php endif; ?>
   <?php if ($invoice['status'] === 'issued' && $canManage && (float)$balance > 0): ?><a class="btn btn-primary" style="background:#294780;border-color:#294780" href="#record-invoice-payment">+ Record Payment</a><?php endif; ?>
   <?php if ($invoice['status'] === 'issued'): ?><?php if ($canManage && !empty($invoice['reservation_id']) && haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/payments'), 'GET')): ?><a class="btn btn-outline-secondary" href="<?= site_url('invoices/' . (int) $invoice['id'] . '/payments') ?>">Manage Payments</a><?php endif; ?><a class="btn btn-primary" href="{{ site_url('invoices/'.$invoice['id'].'/pdf') }}">Download PDF</a><button class="btn btn-outline-primary" onclick="window.print()">Print</button><?php endif; ?>
   <?php if ($invoice['status'] === 'draft' && $canManage): ?>
@@ -24,6 +25,16 @@
 <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger no-print" style="max-width:1000px;margin:0 auto 16px"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
 @if($invoice['status']==='draft' && empty($settings['id']))<div class="alert alert-warning no-print">Complete company invoice settings before issuing this draft. @if(haven_can_access(site_url('invoices/settings'),'GET'))<a href="{{ site_url('invoices/settings') }}">Open invoice settings</a>@endif</div>@endif
 @include('invoices.document')
+
+<?php if (!empty($amendmentHistory)): ?>
+<section class="hs-customer-panel no-print" aria-labelledby="invoice-amendment-history-heading">
+ <h5 id="invoice-amendment-history-heading">Stay and invoice amendment history</h5>
+ <p class="small text-muted">The original details and reason are retained for each amendment. Payment records stay unchanged.</p>
+ <?php foreach ($amendmentHistory as $entry): $before = $entry['before_snapshot']['reservation'] ?? []; $after = $entry['after_snapshot']['reservation'] ?? []; ?>
+  <div class="border-bottom pb-3 mb-3"><div class="fw-bold"><?= esc($entry['actor_name']) ?> <span class="small fw-normal text-muted">· <?= esc($entry['created_at']) ?></span></div><p class="mb-1"><?= esc($entry['reason']) ?></p><div class="small">Stay: <?= esc($before['check_in'] ?? '') ?> to <?= esc($before['check_out'] ?? '') ?> → <?= esc($after['check_in'] ?? '') ?> to <?= esc($after['check_out'] ?? '') ?></div><div class="small">Booking total: KES <?= number_format((float) ($before['total_amount'] ?? 0), 2) ?> → KES <?= number_format((float) ($after['total_amount'] ?? 0), 2) ?></div></div>
+ <?php endforeach; ?>
+</section>
+<?php endif; ?>
 
 <?php if (($invoice['status'] ?? '') !== 'void'): ?>
 <section class="hs-customer-panel no-print" aria-labelledby="hs-customer-heading">

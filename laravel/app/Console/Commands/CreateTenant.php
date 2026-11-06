@@ -68,6 +68,7 @@ class CreateTenant extends Command
             $this->call('haven:install-staff-bills', ['tenant' => $slug]);
             $this->call('haven:install-maintenance-reporting', ['tenant' => $slug]);
             $this->call('haven:install-expense-corrections', ['tenant' => $slug]);
+            $this->call('haven:install-booking-amendments', ['tenant' => $slug]);
             $this->info('Company created: /t/'.$slug.'/dashboard. Configure cleaning rates and host agreements before use.');
 
             return self::SUCCESS;

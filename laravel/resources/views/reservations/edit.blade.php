@@ -12,16 +12,27 @@ $type = ($r['booking_type'] ?? 'managed') === 'partner' ? 'partner' : 'managed';
 $val = static function (string $key, $fallback = '') use ($r) { $old = old($key); return $old !== null ? $old : ($r[$key] ?? $fallback); };
 $ownerNightly = (float) ($r['owner_net_amount'] ?? 0) / max(1, (int) (new DateTimeImmutable($r['check_in']))->diff(new DateTimeImmutable($r['check_out']))->days);
 $ownerValue = old('owner_nightly_rate') ?? number_format($ownerNightly, 2, '.', '');
+$amendment = $amendment ?? [];
+$amendmentInvoices = $amendment['invoices'] ?? [];
+$hasIssuedInvoice = count(array_filter($amendmentInvoices, static fn (array $invoice): bool => $invoice['status'] === 'issued')) > 0;
+$paidForPreview = max((float) ($r['recorded_paid'] ?? 0), (float) ($r['amount_paid'] ?? 0), ...array_map(static fn (array $invoice): float => (float) ($invoice['allocated_amount'] ?? 0), $amendmentInvoices));
+$originalStay = [
+    'check_in' => $r['check_in'],
+    'check_out' => $r['check_out'],
+    'nightly_rate' => (float) $r['nightly_rate'],
+    'unit_id' => (string) ($r['unit_id'] ?? ''),
+    'partner_apartment_id' => (string) ($r['partner_apartment_id'] ?? ''),
+    'owner_nightly_rate' => $ownerNightly,
+];
 ?>
 <div class="hs-edit">
   <div class="hs-head d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
     <div><div class="small text-white-50 mb-1">HAVEN SUITES · RESERVATION #<?= $id ?></div><h3 class="fw-bold mb-1">Edit Reservation</h3><div class="small">Update guest, stay and apartment information</div></div>
     <?php if (haven_can_access(site_url('reservations/' . $id), 'GET')): ?><a class="btn btn-light" href="<?= site_url('reservations/' . $id) ?>">Back to Booking</a><?php endif; ?>
   </div>
-  <?php if (haven_session()->getFlashdata('error')): ?><div class="alert alert-danger" role="alert"><?= esc(haven_session()->getFlashdata('error')) ?></div><?php endif; ?>
-  <?php if (haven_session()->getFlashdata('success')): ?><div class="alert alert-success" role="status"><?= esc(haven_session()->getFlashdata('success')) ?></div><?php endif; ?>
   <?php if (haven_can_access(site_url('reservations/update/' . $id), 'POST')): ?><form method="post" action="<?= site_url('reservations/update/' . $id) ?>" id="reservationEditForm">
     <?= csrf_field() ?>
+    <input type="hidden" name="booking_snapshot" value="<?= esc($amendment['snapshot'] ?? '', 'attr') ?>">
     <div class="hs-panel"><h5>Guest Details</h5><div class="row g-3">
       <div class="col-md-6"><label for="guest_name">Guest Name *</label><input required maxlength="150" class="form-control" id="guest_name" name="guest_name" value="<?= esc($val('guest_name'), 'attr') ?>"></div>
       <div class="col-md-6"><label for="guest_phone">Phone Number *</label><input required maxlength="40" class="form-control" id="guest_phone" name="guest_phone" value="<?= esc($val('guest_phone'), 'attr') ?>"></div>
@@ -44,19 +55,57 @@ $ownerValue = old('owner_nightly_rate') ?? number_format($ownerNightly, 2, '.', 
       <div class="col-md-6"><label for="nightly_rate">Guest Nightly Rate (KES) *</label><input type="number" required min="<?= $type === 'partner' ? '0.01' : '0' ?>" step="0.01" class="form-control" id="nightly_rate" name="nightly_rate" value="<?= esc($val('nightly_rate'), 'attr') ?>"></div>
       <?php if ($type === 'partner'): ?><div class="col-md-6"><label for="owner_nightly_rate">Owner Nightly Rate (KES) *</label><input type="number" required min="0" step="0.01" class="form-control" id="owner_nightly_rate" name="owner_nightly_rate" value="<?= esc($ownerValue, 'attr') ?>"></div><?php endif; ?>
       <div class="col-md-4"><div class="text-muted small">Nights</div><div class="fw-bold" id="previewNights">—</div></div><div class="col-md-4"><div class="text-muted small">Estimated Booking Total</div><div class="hs-total" id="previewTotal">—</div></div><div class="col-md-4"><div class="text-muted small">Recorded Paid Amount</div><div class="fw-bold">KES <?= number_format((float) ($r['recorded_paid'] ?? 0), 2) ?></div></div>
-    </div><p class="small text-muted mt-3 mb-0">Payments are not editable here. The server checks availability and prevents totals below recorded payments. Non-draft invoices may restrict changes to booking totals.</p></div>
+    </div><p class="small text-muted mt-3 mb-0">Existing payments stay unchanged. The revised total must cover money already received, and the apartment must be available for the revised dates.</p></div>
+    <?php if ($amendmentInvoices): ?>
+    <section class="hs-panel" id="invoice-amendment" aria-labelledby="invoice-amendment-heading">
+      <h5 id="invoice-amendment-heading">Linked invoice</h5>
+      <?php foreach ($amendmentInvoices as $linkedInvoice): ?>
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+        <div><strong><?= esc($linkedInvoice['invoice_number'] ?: ('Draft #'.$linkedInvoice['id'])) ?></strong> <span class="text-muted small">(<?= esc(ucfirst($linkedInvoice['status'])) ?>)</span><div class="small text-muted">Current invoice total: <?= esc($linkedInvoice['currency'] ?? 'KES') ?> <?= number_format((float) $linkedInvoice['total_amount'], 2) ?></div></div>
+        <?php if (haven_can_access(site_url('invoices/'.(int) $linkedInvoice['id']), 'GET')): ?><a class="btn btn-outline-primary" href="<?= site_url('invoices/'.(int) $linkedInvoice['id']) ?>" target="_blank" rel="noopener">View invoice <span class="small">(new tab)</span></a><?php endif; ?>
+      </div>
+      <?php endforeach; ?>
+      <?php if (! empty($amendment['can_amend'])): ?>
+        <p>Save the revised stay and its invoice together. The invoice number and existing payment records stay unchanged, and the reason and previous details are kept in the amendment history.</p>
+        <div class="hs-note mb-3" aria-live="polite"><div>Proposed invoice total: <strong id="amendmentTotal">—</strong></div><div>Balance after existing payments: <strong id="amendmentBalance">—</strong></div><div class="small mt-1" id="amendmentPreviewNote">Change the stay dates or rate above to preview the revised charge.</div></div>
+        <?php if ($hasIssuedInvoice): ?>
+          <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="amend_invoice" name="amend_invoice" value="1" <?= old('amend_invoice') === '1' ? 'checked' : '' ?>><label class="form-check-label" for="amend_invoice">Amend linked invoice with this stay change</label></div>
+        <?php else: ?>
+          <p class="small text-muted">The draft invoice will be synchronized when the stay changes.</p>
+        <?php endif; ?>
+        <label for="amendment_reason">Reason for amendment<?= $hasIssuedInvoice ? '' : ' (optional)' ?></label><textarea class="form-control" id="amendment_reason" name="amendment_reason" rows="2" maxlength="2000" aria-describedby="amendment-reason-help" placeholder="e.g. Guest agreed to check out one day earlier"><?= esc(old('amendment_reason') ?? '') ?></textarea><div class="form-text" id="amendment-reason-help">Explain any change to the stay dates, apartment or charges.</div>
+      <?php else: ?>
+        <p class="mb-0"><?= esc($amendment['unavailable_reason'] ?? 'Ask a staff member with invoice management access to amend the stay and invoice together.') ?></p>
+      <?php endif; ?>
+    </section>
+    <?php endif; ?>
     <div class="hs-panel"><h5>Internal Notes</h5><label for="notes">Booking Notes</label><textarea class="form-control" id="notes" name="notes" rows="4"><?= esc($val('notes')) ?></textarea></div>
     <div class="d-flex justify-content-end gap-2 flex-wrap mb-4"><?php if (haven_can_access(site_url('reservations/' . $id), 'GET')): ?><a href="<?= site_url('reservations/' . $id) ?>" class="btn btn-outline-secondary">Cancel</a><?php endif; ?><button type="submit" class="btn btn-save px-4">Save Changes</button></div>
   </form><?php endif; ?>
+  <?php if (! empty($amendment['history'])): ?>
+    <section class="hs-panel" aria-labelledby="amendment-history-heading"><h5 id="amendment-history-heading">Stay and invoice amendment history</h5>
+      <?php foreach ($amendment['history'] as $entry): $before = $entry['before_snapshot']['reservation'] ?? []; $after = $entry['after_snapshot']['reservation'] ?? []; ?>
+        <div class="border-bottom pb-3 mb-3"><div class="fw-bold"><?= esc($entry['actor_name']) ?> <span class="small fw-normal text-muted">· <?= esc($entry['created_at']) ?></span></div><p class="mb-1"><?= esc($entry['reason']) ?></p><div class="small">Stay: <?= esc($before['check_in'] ?? '') ?> to <?= esc($before['check_out'] ?? '') ?> → <?= esc($after['check_in'] ?? '') ?> to <?= esc($after['check_out'] ?? '') ?></div><div class="small">Booking total: KES <?= number_format((float) ($before['total_amount'] ?? 0), 2) ?> → KES <?= number_format((float) ($after['total_amount'] ?? 0), 2) ?></div></div>
+      <?php endforeach; ?>
+    </section>
+  <?php endif; ?>
 </div>
 @endsection
 @section('scripts')
 <script>
 document.addEventListener('DOMContentLoaded',function(){
+  const form=document.getElementById('reservationEditForm');
+  if(!form)return;
   const start=document.getElementById('check_in'),end=document.getElementById('check_out'),rate=document.getElementById('nightly_rate'),nights=document.getElementById('previewNights'),total=document.getElementById('previewTotal');
-  function refresh(){const a=start.value?new Date(start.value+'T12:00:00Z'):null,b=end.value?new Date(end.value+'T12:00:00Z'):null;const n=a&&b?Math.round((b-a)/86400000):0;nights.textContent=n>0?n:'Invalid dates';total.textContent=n>0?'KES '+(n*(Number(rate.value)||0)).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
-  [start,end,rate].forEach(x=>x.addEventListener('input',refresh));refresh();
-  document.getElementById('reservationEditForm').addEventListener('submit',function(e){if(!start.value||!end.value||end.value<=start.value){e.preventDefault();alert('Check-out must be later than check-in.');return;}const owner=document.getElementById('owner_nightly_rate');if(owner&&Number(owner.value)>Number(rate.value)){e.preventDefault();alert('Owner nightly rate cannot exceed the guest nightly rate.');}});
+  const amendmentTotal=document.getElementById('amendmentTotal'),amendmentBalance=document.getElementById('amendmentBalance'),amendmentNote=document.getElementById('amendmentPreviewNote'),consent=document.getElementById('amend_invoice'),reason=document.getElementById('amendment_reason');
+  const original=@json($originalStay);
+  const paid=@json($paidForPreview);
+  const requiresIssuedAmendment=@json($hasIssuedInvoice);
+  const money=value=>'KES '+value.toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  function stayChanged(){return start.value!==original.check_in||end.value!==original.check_out||Number(rate.value)!==original.nightly_rate||['unit_id','partner_apartment_id'].some(key=>{const input=document.getElementById(key);return input&&input.value!==original[key];})||(document.getElementById('owner_nightly_rate')&&Math.abs(Number(document.getElementById('owner_nightly_rate').value)-original.owner_nightly_rate)>0.009);}
+  function refresh(){const a=start.value?new Date(start.value+'T12:00:00Z'):null,b=end.value?new Date(end.value+'T12:00:00Z'):null;const n=a&&b?Math.round((b-a)/86400000):0;const revised=Math.round(n*(Number(rate.value)||0)*100)/100;nights.textContent=n>0?n:'Invalid dates';total.textContent=n>0?money(revised):'—';if(amendmentTotal){amendmentTotal.textContent=n>0?money(revised):'Invalid dates';amendmentBalance.textContent=n>0?money(revised-paid):'—';amendmentNote.textContent=n>0&&revised<paid?'The proposed charge is below money already received. Resolve the payment or refund with finance before reducing the charge.':stayChanged()?'Review the proposed charge before saving the amendment.':'Change the stay dates or rate above to preview the revised charge.';}if(consent)consent.required=stayChanged();if(reason)reason.required=requiresIssuedAmendment&&stayChanged();}
+  [start,end,rate,document.getElementById('unit_id'),document.getElementById('partner_apartment_id'),document.getElementById('owner_nightly_rate')].filter(Boolean).forEach(x=>x.addEventListener('input',refresh));refresh();
+  form.addEventListener('submit',function(e){if(!start.value||!end.value||end.value<=start.value){e.preventDefault();alert('Check-out must be later than check-in.');return;}const owner=document.getElementById('owner_nightly_rate');if(owner&&Number(owner.value)>Number(rate.value)){e.preventDefault();alert('Owner nightly rate cannot exceed the guest nightly rate.');}});
 });
 </script>
 @endsection

@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Haven;
 use App\Models\Haven\ReservationModel;
 use App\Models\Haven\UnitModel;
 use App\Services\ApartmentReadiness;
+use App\Services\BookingAmendments;
 use App\Services\BookingCommunications;
 use App\Services\ExternalCalendars;
 use App\Support\Migration\PageNotFoundException;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class Reservations extends BaseController
 {
@@ -344,7 +347,9 @@ class Reservations extends BaseController
             ->groupStart()->where('status', 'active')->orWhere('id', $reservation['partner_apartment_id'] ?: 0)->groupEnd()
             ->orderBy('apartment_name', 'ASC')->get()->getResultArray();
 
-        return haven_view('reservations/edit', compact('reservation', 'units', 'partners'));
+        $amendment = app(BookingAmendments::class)->preview($reservation);
+
+        return haven_view('reservations/edit', compact('reservation', 'units', 'partners', 'amendment'));
     }
 
     /** Update reservation details without modifying payment ledgers. */
@@ -397,13 +402,16 @@ class Reservations extends BaseController
             }
         }
         $rateInput = $this->request->getPost('nightly_rate');
-        if (! is_numeric($rateInput) || ! is_finite((float) $rateInput) || (float) $rateInput < 0
+        if (! is_numeric($rateInput) || ! is_finite((float) $rateInput) || (float) $rateInput < 0 || (float) $rateInput > 9999999999.99
             || ($type === 'partner' && (float) $rateInput <= 0)) {
             return $this->formError('Please enter a valid nightly rate.');
         }
         $rate = round((float) $rateInput, 2);
         $nights = (int) $start->diff($end)->days;
         $total = round($nights * $rate, 2);
+        if (! is_finite($total) || $total > 9999999999.99) {
+            return $this->formError('Booking total exceeds the supported limit.');
+        }
         $ownerNet = $original['owner_net_amount'];
         if ($type === 'partner') {
             $ownerNightlyInput = $this->request->getPost('owner_nightly_rate');
@@ -416,12 +424,6 @@ class Reservations extends BaseController
         $registeredPaid = (float) DB::connection('tenant')->table('guest_payments')->where('reservation_id', $id)->sum('amount');
         if ($total < max((float) $original['amount_paid'], $registeredPaid)) {
             return $this->formError('Booking total cannot be less than the amount already paid.');
-        }
-        // Issued invoices must be adjusted through invoice workflows, not silently changed here.
-        $financialChange = abs($total - (float) $original['total_amount']) > 0.009;
-        if ($financialChange && $db->table('invoices')->where('reservation_id', $id)
-            ->where('status !=', 'draft')->countAllResults() > 0) {
-            return $this->formError('This booking has a non-draft invoice. Adjust the invoice before changing the booking total.');
         }
         $data = [
             'unit_id' => $unitId,
@@ -441,37 +443,20 @@ class Reservations extends BaseController
             'notes' => trim((string) $this->request->getPost('notes')),
             'updated_at' => date('Y-m-d H:i:s'),
         ];
-        $db->transBegin();
         try {
-            $db->query('SELECT id FROM reservations WHERE id = ? FOR UPDATE', [$id]);
-            $latestPaid = (float) DB::connection('tenant')->table('guest_payments')->where('reservation_id', $id)->sum('amount');
-            if ($total < max((float) $original['amount_paid'], $latestPaid)) {
-                throw new \RuntimeException('The booking total cannot be lower than money already received.');
-            }
-            if (in_array($status, ['confirmed', 'checked_in'], true)) {
-                if ($type !== 'partner' && app(ExternalCalendars::class)->overlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
-                    throw new \RuntimeException('This apartment is blocked by an external calendar for those dates.');
-                }
-                $overlap = $db->table('reservations')
-                    ->where('id !=', $id)
-                    ->where($type === 'partner' ? 'partner_apartment_id' : 'unit_id', $type === 'partner' ? $partnerId : $unitId)
-                    ->whereIn('status', ['confirmed', 'checked_in'])
-                    ->where('check_in <', $checkOut)
-                    ->where('check_out >', $checkIn)
-                    ->countAllResults();
-                if ($overlap > 0) {
-                    throw new \RuntimeException('This apartment has another confirmed booking for those dates.');
-                }
-            }
-            if (! $db->table('reservations')->where('id', $id)->update($data) || $db->transStatus() === false) {
-                throw new \RuntimeException('Reservation could not be updated.');
-            }
-            $db->transCommit();
+            app(BookingAmendments::class)->save(
+                $id, $data, (string) $this->request->getPost('booking_snapshot'),
+                $this->request->getPost('amend_invoice') === '1',
+                (string) $this->request->getPost('amendment_reason'), auth()->user()
+            );
+        } catch (ValidationException $exception) {
+            return $this->formError($exception->validator->errors()->first());
+        } catch (HttpExceptionInterface $exception) {
+            throw $exception;
         } catch (\Throwable $e) {
-            $db->transRollback();
             log_message('error', 'Reservation update failed: {error}', ['error' => $e->getMessage()]);
 
-            return $this->formError($e instanceof \RuntimeException ? $e->getMessage() : 'Unable to update reservation.');
+            return $this->formError('Unable to update reservation. Please try again or contact an administrator.');
         }
 
         return redirect()->to(site_url('reservations/'.$id))

@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Services\BookingAmendments;
 use App\Support\InvoiceDefaults;
 use App\Support\Migration\PageNotFoundException;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class Invoices extends BaseController
 {
@@ -317,7 +319,11 @@ class Invoices extends BaseController
 
     public function show(int $id)
     {
-        return haven_view('invoices/show', $this->documentData($id));
+        $data = $this->documentData($id);
+        $data['amendmentHistory'] = ! empty($data['invoice']['reservation_id'])
+            ? app(BookingAmendments::class)->history((int) $data['invoice']['reservation_id']) : [];
+
+        return haven_view('invoices/show', $data);
     }
 
     public function pdf(int $id): Response
@@ -374,7 +380,17 @@ class Invoices extends BaseController
 
         $bookingSummary = ! empty($invoice['reservation_id']) ? $db->table('reservations r')->select('r.check_in, r.check_out, u.unit_number, p.name AS property_name, pa.apartment_name AS partner_name')->join('units u', 'u.id = r.unit_id', 'left')->join('properties p', 'p.id = u.property_id', 'left')->join('partner_apartments pa', 'pa.id = r.partner_apartment_id', 'left')->where('r.id', $invoice['reservation_id'])->get()->getRowArray() : null;
 
+        $invoiceRevision = null;
+        if ($db->tableExists('booking_amendments')) {
+            $revisions = DB::connection('tenant')->table('booking_amendments')->where('invoice_id', $id);
+            $latestRevision = (clone $revisions)->orderByDesc('id')->first();
+            if ($latestRevision !== null) {
+                $invoiceRevision = ['number' => $revisions->count(), 'created_at' => $latestRevision->created_at];
+            }
+        }
+
         return [
+            'invoiceRevision' => $invoiceRevision,
             'bookingSummary' => $bookingSummary,
             'customers' => $customers,
             'linkedCustomer' => $linkedCustomer,
