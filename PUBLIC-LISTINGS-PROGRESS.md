@@ -1,6 +1,6 @@
 # Public listings implementation checkpoint
 
-Updated: 6 November 2026. Status: first-release code pushed as `d7f122a`; website mapping review implemented. Deployment and approved content import remain.
+Updated: 6 November 2026. Status: code and mapping review deployed as `67392b3`; approved content import remains.
 
 ## Objective
 
@@ -105,10 +105,19 @@ and `git status` to identify the exact commit and any later changes when resumin
 
 ## Exact stopping point / next work
 
+The user confirmed successful live deployment of `67392b3` on 6 November 2026.
+Application is online. File backup: `/root/haven-deploy-Xr6tSa9O`.
+The live planning command completed with 108 rows: missing_code 2, unmatched 98,
+candidate_only 6, duplicate_code 2, and no exact matches. Private server review:
+`/var/www/haven-suites/storage/app/private/listing-imports/1/20261106-141037-Cta2ccDI/review.csv`.
+No listings were imported/published and no rates/messages were changed by planning.
+Next inspect the live apartment numbers and six candidate mappings before importing.
+
 Code, tests and private-preview workflows are complete. The user confirmed that
 old website listing codes such as 064/101 match app unit numbers. The next work is
-running the mapping review against the full live inventory, reviewing missing or
-ambiguous entries, live deployment and a small publishing pilot.
+reviewing the live mapping results and resolving missing or ambiguous entries,
+then a small publishing pilot. The app schema has `unit_number` but no separate
+website listing-code field; do not substitute numeric database IDs for codes.
 
 The local database contains only four apartments (F5, F6, Q 103 and R61), so it is
 not a reliable copy of the current live inventory. A read-only local plan found
@@ -201,7 +210,7 @@ later domain migration; no public redirects are installed automatically.
 
 ## Remaining operational work after code is ready
 
-- Deploy prepared files while in maintenance, then run the central migrations.
+- Deployment and central migrations completed according to the user's server output.
 - Configure the company's public site and an active sales assignee.
 - Map actual website listings/photos to actual units; review and publish them.
 - Pilot a few units and inspect real calendar freshness without sending test SMS
