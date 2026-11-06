@@ -1,6 +1,6 @@
 # Public listings implementation checkpoint
 
-Updated: 6 November 2026. Status: first-release code complete and verified; deployment and real content mapping remain.
+Updated: 6 November 2026. Status: first-release code pushed as `d7f122a`; website mapping review implemented. Deployment and approved content import remain.
 
 ## Objective
 
@@ -67,6 +67,11 @@ listings have been mapped and reviewed.
 
 Verification completed:
 
+- Mapping follow-up: WebsiteListingSourceTest, PlanPublicListingsTest,
+  PublicListingUnitMatcherTest and existing ImportPublicListingsTest passed
+  together: **34 tests, 251 assertions**. Pint and `git diff --check` passed.
+  A real read-only website fetch generated all 108 review rows against the local
+  four-unit inventory. No application records, live content or messages changed.
 - PublicListingAdminTest: 11 tests, 98 assertions passed.
 - UnitAvailabilityTest, CalendarExportTest, ExternalCalendarTest and
   BookingAmendmentsTest: 41 tests, 337 assertions passed.
@@ -100,11 +105,17 @@ and `git status` to identify the exact commit and any later changes when resumin
 
 ## Exact stopping point / next work
 
-Code, tests and private-preview workflows are complete. The next work is live
-deployment, then real content mapping and a small publishing pilot. The user has
-been asked whether old website codes such as 064/101 are real apartment numbers
-or independent marketing codes. Until verified, do not infer unit mappings from
-those numbers and do not publish imported content automatically.
+Code, tests and private-preview workflows are complete. The user confirmed that
+old website listing codes such as 064/101 match app unit numbers. The next work is
+running the mapping review against the full live inventory, reviewing missing or
+ambiguous entries, live deployment and a small publishing pilot.
+
+The local database contains only four apartments (F5, F6, Q 103 and R61), so it is
+not a reliable copy of the current live inventory. A read-only local plan found
+108 website listings: 101 unmatched locally, three numeric-suffix candidates,
+two entries sharing code 13/013, and two without codes. No exact local matches
+were selected. These counts describe the limited local copy, not live inventory.
+Do not treat a suffix candidate such as 103/Q 103 as a verified full-unit match.
 
 No current website listings or photos have been copied into live app records.
 No site has been enabled, no DNS has changed, and no real SMS has been sent by
@@ -144,6 +155,32 @@ The live company has not been enabled or populated automatically. The existing
 WordPress website, DNS and training pages are unchanged.
 
 ## Preparing a mapped import
+
+Generate a review CSV against the intended company's inventory first:
+
+`php artisan haven:plan-public-listings haven --no-interaction`
+
+This reads the public WordPress REST source at havensuitesbnb.com and the chosen
+company's apartments. It writes a uniquely named private review CSV under
+`storage/app/private/listing-imports/{tenant-id}/`, prints its path and mapping
+counts, and changes no application records. It can run from the prepared
+repository before the new central migrations have been deployed.
+
+The command currently supports only Haven's website and company. Exact complete
+unit numbers are matched without case/whitespace differences; purely numeric
+codes ignore leading zeroes. Duplicate website codes, duplicate apartment numbers,
+inactive units, missing codes and suffix-only candidates require manual review.
+Sale labels conflicting with nightly prices and bedroom discrepancies are flagged.
+Descriptions become plain text; only public metadata is requested, and photos
+are referenced by media ID without downloading them.
+
+The review CSV includes the import headers below plus source IDs, matching status,
+candidates, website rates, photo references and review notes. Guest capacity and
+minimum stay remain blank because the website does not provide verified values.
+`starting_price` remains blank to retain the app rate; website prices and currency
+must be reviewed rather than silently replacing app prices. Fill required values,
+confirm photos/content, and resolve/remove unmatched rows before validation.
+Nothing is imported or published by the planning command.
 
 Required UTF-8 CSV headers:
 
