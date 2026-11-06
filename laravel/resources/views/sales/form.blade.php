@@ -2,8 +2,10 @@
 @section('title','New enquiry')
 @section('content')
 <h1>New enquiry</h1><p class="muted">Record where the guest first found you separately from the channel you are using now.</p>
+<p class="muted">Saving adds the guest to the New enquiry pipeline stage and sends a short acknowledgement SMS when a valid phone number and SMS delivery are available.</p>
 @if(session('duplicates'))<section class="card"><h2>Possible existing enquiries</h2>@foreach(session('duplicates') as $duplicate)<p><a href="{{ route('sales.show',[app('currentTenant')->slug,$duplicate['id']]) }}">{{ $duplicate['name'] }} / {{ $duplicate['check_in'] ?: 'Dates to confirm' }}</a></p>@endforeach</section>@endif
 <form method="post" action="{{ route('sales.store',app('currentTenant')->slug) }}" class="card">@csrf<div class="grid">
+<input type="hidden" name="capture_token" value="{{ old('capture_token', (string) \Illuminate\Support\Str::uuid()) }}">
 @foreach(['name'=>'Guest name','phone'=>'Phone number','email'=>'Email address','campaign'=>'Campaign / Advert','location'=>'Preferred location','unit_preference'=>'Preferred apartment'] as $key=>$label)
 <div><label for="{{ $key }}">{{ $label }}</label><input id="{{ $key }}" name="{{ $key }}" type="{{ $key==='email'?'email':'text' }}" value="{{ old($key) }}" maxlength="{{ $key==='phone'?50:150 }}" @required($key==='name')></div>
 @endforeach

@@ -26,6 +26,7 @@ body:not(.has-company-sidebar) .saas-content{padding:0}.saas-content{max-width:1
 @if(auth()->user()->is_platform_admin)
 <a class="hs-nav-link {{ request()->is('platform*')?'active':'' }}" href="{{ route('platform.index') }}">Platform administration</a>
 @endif
+@unless(session()->has('haven.impersonation'))<a class="hs-nav-link {{ request()->routeIs('account.password.*')?'active':'' }}" href="{{ route('account.password.edit') }}">Change password</a>@endunless
 </nav><div class="hs-sidebar-footer"><form method="post" action="{{ url('/logout') }}">@csrf<button>Sign out</button></form></div>
 </aside>
 @endif
@@ -38,6 +39,7 @@ body:not(.has-company-sidebar) .saas-content{padding:0}.saas-content{max-width:1
 @auth
 @if(!app()->bound('currentTenant'))<a href="{{ url('/') }}">{{ auth()->user()->hasMultipleCompanies() ? 'My companies' : 'My workspace' }}</a>@endif
 @if(auth()->user()->is_platform_admin)<a href="{{ route('platform.index') }}">Platform</a>@endif
+@unless(session()->has('haven.impersonation'))<a href="{{ route('account.password.edit') }}">Change password</a>@endunless
 <span aria-label="Current page">@yield('title','Workspace')</span>
 <form class="inline" method="post" action="{{ url('/logout') }}">@csrf<button>Sign out</button></form>
 @else<a href="{{ route('pricing') }}">Plans</a><a href="{{ url('/login') }}">Sign in</a><a href="{{ route('register') }}">Start free trial</a>@endauth

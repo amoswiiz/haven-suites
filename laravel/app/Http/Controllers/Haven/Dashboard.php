@@ -9,6 +9,7 @@ use App\Models\Haven\StaffModel;
 use App\Models\Haven\UnitModel;
 use App\Services\DueCommunications;
 use App\Services\OwnerRemittanceCalculator;
+use App\Services\SalesPipelineSummary;
 use App\Services\UnitAccounting;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,9 @@ class Dashboard extends BaseController
 
         $data['pageTitle'] = 'Dashboard';
         $data['todayLabel'] = $day->format('l, j F Y');
+        $data['pipelineSummary'] = auth()->user()->can('sales.view')
+            ? app(SalesPipelineSummary::class)->summary()
+            : null;
         $data['communicationQueue'] = auth()->user()->can('messaging.view')
             ? app(DueCommunications::class)->summary()
             : null;

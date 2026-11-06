@@ -2,6 +2,7 @@
 @section('title','Sales pipeline')
 @section('content')
 <div class="split"><div><h1>Sales pipeline</h1><p class="muted">Enquiries from every channel, one next action for every guest.</p></div><div class="actions" style="margin-top:0">@if(auth()->user()->can('sales.manage'))<a class="button" href="{{ route('sales.create',app('currentTenant')->slug) }}">New enquiry</a>@endif<a href="{{ route('sales.index',[app('currentTenant')->slug,'overdue'=>1]) }}">{{ $overdue }} overdue follow-ups</a></div></div>
+@if($pipelineSummary ?? null)@include('dashboard.pipeline', ['pipelineCurrentStage' => $filters['stage'] ?? null])@endif
 <form method="get" class="card"><div class="grid">
 <div><label for="q">Search guest, phone or email</label><input id="q" name="q" value="{{ $filters['q']??'' }}"></div>
 <div><label for="stage">Stage</label><select id="stage" name="stage"><option value="">All stages</option>@foreach(config('sales.stages') as $key=>$label)<option value="{{ $key }}" @selected(($filters['stage']??'')===$key)>{{ $label }}</option>@endforeach</select></div>

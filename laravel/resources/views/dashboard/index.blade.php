@@ -60,6 +60,7 @@
             @endforeach
         </div>
     </section>
+    @if(auth()->user()->can('sales.view') && ($pipelineSummary ?? null))@include('dashboard.pipeline')@endif
     @if($communicationQueue ?? null)@include('dashboard.communications')@endif
     <section aria-labelledby="attention-heading">
         <div class="hs-section-head"><div><h2 id="attention-heading">Tasks needing attention</h2><p class="mb-0 mt-1">Up to five records per list. Daily tasks are independent of reporting filters.</p></div></div>

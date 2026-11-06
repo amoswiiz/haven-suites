@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\EnquiryAcknowledgements;
+use App\Services\SalesPipelineSummary;
 use App\Support\CompanyModules;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -9,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -28,6 +31,22 @@ class SalesController extends Controller
     private function activity(int $id, string $type, string $body): void
     {
         DB::table('sales_activities')->insert(['tenant_id' => app('currentTenant')->id, 'lead_id' => $id, 'actor_id' => auth()->id(), 'type' => $type, 'body' => $body, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    private function acknowledgeAfterCommit(int $id): void
+    {
+        $tenant = app('currentTenant');
+        $actor = auth()->user();
+        DB::afterCommit(function () use ($tenant, $id, $actor): void {
+            try {
+                $service = app(EnquiryAcknowledgements::class);
+                if ($service->status($tenant->id, $id)?->status === 'pending') {
+                    $service->send($tenant, $id, $actor);
+                }
+            } catch (\Throwable $exception) {
+                Log::warning('Enquiry saved but acknowledgement submission could not be completed.', ['tenant_id' => $tenant->id, 'enquiry_id' => $id]);
+            }
+        });
     }
 
     private function members(): Collection
@@ -54,8 +73,9 @@ class SalesController extends Controller
             $query->whereNotIn('stage', ['won', 'lost'])->where('follow_up_at', '<', now());
         }
         $summary = $this->table('sales_leads')->selectRaw('source, COUNT(*) as total, SUM(CASE WHEN stage = ? THEN 1 ELSE 0 END) as won, SUM(CASE WHEN stage = ? THEN COALESCE(budget,0) ELSE 0 END) as estimated_won_value', ['won', 'won'])->groupBy('source')->get();
+        $pipelineSummary = app(SalesPipelineSummary::class)->summary();
 
-        return view('sales.index', ['leads' => $query->orderByRaw('CASE WHEN follow_up_at IS NULL THEN 1 ELSE 0 END')->orderBy('follow_up_at')->paginate(60)->withQueryString(), 'members' => $this->members(), 'summary' => $summary, 'filters' => $filters, 'overdue' => $this->table('sales_leads')->whereNotIn('stage', ['won', 'lost'])->where('follow_up_at', '<', now())->count()]);
+        return view('sales.index', ['leads' => $query->orderByRaw('CASE WHEN follow_up_at IS NULL THEN 1 ELSE 0 END')->orderBy('follow_up_at')->paginate(60)->withQueryString(), 'members' => $this->members(), 'summary' => $summary, 'filters' => $filters, 'pipelineSummary' => $pipelineSummary, 'overdue' => $pipelineSummary['overdueCount']]);
     }
 
     public function create(): View
@@ -65,7 +85,14 @@ class SalesController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'source' => ['required', Rule::in(array_keys(config('sales.sources')))], 'channel' => ['required', Rule::in(array_keys(config('sales.channels')))], 'campaign' => 'nullable|string|max:255', 'assigned_to' => ['required', Rule::in($this->members()->pluck('id')->all())], 'agent_id' => 'nullable|integer', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'next_action' => 'required|string|max:255', 'follow_up_at' => 'required|date|after:now', 'notes' => 'nullable|string|max:5000', 'duplicate_acknowledged' => 'sometimes|accepted']);
+        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'source' => ['required', Rule::in(array_keys(config('sales.sources')))], 'channel' => ['required', Rule::in(array_keys(config('sales.channels')))], 'campaign' => 'nullable|string|max:255', 'assigned_to' => ['required', Rule::in($this->members()->pluck('id')->all())], 'agent_id' => 'nullable|integer', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'next_action' => 'required|string|max:255', 'follow_up_at' => 'required|date|after:now', 'notes' => 'nullable|string|max:5000', 'duplicate_acknowledged' => 'sometimes|accepted', 'capture_token' => 'nullable|uuid']);
+        $data['capture_token'] = ! empty($data['capture_token']) ? strtolower($data['capture_token']) : null;
+        if ($data['capture_token'] !== null && ($existing = $this->table('sales_leads')->where('capture_token', $data['capture_token'])->first())) {
+            $this->acknowledgeAfterCommit((int) $existing->id);
+
+            return redirect()->route('sales.show', [app('currentTenant')->slug, $existing->id])
+                ->with('success', 'This enquiry was already saved. No duplicate enquiry or acknowledgement was created.');
+        }
         if (empty($data['phone']) && empty($data['email'])) {
             throw ValidationException::withMessages(['phone' => 'Enter a phone number or email address.']);
         }
@@ -73,12 +100,9 @@ class SalesController extends Controller
             abort_unless(CompanyModules::enabled('agents'), 403);
             $this->table('sales_agents')->where('active', true)->where('id', $data['agent_id'])->firstOrFail();
         }
-        $phone = preg_replace('/\D/', '', $data['phone'] ?? '');
-        if (str_starts_with($phone, '0') && strlen($phone) === 10) {
-            $phone = '254'.substr($phone, 1);
-        }
+        $phone = ltrim(app(EnquiryAcknowledgements::class)->phone($data['phone'] ?? null) ?? '', '+');
         $data['email'] = empty($data['email']) ? null : strtolower($data['email']);
-        $duplicates = $this->table('sales_leads')->where(function (Builder $q) use ($phone, $data): void {
+        $duplicates = $phone === '' && empty($data['email']) ? collect() : $this->table('sales_leads')->where(function (Builder $q) use ($phone, $data): void {
             if ($phone !== '') {
                 $q->where('phone_normalized', $phone);
             }if (! empty($data['email'])) {
@@ -89,14 +113,29 @@ class SalesController extends Controller
             return back()->withInput()->with('duplicates', $duplicates->map(fn ($lead) => ['id' => $lead->id, 'name' => $lead->name, 'check_in' => $lead->check_in])->all())->withErrors(['duplicate' => 'Possible duplicate guest found. Review the existing enquiries or confirm this is a separate enquiry.']);
         }
         unset($data['duplicate_acknowledged']);
-        $id = DB::transaction(function () use ($data, $phone): int {
-            $id = DB::table('sales_leads')->insertGetId([...$data, 'tenant_id' => app('currentTenant')->id, 'phone_normalized' => $phone ?: null, 'created_at' => now(), 'updated_at' => now()]);
-            $this->activity($id, 'created', 'Enquiry captured from '.$data['source'].'.');
+        $tenant = app('currentTenant');
+        $actor = auth()->user();
+        try {
+            $id = DB::transaction(function () use ($data, $phone, $tenant, $actor): int {
+                $id = DB::table('sales_leads')->insertGetId([...$data, 'tenant_id' => $tenant->id, 'phone_normalized' => $phone ?: null, 'stage' => 'new', 'created_at' => now(), 'updated_at' => now()]);
+                $this->activity($id, 'created', 'Enquiry captured from '.$data['source'].'.');
+                app(EnquiryAcknowledgements::class)->prepare($tenant, $id, $actor);
+                $this->acknowledgeAfterCommit($id);
 
-            return $id;
-        });
+                return $id;
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            $existing = $data['capture_token'] !== null ? $this->table('sales_leads')->where('capture_token', $data['capture_token'])->first() : null;
+            if (! $existing) {
+                throw $exception;
+            }
+            $this->acknowledgeAfterCommit((int) $existing->id);
 
-        return redirect()->route('sales.show', [app('currentTenant')->slug, $id])->with('success', 'Enquiry created.');
+            return redirect()->route('sales.show', [$tenant->slug, $existing->id])
+                ->with('success', 'This enquiry was already saved. No duplicate enquiry or acknowledgement was created.');
+        }
+
+        return redirect()->route('sales.show', [$tenant->slug, $id])->with('success', 'Enquiry added to the New enquiry pipeline stage. Check its acknowledgement SMS status below.');
     }
 
     public function show(string $tenant, int $id): View
@@ -150,7 +189,7 @@ class SalesController extends Controller
             $eligibleInvoices = $query->select('i.id', 'i.invoice_number', 'i.customer_name', 'i.issue_date', 'i.total_amount', 'i.currency', 'i.status', 'r.id as reservation_id', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('i.id')->limit(50)->get();
         }
 
-        return view('sales.show', ['eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
+        return view('sales.show', ['acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse
@@ -195,10 +234,7 @@ class SalesController extends Controller
         if (empty($data['phone']) && empty($data['email'])) {
             throw ValidationException::withMessages(['phone' => 'Enter a phone number or email address.']);
         }
-        $phone = preg_replace('/\D/', '', $data['phone'] ?? '');
-        if (str_starts_with($phone, '0') && strlen($phone) === 10) {
-            $phone = '254'.substr($phone, 1);
-        }
+        $phone = ltrim(app(EnquiryAcknowledgements::class)->phone($data['phone'] ?? null) ?? '', '+');
         $version = $data['version'];
         unset($data['version']);
         $data['phone_normalized'] = $phone ?: null;

@@ -3,6 +3,15 @@
 @section('content')
 <p><a href="{{ route('sales.index',app('currentTenant')->slug) }}">&larr; Sales pipeline</a></p>
 <div class="split"><div><h1>{{ $lead->name }}</h1><p>{{ $lead->phone }} {{ $lead->email }}</p></div><span class="pill">{{ config('sales.stages.'.$lead->stage) }}</span></div>
+<section class="card" aria-labelledby="enquiry-acknowledgement-heading">
+<h2 id="enquiry-acknowledgement-heading">Enquiry acknowledgement SMS</h2>
+@if($acknowledgement)
+@php($acknowledgementLabel = match($acknowledgement->status) {'pending' => 'Awaiting SMS submission', 'submitted' => 'Submitted to SMS provider — delivery pending', 'delivered' => 'Delivered', 'skipped' => 'Not sent', 'rejected', 'undelivered' => 'Not delivered', 'processing' => 'Submission in progress — check before sending again', default => 'Delivery uncertain — check before sending again'})
+<p><strong>{{ $acknowledgementLabel }}</strong>@if($acknowledgement->phone)<br><span class="muted">To {{ $acknowledgement->phone }}</span>@endif</p>
+@if($acknowledgement->last_error)<p class="muted">{{ $acknowledgement->last_error }}</p>@endif
+@if(in_array($acknowledgement->status, ['submitted','delivered']))<p>{{ $acknowledgement->body }}</p>@endif
+@else<p class="muted">No acknowledgement SMS is recorded for this enquiry. Check existing correspondence before contacting the guest.</p>@endif
+</section>
 <section class="card"><h2>Next step</h2><p><strong>{{ $lead->next_action }}</strong></p><p class="muted">{{ $members->firstWhere('id',$lead->assigned_to)?->name ?? 'Unassigned' }} @if($lead->follow_up_at) &middot; Follow up {{ date('d M Y H:i',strtotime($lead->follow_up_at)) }}@endif</p><a href="#booking-invoice">{{ $lead->reservation_id?'Review the booking and invoice':'Create a booking or request help from reservations' }}</a></section>
 <section class="card"><div class="grid"><div><h2>Stay requirements</h2><p>{{ $lead->check_in ?: 'Check-in to confirm' }} &rarr; {{ $lead->check_out ?: 'Check-out to confirm' }}<br>{{ $lead->guests }} guests &middot; {{ $lead->location ?: 'Location to confirm' }}<br>{{ $lead->unit_preference }}</p><p>Budget: {{ $lead->budget===null?'To confirm':app('currentTenant')->currency.' '.number_format($lead->budget,2) }}</p></div><div><h2>How the guest found us</h2><p>Original source: {{ config('sales.sources.'.$lead->source) }}<br>Current channel: {{ config('sales.channels.'.$lead->channel) }}<br>Campaign: {{ $lead->campaign ?: 'Not recorded' }}</p><p>{{ $lead->notes }}</p></div></div>
 <div class="actions">

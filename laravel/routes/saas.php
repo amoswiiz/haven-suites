@@ -8,6 +8,7 @@ use App\Http\Controllers\DueCommunicationController;
 use App\Http\Controllers\GuestCommunicationController;
 use App\Http\Controllers\InvestorController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\SaasAccountController;
@@ -31,6 +32,8 @@ Route::middleware('guest')->group(function (): void {
     Route::post('reset-password', [PasswordRecoveryController::class, 'update'])->name('password.update')->middleware('throttle:5,1');
 });
 Route::middleware('auth')->group(function (): void {
+    Route::get('account/password', [PasswordChangeController::class, 'edit'])->name('account.password.edit');
+    Route::put('account/password', [PasswordChangeController::class, 'update'])->middleware('throttle:5,1')->name('account.password.update');
     Route::get('verify-email', [SaasAccountController::class, 'notice'])->name('verification.notice');
     Route::get('verify-email/{id}/{hash}', [SaasAccountController::class, 'verify'])->middleware('signed')->name('verification.verify');
     Route::post('email/verification-notification', [SaasAccountController::class, 'resend'])->middleware('throttle:6,1')->name('verification.send');
@@ -108,7 +111,7 @@ Route::post('billing/webhooks/mpesa/{token}', [BillingController::class, 'mpesa'
 Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
     Route::get('/', [SalesController::class, 'index'])->middleware('permission:sales.view')->name('sales.index');
     Route::get('new', [SalesController::class, 'create'])->middleware('permission:sales.manage')->name('sales.create');
-    Route::post('/', [SalesController::class, 'store'])->middleware('permission:sales.manage')->name('sales.store');
+    Route::post('/', [SalesController::class, 'store'])->middleware(['permission:sales.manage', 'throttle:20,1'])->name('sales.store');
     Route::get('agents', [SalesController::class, 'agents'])->middleware('permission:agents.view')->name('sales.agents');
     Route::post('agents', [SalesController::class, 'agent'])->middleware('permission:agents.manage')->name('sales.agent.store');
     Route::get('connections', [SalesController::class, 'connections'])->middleware('permission:messaging.view')->name('sales.connections');
