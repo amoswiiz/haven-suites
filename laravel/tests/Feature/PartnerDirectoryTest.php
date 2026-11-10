@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
@@ -218,5 +219,40 @@ class PartnerDirectoryTest extends TestCase
 
         DB::connection('tenant')->table('partner_apartments')->where('id', 4)->update(['apartment_name' => 'Golden Sand Resort', 'building_name' => 'golden sand resort', 'unit_number' => 'C017', 'bedrooms' => 1]);
         $this->assertSame('Golden Sand Resort, C017 (1BR)', $this->search(['q' => 'C017'])->viewData('rows')->first()['label']);
+    }
+
+    public function test_a_featured_photo_helps_owners_recognise_the_unit(): void
+    {
+        Storage::fake('local');
+        $partner = (array) DB::connection('tenant')->table('partner_apartments')->find(2);
+        $form = array_intersect_key($partner, array_flip(['owner_name', 'owner_phone', 'owner_email', 'apartment_name', 'building_name', 'unit_number', 'location', 'bedrooms', 'bathrooms', 'notes', 'status']));
+        $update = fn (array $extra) => $this->actingAs($this->admin)->post(route('partners.update', [$this->company->slug, 2]), [...$form, ...$extra]);
+
+        $this->search(['q' => 'Galu'])->assertSee('No photo or unit number');
+        $update(['photo' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf'), 'owner_name' => 'Changed'])->assertSessionHasErrors('photo');
+        $this->assertSame('Peter Otieno', DB::connection('tenant')->table('partner_apartments')->find(2)->owner_name, 'A rejected photo saves nothing.');
+
+        $update(['photo' => UploadedFile::fake()->image('front.png', 3200, 2000)])->assertSessionHasNoErrors();
+        $first = DB::table('partner_apartment_photos')->where('partner_apartment_id', 2)->value('storage_key');
+        Storage::disk('local')->assertExists($first);
+        [$width, , $type] = getimagesizefromstring(Storage::disk('local')->get($first));
+        $this->assertSame([1600, IMAGETYPE_JPEG], [$width, $type]);
+        $this->actingAs($this->admin)->get(route('partners.photo', [$this->company->slug, 2]))->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        $this->search(['q' => 'Galu'])->assertSee(route('partners.photo', [$this->company->slug, 2]), false)->assertDontSee('No photo or unit number');
+        $this->actingAs($this->admin)->get(route('partners.edit', [$this->company->slug, 2]))->assertOk()->assertSee('Remove this photo');
+
+        $location = $this->actingAs($this->admin)->post(route('partners.ask', [$this->company->slug, 2]))->headers->get('Location');
+        parse_str(parse_url($location, PHP_URL_QUERY), $query);
+        preg_match('#/p/[A-Za-z0-9_-]{12}#', $query['text'], $match);
+        $this->get($match[0])->assertOk()->assertSee($match[0].'/featured', false);
+        $this->get($match[0].'/featured')->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+
+        $update(['photo' => UploadedFile::fake()->image('new.jpg', 800, 600)])->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($first);
+        $second = DB::table('partner_apartment_photos')->where('partner_apartment_id', 2)->value('storage_key');
+        $update(['remove_photo' => 1])->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($second);
+        $this->assertDatabaseMissing('partner_apartment_photos', ['partner_apartment_id' => 2]);
+        $this->get($match[0].'/featured')->assertNotFound();
     }
 }

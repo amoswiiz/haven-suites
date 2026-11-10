@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -28,7 +29,7 @@ class PartnerRequestController extends Controller
 
         return response()->view('partners.request', [
             'tenant' => $tenant, 'site' => $site, 'availability' => $availability, 'code' => $code,
-            'unit' => $details['unit'], 'photos' => $details['photos'], 'listingUrl' => $listingUrl,
+            'unit' => $details['unit'], 'photos' => $details['photos'], 'listingUrl' => $listingUrl, 'hasFeatured' => $details['featured'],
             'pageTitle' => 'Availability request | '.$tenant->name, 'pageDescription' => $this->preview($availability),
             'robotsContent' => 'noindex, nofollow', 'websiteMenu' => [],
         ])->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
@@ -47,6 +48,19 @@ class PartnerRequestController extends Controller
         $requests->respond($found['request'], $data['response'], isset($data['nightly_price']) ? (float) $data['nightly_price'] : null, $data['note'] ?? null);
 
         return redirect()->route('partner-request.show', $code)->with('success', 'Thank you. Your reply has been sent to '.$found['tenant']->name.'.');
+    }
+
+    /** The unit's featured photo, served only through the owner's private link. */
+    public function featured(string $code, PartnerAvailabilityRequests $requests): BinaryFileResponse|Response
+    {
+        $found = $requests->find($code);
+        $path = $found ? $requests->featuredPhotoPath($found['tenant'], (int) $found['request']->partner_apartment_id) : null;
+        if (! $path) {
+            return $this->notFound();
+        }
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=3600', 'X-Robots-Tag' => 'noindex, nofollow']);
     }
 
     /** A photo of the unit being asked about, served only through the owner's private link. */

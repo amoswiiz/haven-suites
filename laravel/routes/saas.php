@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function (): void {
 Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
     Route::prefix('partners')->name('partners.')->group(function (): void {
         Route::get('/', [PartnerDirectoryController::class, 'index'])->middleware('permission:availability.view')->name('index');
+        Route::get('{id}/photo', [PartnerDirectoryController::class, 'photo'])->whereNumber('id')->middleware('permission:availability.view')->name('photo');
         Route::post('{id}/ask', [PartnerDirectoryController::class, 'ask'])->whereNumber('id')->middleware(['permission:availability.view', 'throttle:30,1'])->name('ask');
         Route::get('new', [PartnerDirectoryController::class, 'create'])->middleware('permission:reservations.manage')->name('create');
         Route::post('/', [PartnerDirectoryController::class, 'store'])->middleware(['permission:reservations.manage', 'throttle:30,1'])->name('store');

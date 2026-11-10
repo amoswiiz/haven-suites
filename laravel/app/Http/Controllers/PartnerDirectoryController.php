@@ -7,13 +7,17 @@ use App\Services\PartnerAvailabilityRequests;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Support\CompanyModules;
+use App\Support\ImageResizer;
 use App\Support\PhoneNumber;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Directory of partner apartments and their owners, for finding a unit that matches a client's request and asking
@@ -50,7 +54,8 @@ class PartnerDirectoryController extends Controller
         $links = app(PublicWebsiteLinks::class);
         $siteEnabled = app(PublicListingCatalog::class)->site($tenant) !== null;
         $latest = app(PartnerAvailabilityRequests::class)->latestFor($tenant, $partners->pluck('id')->map(fn ($id): int => (int) $id)->all(), $filters['check_in'] ?? null, $filters['check_out'] ?? null);
-        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $siteEnabled, $latest): array {
+        $withPhotos = app(PartnerAvailabilityRequests::class)->partnersWithPhotos($tenant, $partners->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $siteEnabled, $latest, $withPhotos): array {
             $mobile = PhoneNumber::normalize($partner->owner_phone);
             $label = $this->label($partner);
             $listing = $listings->get($partner->id);
@@ -62,7 +67,7 @@ class PartnerDirectoryController extends Controller
                 'partner' => $partner, 'label' => $label, 'tel' => PhoneNumber::normalize($partner->owner_phone, mobileOnly: false),
                 'whatsapp_url' => $links->ownerWhatsappUrl($owner, $tenant, $label, $stay, null, $link),
                 'whatsapp_number' => $owner['whatsapp'], 'greeting' => $links->ownerGreeting($owner, $tenant, $label), 'link' => $link,
-                'booked' => in_array((int) $partner->id, $booked, true), 'listing' => $listing, 'latest' => $latest->get($partner->id),
+                'booked' => in_array((int) $partner->id, $booked, true), 'listing' => $listing, 'latest' => $latest->get($partner->id), 'has_photo' => in_array((int) $partner->id, $withPhotos, true),
             ];
         });
         $agents = CompanyModules::enabled('agents') && auth()->user()->can('agents.view')
@@ -131,23 +136,59 @@ class PartnerDirectoryController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
+        $photo = $request->hasFile('photo') ? ImageResizer::toJpeg($request->file('photo'), 'photo') : null;
         $id = DB::connection('tenant')->table('partner_apartments')->insertGetId($data + ['created_at' => now(), 'updated_at' => now()]);
+        $this->savePhoto($id, $request, $photo);
 
         return redirect()->route('partners.index', app('currentTenant')->slug)->with('success', 'Partner apartment added: '.$this->label((object) ($data + ['id' => $id])).'.');
     }
 
     public function edit(string $tenant, int $id): View
     {
-        return view('partners.form', ['partner' => DB::connection('tenant')->table('partner_apartments')->where('id', $id)->firstOrFail()]);
+        $partner = DB::connection('tenant')->table('partner_apartments')->where('id', $id)->firstOrFail();
+        $photo = DB::table('partner_apartment_photos')->where('tenant_id', app('currentTenant')->id)->where('partner_apartment_id', $id)->first();
+
+        return view('partners.form', ['partner' => $partner, 'hasPhoto' => $photo !== null, 'photoVersion' => $photo ? strtotime((string) $photo->updated_at) : null]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse
     {
         $data = $this->validated($request);
+        $photo = $request->hasFile('photo') ? ImageResizer::toJpeg($request->file('photo'), 'photo') : null;
         $updated = DB::connection('tenant')->table('partner_apartments')->where('id', $id)->update($data + ['updated_at' => now()]);
         abort_if($updated === 0 && ! DB::connection('tenant')->table('partner_apartments')->where('id', $id)->exists(), 404);
+        $this->savePhoto($id, $request, $photo);
 
         return redirect()->route('partners.index', $tenant)->with('success', 'Partner apartment updated.');
+    }
+
+    /** The partner apartment's featured photo, for staff. */
+    public function photo(string $tenant, int $id): BinaryFileResponse
+    {
+        $path = app(PartnerAvailabilityRequests::class)->featuredPhotoPath(app('currentTenant'), $id);
+        abort_unless($path, 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, max-age=600']);
+    }
+
+    /** Store, replace or remove the featured photo after the partner apartment is saved. */
+    private function savePhoto(int $partnerId, Request $request, ?string $photo): void
+    {
+        $tenant = app('currentTenant');
+        $current = DB::table('partner_apartment_photos')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->first();
+        if ($photo !== null) {
+            $path = 'partner-photos/'.$tenant->id.'/'.$partnerId.'-'.Str::random(24).'.jpg';
+            Storage::disk('local')->put($path, $photo);
+            DB::table('partner_apartment_photos')->updateOrInsert(['tenant_id' => $tenant->id, 'partner_apartment_id' => $partnerId],
+                ['storage_key' => $path, 'updated_at' => now(), 'created_at' => $current->created_at ?? now()]);
+        } elseif ($request->boolean('remove_photo') && $current) {
+            DB::table('partner_apartment_photos')->where('id', $current->id)->delete();
+        } else {
+            return;
+        }
+        if ($current && str_starts_with($current->storage_key, 'partner-photos/'.$tenant->id.'/')) {
+            Storage::disk('local')->delete($current->storage_key);
+        }
     }
 
     /** @return array<string, mixed> */
@@ -158,7 +199,9 @@ class PartnerDirectoryController extends Controller
             'apartment_name' => 'required|string|max:150', 'building_name' => 'nullable|string|max:150', 'unit_number' => 'nullable|string|max:50',
             'location' => 'required|string|max:150', 'bedrooms' => 'required|integer|min:0|max:20', 'bathrooms' => 'nullable|integer|min:0|max:20',
             'notes' => 'nullable|string|max:5000', 'status' => 'required|in:active,inactive',
-        ]);
+            'photo' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:8192', 'remove_photo' => 'sometimes|boolean',
+        ], ['photo.mimes' => 'Upload the photo as a JPG, PNG or WebP image.', 'photo.max' => 'Keep the photo under 8 MB.']);
+        unset($data['photo'], $data['remove_photo']);
         if (PhoneNumber::isBlank($data['owner_phone'] ?? null)) {
             $data['owner_phone'] = null;
         } elseif (! ($data['owner_phone'] = PhoneNumber::normalize($data['owner_phone'], mobileOnly: false))) {

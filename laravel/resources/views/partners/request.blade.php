@@ -10,6 +10,7 @@
     <span class="stay-eyebrow">Availability request from {{ $tenant->name }}</span>
     <h1 id="request-heading">Is your apartment available?</h1>
     @if(session('success'))<div class="stay-track-status" role="status"><strong>{{ session('success') }}</strong></div>@endif
+    @if($hasFeatured)<img class="stay-request-featured" src="{{ route('partner-request.featured', $code) }}" alt="{{ $availability->apartment_label }}" width="900" height="560">@endif
     @if($photos->isNotEmpty())
         <div class="stay-request-photos">@foreach($photos as $photo)<img src="{{ route('partner-request.photo', [$code, $photo->id]) }}" alt="{{ $photo->caption ?: $availability->apartment_label }}" loading="lazy" width="320" height="220">@endforeach</div>
     @endif

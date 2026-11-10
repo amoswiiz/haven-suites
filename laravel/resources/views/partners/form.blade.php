@@ -8,7 +8,7 @@
 <p><a href="{{ route('partners.index', $tenantSlug) }}">&larr; Partner apartments</a></p>
 <h1>{{ $partner ? 'Edit partner apartment' : 'Add partner apartment' }}</h1>
 <p class="muted">Owner contact details are for staff only and are never shown to guests.</p>
-<form method="post" action="{{ $partner ? route('partners.update', [$tenantSlug, $partner->id]) : route('partners.store', $tenantSlug) }}" class="card">
+<form method="post" enctype="multipart/form-data" action="{{ $partner ? route('partners.update', [$tenantSlug, $partner->id]) : route('partners.store', $tenantSlug) }}" class="card">
     @csrf
     <h2>Apartment</h2>
     <div class="grid">
@@ -20,6 +20,10 @@
         <div><label for="bathrooms">Bathrooms</label><input id="bathrooms" name="bathrooms" type="number" min="0" max="20" value="{{ $value('bathrooms') }}"></div>
         <div><label for="status">Status</label><select id="status" name="status">@foreach(['active' => 'Active', 'inactive' => 'Inactive'] as $key => $label)<option value="{{ $key }}" @selected($value('status', 'active') === $key)>{{ $label }}</option>@endforeach</select></div>
     </div>
+    <h2>Featured photo</h2>
+    <p class="muted">Shown to the owner in availability requests so they can tell which of their units you mean. A clear photo of the building or the living room works well.</p>
+    @if(!empty($hasPhoto))<p><img src="{{ route('partners.photo', [$tenantSlug, $partner->id]) }}?v={{ $photoVersion }}" alt="Current photo" style="max-height:140px;width:auto;border-radius:8px;border:1px solid #dfe5ef"></p><label><input type="checkbox" name="remove_photo" value="1" style="width:auto"> Remove this photo</label>@endif
+    <div><label for="photo">{{ !empty($hasPhoto) ? 'Replace photo' : 'Upload photo' }}</label><input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp">@error('photo')<p class="error" role="alert">{{ $message }}</p>@enderror</div>
     <h2>Owner</h2>
     <div class="grid">
         <div><label for="owner_name">Owner name</label><input id="owner_name" name="owner_name" required maxlength="150" value="{{ $value('owner_name') }}"></div>

@@ -7,6 +7,7 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Private links that let a partner owner see a staff availability request and answer it with one tap.
@@ -83,10 +84,31 @@ class PartnerAvailabilityRequests
         }
         $listing = $this->listing($tenant, $request);
 
-        return ['unit' => $unit, 'listing' => $listing, 'photos' => $listing
+        return ['unit' => $unit, 'listing' => $listing, 'featured' => $this->featuredPhotoPath($tenant, (int) $request->partner_apartment_id) !== null, 'photos' => $listing
             ? DB::table('public_listing_photos')->where('tenant_id', $tenant->id)->where('listing_id', $listing->id)
                 ->orderBy('sort_order')->orderBy('id')->limit(8)->get(['id', 'caption'])
             : collect()];
+    }
+
+    /** Storage path of the partner apartment's featured photo, if it has one. */
+    public function featuredPhotoPath(Tenant $tenant, int $partnerId): ?string
+    {
+        $path = DB::table('partner_apartment_photos')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->value('storage_key');
+
+        return is_string($path) && preg_match('#^partner-photos/'.(int) $tenant->id.'/'.$partnerId.'-[A-Za-z0-9]{24}\.jpg$#D', $path)
+            && Storage::disk('local')->exists($path) ? $path : null;
+    }
+
+    /**
+     * Partner apartments (of those given) that have a featured photo.
+     *
+     * @param  list<int>  $partnerIds
+     * @return list<int>
+     */
+    public function partnersWithPhotos(Tenant $tenant, array $partnerIds): array
+    {
+        return DB::table('partner_apartment_photos')->where('tenant_id', $tenant->id)->whereIn('partner_apartment_id', $partnerIds)
+            ->pluck('partner_apartment_id')->map(fn ($id): int => (int) $id)->all();
     }
 
     /** The unit's website listing, if any, excluding archived ones. */
