@@ -45,13 +45,19 @@ class TaskController extends Controller
 
     public function index(Request $request, TaskAccess $access): View
     {
-        $data = $request->validate(['scope' => 'nullable|in:mine,team', 'status' => ['nullable', Rule::in([...array_keys(self::STATUSES), 'open', 'overdue'])], 'q' => 'nullable|string|max:100', 'view' => 'nullable|in:list,board']);
+        $data = $request->validate(['scope' => 'nullable|in:mine,team', 'status' => ['nullable', Rule::in([...array_keys(self::STATUSES), 'open', 'overdue'])], 'q' => 'nullable|string|max:100', 'view' => 'nullable|in:list,board',
+            'unit' => 'nullable|integer|min:1', 'assignee' => 'nullable|integer|min:1', 'due' => 'nullable|in:overdue,today,week', 'quick' => 'nullable|in:high,cost',
+            'group' => 'nullable|in:status,unit,assignee', 'cancelled' => 'nullable|boolean']);
         $owner = ! auth()->user()->can('tasks.view');
         $team = ($data['scope'] ?? 'mine') === 'team';
         abort_if($team && ! auth()->user()->can('tasks.manage'), 403);
         $q = $access->scope(auth()->user());
         if (! $owner && ! $team) {
             $q->where(fn ($q) => $q->where('assigned_to', auth()->id())->orWhere('reviewer_id', auth()->id()));
+        }
+        $this->applyFilters($q, $data, $team);
+        if (($data['view'] ?? null) === 'board') {
+            return $this->board($q, $data, $owner, $team);
         }
         $status = $request->exists('status') ? ($data['status'] ?? '') : 'open';
         if ($status === 'open' || $status === 'overdue') {
@@ -62,12 +68,110 @@ class TaskController extends Controller
         if ($status === 'overdue') {
             $q->where('due_date', '<', now(app('currentTenant')->timezone)->toDateString());
         }
-        if (! empty($data['q'])) {
-            $q->where('title', 'like', '%'.$data['q'].'%');
-        }
         $tasks = $q->orderByRaw("CASE WHEN status IN ('done','cancelled') THEN 1 ELSE 0 END")->orderBy('due_date')->orderByDesc('id')->paginate(30)->withQueryString();
 
         return view('tasks.index', ['tasks' => $tasks, 'owner' => $owner, 'members' => $owner ? collect() : $this->members(), 'units' => $this->units(), 'statuses' => self::STATUSES, 'team' => $team, 'unread' => DB::table('task_notices')->where('tenant_id', app('currentTenant')->id)->where('user_id', auth()->id())->whereNull('read_at')->count()]);
+    }
+
+    /** Filters shared by the list and the board. */
+    private function applyFilters(Builder $q, array $data, bool $team): void
+    {
+        $today = now(app('currentTenant')->timezone)->toDateString();
+        if (! empty($data['q'])) {
+            $q->where('title', 'like', '%'.addcslashes($data['q'], '%_\\').'%');
+        }
+        if (! empty($data['unit'])) {
+            $q->where('unit_id', $data['unit']);
+        }
+        if ($team && ! empty($data['assignee'])) {
+            $q->where('assigned_to', $data['assignee']);
+        }
+        match ($data['due'] ?? null) {
+            'overdue' => $q->where('due_date', '<', $today)->whereNotIn('status', ['done', 'cancelled']),
+            'today' => $q->where('due_date', $today),
+            'week' => $q->whereBetween('due_date', [$today, now(app('currentTenant')->timezone)->addDays(6)->toDateString()]),
+            default => null,
+        };
+        match ($data['quick'] ?? null) {
+            'high' => $q->whereIn('priority', ['high', 'urgent']),
+            'cost' => $q->where('kind', 'cost'),
+            default => null,
+        };
+    }
+
+    /**
+     * Kanban board: every open task (not paginated), tasks finished in the last 14 days, and cancelled ones on request,
+     * grouped by status (with drag and drop), apartment or assignee.
+     */
+    private function board(Builder $q, array $data, bool $owner, bool $team): View
+    {
+        $group = $owner ? 'status' : ($data['group'] ?? 'status');
+        $showCancelled = (bool) ($data['cancelled'] ?? false);
+        $recent = now()->subDays(14);
+        $tasks = (clone $q)->whereNotIn('status', ['done', 'cancelled'])->orderBy('due_date')->orderByDesc('id')->limit(300)->get()
+            ->concat((clone $q)->where('status', 'done')->where('updated_at', '>=', $recent)->orderByDesc('updated_at')->limit(100)->get())
+            ->concat($showCancelled ? (clone $q)->where('status', 'cancelled')->where('updated_at', '>=', $recent)->orderByDesc('updated_at')->limit(50)->get() : collect());
+        $ids = $tasks->pluck('id')->all();
+        $members = $owner ? collect() : $this->members();
+        $units = $this->units();
+        $comments = $ids ? DB::table('task_updates')->whereIn('task_id', $ids)->when($owner, fn ($query) => $query->where('shared', true))
+            ->selectRaw('task_id, COUNT(*) as total')->groupBy('task_id')->pluck('total', 'task_id') : collect();
+        $unread = $ids ? DB::table('task_notices')->where('tenant_id', app('currentTenant')->id)->where('user_id', auth()->id())->whereNull('read_at')
+            ->whereIn('task_id', $ids)->pluck('task_id')->unique()->flip() : collect();
+        $statuses = array_filter(self::STATUSES, fn (string $key): bool => $key !== 'cancelled' || $showCancelled, ARRAY_FILTER_USE_KEY);
+        $columns = match ($group) {
+            'unit' => $tasks->groupBy(fn ($task) => (string) ($task->unit_id ?? 0))->map(function ($items, $key) use ($units): array {
+                $unit = $units->firstWhere('id', (int) $key);
+
+                return ['label' => $unit ? $unit->property_name.' / '.$unit->unit_number : 'No apartment', 'tasks' => $items];
+            })->sortBy('label')->values()->all(),
+            'assignee' => $tasks->groupBy('assigned_to')->map(fn ($items, $key): array => ['label' => $members->firstWhere('id', (int) $key)?->name ?? 'Former team member', 'tasks' => $items])
+                ->sortBy('label')->values()->all(),
+            default => collect($statuses)->map(fn (string $label, string $key): array => ['key' => $key, 'label' => $owner && $key === 'review' ? 'Completion being checked' : $label,
+                'tasks' => $tasks->where('status', $key)->values()])->values()->all(),
+        };
+
+        return view('tasks.board', [
+            'columns' => $columns, 'group' => $group, 'owner' => $owner, 'team' => $team, 'filters' => $data, 'showCancelled' => $showCancelled,
+            'members' => $members, 'units' => $units, 'statuses' => self::STATUSES, 'comments' => $comments, 'unreadTasks' => $unread,
+            'moves' => $owner ? [] : $tasks->mapWithKeys(fn ($task): array => [$task->id => $this->boardMoves($task, $showCancelled)])->all(),
+            'canManage' => auth()->user()->can('tasks.manage'), 'today' => now(app('currentTenant')->timezone)->toDateString(),
+            'unread' => DB::table('task_notices')->where('tenant_id', app('currentTenant')->id)->where('user_id', auth()->id())->whereNull('read_at')->count(),
+        ]);
+    }
+
+    /**
+     * Which columns this person may move a task to, mirroring the rules in action(): target status => action and
+     * whether a note is required.
+     *
+     * @return array<string, array{action: string, note: bool, label: string}>
+     */
+    private function boardMoves(object $task, bool $showCancelled): array
+    {
+        $user = auth()->user();
+        $manager = $user->can('tasks.manage');
+        $assignee = (int) $task->assigned_to === $user->id;
+        $reviewer = (int) $task->reviewer_id === $user->id;
+        $costBlocked = $task->kind === 'cost' && $task->cost_status !== 'approved';
+        $moves = [];
+        if ($assignee && ! $costBlocked && $task->status === 'todo') {
+            $moves['in_progress'] = ['action' => 'start', 'note' => false, 'label' => 'Start work'];
+        }
+        if ($assignee && ! $costBlocked && in_array($task->status, ['todo', 'in_progress'], true)) {
+            $moves[$task->reviewer_id ? 'review' : 'done'] = ['action' => 'complete', 'note' => true, 'label' => $task->reviewer_id ? 'Submit for review' : 'Mark complete'];
+        }
+        if ($reviewer && $task->status === 'review') {
+            $moves['done'] = ['action' => 'approve', 'note' => false, 'label' => 'Approve completion'];
+            $moves['in_progress'] = ['action' => 'return', 'note' => true, 'label' => 'Return for more work'];
+        }
+        if ($manager && in_array($task->status, ['done', 'cancelled'], true)) {
+            $moves['todo'] = ['action' => 'reopen', 'note' => false, 'label' => 'Reopen'];
+        }
+        if ($manager && $showCancelled && in_array($task->status, ['todo', 'in_progress', 'review'], true)) {
+            $moves['cancelled'] = ['action' => 'cancel', 'note' => false, 'label' => 'Cancel task'];
+        }
+
+        return $moves;
     }
 
     public function create(): View
@@ -123,7 +227,16 @@ class TaskController extends Controller
             return $id;
         });
 
-        return redirect()->route('tasks.show', [app('currentTenant')->slug, $id])->with('success', 'Task assigned.');
+        return $this->toBoard($request) ?? redirect()->route('tasks.show', [app('currentTenant')->slug, $id])->with('success', 'Task assigned.');
+    }
+
+    /** Return to the board a change was made from, when the request came from it (only this company's task pages). */
+    private function toBoard(Request $request, string $message = 'Task added.'): ?RedirectResponse
+    {
+        $target = $request->input('return_to');
+        $base = route('tasks.index', app('currentTenant')->slug);
+
+        return is_string($target) && ($target === $base || str_starts_with($target, $base.'?')) ? redirect()->to($target)->with('success', $message) : null;
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse
@@ -248,7 +361,7 @@ class TaskController extends Controller
             app(TaskNotifications::class)->record($fresh, 'action:'.($task->version + 1), $label.': a task needs your attention.', auth()->id(), $owners && (bool) $task->owner_visible);
         });
 
-        return redirect()->route('tasks.show', [$tenant, $id])->with('success', 'Task updated.');
+        return $this->toBoard($request, 'Task moved.') ?? redirect()->route('tasks.show', [$tenant, $id])->with('success', 'Task updated.');
     }
 
     public function show(string $tenant, int $id): View
@@ -338,8 +451,8 @@ class TaskController extends Controller
         }
         $consent = $data['sms_consent'] && ! empty($data['phone']) ? now() : null;
         unset($data['sms_consent']);
-        DB::table('task_preferences')->updateOrInsert(['tenant_id' => app('currentTenant')->id, 'user_id' => auth()->id()],[...$data, 'sms_consented_at' => $consent, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('task_preferences')->updateOrInsert(['tenant_id' => app('currentTenant')->id, 'user_id' => auth()->id()], [...$data, 'sms_consented_at' => $consent, 'created_at' => now(), 'updated_at' => now()]);
 
-        return back()->with('success','Notification preferences saved.');
+        return back()->with('success', 'Notification preferences saved.');
     }
 }

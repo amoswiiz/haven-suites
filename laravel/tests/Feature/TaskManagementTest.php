@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ResolveTenant;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TaskNotifications;
@@ -170,52 +171,127 @@ class TaskManagementTest extends TestCase
         $service->process();
         $this->assertSame($count, DB::table('task_notices')->count());
         $this->assertDatabaseHas('task_notices', ['task_id' => $task->id, 'user_id' => $staff->id, 'email_status' => 'simulated']);
-        $notice = DB::table('task_notices')->where('user_id',$staff->id)->first();
-        DB::table('task_notices')->where('id',$notice->id)->update(['email_status' => 'pending']);
+        $notice = DB::table('task_notices')->where('user_id', $staff->id)->first();
+        DB::table('task_notices')->where('id', $notice->id)->update(['email_status' => 'pending']);
         $staff->tenants()->detach($t->id);
-        app()->instance('currentTenant',$t);
+        app()->instance('currentTenant', $t);
         $service->deliver($notice->id);
         app()->forgetInstance('currentTenant');
-        $this->assertDatabaseHas('task_notices',['id' => $notice->id, 'email_status' => 'blocked']);
+        $this->assertDatabaseHas('task_notices', ['id' => $notice->id, 'email_status' => 'blocked']);
     }
+
     public function test_linked_expense_uses_finance_payment_status_without_creating_a_second_expense(): void
     {
-        $t=$this->company(); $admin=$this->member($t,'admin'); $staff=$this->member($t);
-        config(['database.connections.tenant.database'=>$t->database_name]); DB::purge('tenant');
-        $db=DB::connection('tenant'); $db->beginTransaction();
-        $this->withoutMiddleware(\App\Http\Middleware\ResolveTenant::class); app()->instance('currentTenant',$t);
+        $t = $this->company();
+        $admin = $this->member($t, 'admin');
+        $staff = $this->member($t);
+        config(['database.connections.tenant.database' => $t->database_name]);
+        DB::purge('tenant');
+        $db = DB::connection('tenant');
+        $db->beginTransaction();
+        $this->withoutMiddleware(ResolveTenant::class);
+        app()->instance('currentTenant', $t);
         try {
-            $unit=$db->table('units')->first(); $category=$db->table('expense_categories')->first();
-            $expense=$db->table('unit_expenses')->insertGetId(['unit_id'=>$unit->id,'category_id'=>$category->id,'expense_date'=>now()->toDateString(),'description'=>'Task repair test expense','amount'=>5000,'amount_paid'=>2000,'payment_status'=>'partial','created_at'=>now(),'updated_at'=>now()]);
-            $count=$db->table('unit_expenses')->count();
-            $task=$this->createTask($t,$admin,$staff,['kind'=>'cost','estimate'=>'5000','unit_id'=>$unit->id]);
-            $this->act($t,$task,$admin,'approve_cost')->assertSessionHasNoErrors();
-            $this->act($t,$task,$staff,'link_expense',['expense_id'=>$expense])->assertForbidden();
-            $this->act($t,$task,$admin,'link_expense',['expense_id'=>$expense])->assertSessionHasNoErrors();
+            $unit = $db->table('units')->first();
+            $category = $db->table('expense_categories')->first();
+            $expense = $db->table('unit_expenses')->insertGetId(['unit_id' => $unit->id, 'category_id' => $category->id, 'expense_date' => now()->toDateString(), 'description' => 'Task repair test expense', 'amount' => 5000, 'amount_paid' => 2000, 'payment_status' => 'partial', 'created_at' => now(), 'updated_at' => now()]);
+            $count = $db->table('unit_expenses')->count();
+            $task = $this->createTask($t, $admin, $staff, ['kind' => 'cost', 'estimate' => '5000', 'unit_id' => $unit->id]);
+            $this->act($t, $task, $admin, 'approve_cost')->assertSessionHasNoErrors();
+            $this->act($t, $task, $staff, 'link_expense', ['expense_id' => $expense])->assertForbidden();
+            $this->act($t, $task, $admin, 'link_expense', ['expense_id' => $expense])->assertSessionHasNoErrors();
             $this->actingAs($admin)->get('/t/'.$t->slug.'/tasks/'.$task->id)->assertOk()->assertSee('Part-paid')->assertSee('2,000.00');
-            $this->act($t,$task,$staff,'complete',['note'=>'Repair complete'])->assertSessionHasNoErrors();
-            $this->assertSame($count,$db->table('unit_expenses')->count());
-            $this->assertEquals(2000,$db->table('unit_expenses')->where('id',$expense)->value('amount_paid'));
-        } finally { $db->rollBack(); DB::purge('tenant'); app()->forgetInstance('currentTenant'); }
+            $this->act($t, $task, $staff, 'complete', ['note' => 'Repair complete'])->assertSessionHasNoErrors();
+            $this->assertSame($count, $db->table('unit_expenses')->count());
+            $this->assertEquals(2000, $db->table('unit_expenses')->where('id', $expense)->value('amount_paid'));
+        } finally {
+            $db->rollBack();
+            DB::purge('tenant');
+            app()->forgetInstance('currentTenant');
+        }
     }
 
     public function test_sms_is_opt_in_generic_and_submitted_only_once(): void
     {
-        config(['tasks.live_delivery'=>true,'services.roycetalk.api_key'=>'fake-key','services.roycetalk.sender_id'=>'TEST']);
-        Http::fake(['roycetalk.com/*'=>Http::response(['success'=>true,'data'=>['message_id'=>'task-test-message']],200)]);
-        $t=$this->company(); $admin=$this->member($t,'admin'); $staff=$this->member($t);
-        DB::table('investor_notification_settings')->insert(['tenant_id'=>$t->id,'email_enabled'=>false,'sms_enabled'=>true,'created_at'=>now(),'updated_at'=>now()]);
-        $task=$this->createTask($t,$admin,$staff);
-        $this->actingAs($staff)->post('/t/'.$t->slug.'/tasks/preferences',['email_enabled'=>0,'sms_enabled'=>1,'phone'=>'+254712345678','sms_consent'=>0])->assertSessionHasErrors('sms_consent');
-        $this->post('/t/'.$t->slug.'/tasks/preferences',['email_enabled'=>0,'sms_enabled'=>1,'phone'=>'+254712345678','sms_consent'=>1])->assertSessionHasNoErrors();
-        app()->instance('currentTenant',$t);
+        config(['tasks.live_delivery' => true, 'services.roycetalk.api_key' => 'fake-key', 'services.roycetalk.sender_id' => 'TEST']);
+        Http::fake(['roycetalk.com/*' => Http::response(['success' => true, 'data' => ['message_id' => 'task-test-message']], 200)]);
+        $t = $this->company();
+        $admin = $this->member($t, 'admin');
+        $staff = $this->member($t);
+        DB::table('investor_notification_settings')->insert(['tenant_id' => $t->id, 'email_enabled' => false, 'sms_enabled' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $task = $this->createTask($t, $admin, $staff);
+        $this->actingAs($staff)->post('/t/'.$t->slug.'/tasks/preferences', ['email_enabled' => 0, 'sms_enabled' => 1, 'phone' => '+254712345678', 'sms_consent' => 0])->assertSessionHasErrors('sms_consent');
+        $this->post('/t/'.$t->slug.'/tasks/preferences', ['email_enabled' => 0, 'sms_enabled' => 1, 'phone' => '+254712345678', 'sms_consent' => 1])->assertSessionHasNoErrors();
+        app()->instance('currentTenant', $t);
         try {
-            $notice=DB::table('task_notices')->where('user_id',$staff->id)->first();
-            $service=app(TaskNotifications::class); $service->deliver($notice->id); $service->deliver($notice->id);
-            $this->assertDatabaseHas('task_notices',['id'=>$notice->id,'sms_status'=>'submitted','email_status'=>'skipped']);
+            $notice = DB::table('task_notices')->where('user_id', $staff->id)->first();
+            $service = app(TaskNotifications::class);
+            $service->deliver($notice->id);
+            $service->deliver($notice->id);
+            $this->assertDatabaseHas('task_notices', ['id' => $notice->id, 'sms_status' => 'submitted', 'email_status' => 'skipped']);
             Http::assertSentCount(1);
-            Http::assertSent(fn($request)=>$request['phone_number']==='+254712345678' && !str_contains($request['text_message'],'Private staff instructions') && str_contains($request['text_message'],'/tasks/'.$task->id));
-        } finally { app()->forgetInstance('currentTenant'); }
+            Http::assertSent(fn ($request) => $request['phone_number'] === '+254712345678' && ! str_contains($request['text_message'], 'Private staff instructions') && str_contains($request['text_message'], '/tasks/'.$task->id));
+        } finally {
+            app()->forgetInstance('currentTenant');
+        }
     }
 
+    public function test_board_offers_only_permitted_moves_and_returns_to_the_board(): void
+    {
+        $t = $this->company();
+        $manager = $this->member($t, 'manager');
+        $staff = $this->member($t);
+        $reviewer = $this->member($t, 'admin');
+        $task = $this->createTask($t, $manager, $staff, ['title' => 'Board review task', 'reviewer_id' => $reviewer->id]);
+        $urgent = $this->createTask($t, $manager, $staff, ['title' => 'Urgent linen restock', 'priority' => 'urgent', 'due_date' => now($t->timezone)->toDateString()]);
+        $cost = $this->createTask($t, $manager, $staff, ['title' => 'Replace geyser', 'kind' => 'cost', 'estimate' => 4500]);
+        $board = '/t/'.$t->slug.'/tasks?view=board';
+
+        $response = $this->actingAs($staff)->get($board)->assertOk()->assertViewIs('tasks.board')
+            ->assertSee('Board review task')->assertSee('Urgent linen restock')->assertSee('Waiting for cost approval')->assertSee('Cost requested')
+            ->assertSee('Finished in the last 14 days')->assertDontSee('data-drop-status="cancelled"', false);
+        $moves = $response->viewData('moves');
+        $this->assertSame(['in_progress', 'review'], array_keys($moves[$task->id]));
+        $this->assertSame(['in_progress', 'done'], array_keys($moves[$urgent->id]), 'Without a reviewer, completing goes straight to done.');
+        $this->assertSame([], $moves[$cost->id]);
+
+        $this->act($t, $task, $staff, 'start', ['return_to' => 'http://127.0.0.1:8001'.$board])->assertRedirect('http://127.0.0.1:8001'.$board)->assertSessionHas('success', 'Task moved.');
+        $this->act($t, $task, $staff, 'complete', ['return_to' => 'http://127.0.0.1:8001'.$board])->assertSessionHasErrors('note');
+        $this->act($t, $task, $staff, 'complete', ['note' => 'All checked', 'return_to' => 'https://evil.example/steal'])
+            ->assertRedirect(route('tasks.show', [$t->slug, $task->id]));
+
+        $reviewerMoves = $this->actingAs($reviewer)->get($board)->assertOk()->viewData('moves');
+        $this->assertSame(['done', 'in_progress'], array_keys($reviewerMoves[$task->id]));
+        $this->act($t, $task, $reviewer, 'approve')->assertSessionHasNoErrors();
+        $this->actingAs($staff)->get($board)->assertOk()->assertViewHas('columns', fn (array $columns): bool => collect($columns)->firstWhere('key', 'done')['tasks']->pluck('id')->contains($task->id));
+    }
+
+    public function test_board_filters_grouping_cancelled_column_and_quick_add(): void
+    {
+        $t = $this->company();
+        $manager = $this->member($t, 'manager');
+        $staff = $this->member($t);
+        $this->createTask($t, $manager, $staff, ['title' => 'Due today task', 'due_date' => now($t->timezone)->toDateString(), 'priority' => 'high']);
+        $this->createTask($t, $manager, $staff, ['title' => 'Next week task', 'due_date' => now($t->timezone)->addDays(9)->toDateString()]);
+        $board = '/t/'.$t->slug.'/tasks?view=board&scope=team';
+
+        $titles = fn (string $query): array => collect($this->actingAs($manager)->get($board.$query)->assertOk()->viewData('columns'))->flatMap(fn ($column) => $column['tasks'])->pluck('title')->all();
+        $this->assertContains('Due today task', $titles('&due=today'));
+        $this->assertNotContains('Next week task', $titles('&due=today'));
+        $this->assertNotContains('Next week task', $titles('&quick=high'));
+        $this->assertContains('Next week task', $titles(''));
+
+        $grouped = $this->actingAs($manager)->get($board.'&group=assignee')->assertOk();
+        $this->assertSame([$staff->name], collect($grouped->viewData('columns'))->pluck('label')->all());
+        $grouped->assertDontSee('data-drop-status', false);
+
+        $cancelled = $this->actingAs($manager)->get($board.'&cancelled=1')->assertOk()->assertSee('data-drop-status="cancelled"', false);
+        $this->assertArrayHasKey('cancelled', collect($cancelled->viewData('moves'))->first());
+
+        $this->actingAs($manager)->get($board)->assertOk()->assertSee('+ Add task');
+        $this->actingAs($manager)->post('/t/'.$t->slug.'/tasks', [...$this->data($staff, ['title' => 'Quick added task']), 'return_to' => 'http://127.0.0.1:8001'.$board])
+            ->assertRedirect('http://127.0.0.1:8001'.$board)->assertSessionHas('success', 'Task added.');
+        $this->assertDatabaseHas('task_items', ['title' => 'Quick added task', 'assigned_to' => $staff->id]);
+        $this->actingAs($staff)->get('/t/'.$t->slug.'/tasks?view=board')->assertOk()->assertDontSee('+ Add task');
+    }
 }
