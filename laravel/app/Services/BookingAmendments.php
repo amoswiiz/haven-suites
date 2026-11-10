@@ -62,6 +62,13 @@ class BookingAmendments
                     $this->fail('Choose an active apartment belonging to this company.');
                 }
             }
+            $partnerIds = array_unique(array_filter([$booking->partner_apartment_id ?? null, $data['partner_apartment_id'] ?? null]));
+            sort($partnerIds, SORT_NUMERIC);
+            foreach ($partnerIds as $partnerId) {
+                if (! $db->table('partner_apartments')->where('id', $partnerId)->lockForUpdate()->first()) {
+                    $this->fail('Choose a partner apartment belonging to this company.');
+                }
+            }
             $before = $this->state($reservationId, true);
             if ($snapshot !== '' && ! hash_equals($this->snapshot($before), $snapshot)) {
                 $this->fail('This booking, invoice or its payments changed. Reload the edit page and review the latest amounts before saving.');

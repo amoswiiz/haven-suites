@@ -6,6 +6,7 @@ use App\Http\Middleware\ResolveTenant;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\InvoiceDefaults;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -53,6 +54,29 @@ class BusinessWorkflowTest extends TestCase
         return ['booking_type' => 'managed', 'unit_id' => $unit, 'guest_name' => 'Migration Workflow Guest', 'guest_phone' => '0700000000',
             'guest_email' => 'workflow-guest@example.test', 'check_in' => '2035-01-10', 'check_out' => '2035-01-12',
             'adults' => 1, 'children' => 0, 'nightly_rate' => '100.00', 'amount_paid' => '0.00', 'status' => 'confirmed', 'booking_source' => 'Direct', 'notes' => 'Transactional migration test'];
+    }
+
+    public function test_partner_booking_locks_the_partner_apartment_and_rejects_overlapping_dates(): void
+    {
+        $db = DB::connection('tenant');
+        $partnerId = $db->table('partner_apartments')->insertGetId([
+            'owner_name' => 'Workflow owner', 'apartment_name' => 'Workflow partner '.bin2hex(random_bytes(3)), 'location' => 'Nyali',
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $booking = array_replace($this->reservation(0), [
+            'booking_type' => 'partner', 'unit_id' => null, 'partner_choice' => 'existing', 'partner_apartment_id' => $partnerId, 'guest_total' => '100.00', 'owner_net_amount' => '60.00',
+        ]);
+        $queries = [];
+        $db->listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->post('/t/workflow/reservations/store', $booking)->assertSessionHas('success');
+        $this->assertTrue(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'from partner_apartments') && str_contains($sql, 'for update')),
+            'Creating a confirmed partner booking must lock the partner apartment row.');
+
+        $this->post('/t/workflow/reservations/store', array_replace($booking, ['check_in' => '2035-01-11', 'check_out' => '2035-01-13']))->assertSessionMissing('success');
+        $this->assertSame(1, $db->table('reservations')->where('partner_apartment_id', $partnerId)->count());
     }
 
     public function test_sales_won_requires_verified_payments_and_links_the_matching_booking(): void

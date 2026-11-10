@@ -1,9 +1,14 @@
 # Public listings implementation checkpoint
 
-Updated: 10 November 2026. Status: the 11-apartment pilot (`810ab8f`) and the
-listing media/UX/SEO follow-up (`4092dc6`) are on GitHub; their deployment has
-not been confirmed. The website settings follow-up below is implemented, tested
-and committed locally, ready for push/deployment.
+Updated: 10 November 2026. Status: `0d4f2e2` (website settings, below) was
+deployed live on 10 November 2026, including migration
+`2026_11_07_015444_add_public_website_settings`. File backup:
+`/root/haven-deploy-7FvKQBPR`; central database backup:
+`/var/www/haven-suites/storage/app/private/deploy-backups/central-20261110-081059-88616e2e.sqlite`.
+The prepare preview showed only `0d4f2e2` files, so the earlier pilot
+(`810ab8f`) and media/SEO (`4092dc6`) releases were already live.
+`/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
+`chmod 755`.
 
 ## 10 November: website settings, WhatsApp and menu
 
@@ -35,8 +40,8 @@ and committed locally, ready for push/deployment.
   `InvestorPortalTest::test_invites_use_owner_role_and_only_verified_matching_recipient_can_accept`)
   fail identically on `4092dc6` and are unrelated pre-existing failures to fix
   separately. Pint, Blade compilation and JS syntax checks passed.
-- Next: push, deploy with `haven-prepare` then `deploy-haven.sh EXPECTED_COMMIT`,
-  then fill in website settings (search text, WhatsApp number, menu).
+- Deployed. Next: fill in website settings (search text, WhatsApp number, menu)
+  at `/t/haven/public-listings/settings`.
 
 ## Objective
 

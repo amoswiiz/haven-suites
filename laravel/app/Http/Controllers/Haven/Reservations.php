@@ -310,6 +310,8 @@ class Reservations extends BaseController
                     if (app(UnitAvailability::class)->closureOverlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
                         throw new \RuntimeException('This apartment is blocked for owner use or repairs during those dates.');
                     }
+                } elseif (! $db->query('SELECT id FROM partner_apartments WHERE id = ? FOR UPDATE', [$partnerId])->getRowArray()) {
+                    throw new \RuntimeException('The partner apartment is no longer available.');
                 }
                 if ($type === 'managed' && app(ExternalCalendars::class)->overlaps(app('currentTenant')->id, (int) $unitId, $checkIn, $checkOut)) {
                     throw new \RuntimeException('This apartment is blocked by an external calendar for those dates.');

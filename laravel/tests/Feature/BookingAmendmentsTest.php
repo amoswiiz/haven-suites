@@ -8,10 +8,12 @@ use App\Models\User;
 use App\Services\BookingAmendments;
 use App\Services\BookingAmendmentSchema;
 use App\Services\ExternalCalendars;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\AssertionFailedError;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Tests\TestCase;
@@ -435,6 +437,63 @@ class BookingAmendmentsTest extends TestCase
         $db->table('booking_financials')->where('reservation_id', 1)->update(['guest_total' => '40000.00']);
         $db->table('reservations')->where('id', 1)->update(['booking_type' => 'partner']);
         $this->assertRejected(fn () => $this->save());
+    }
+
+    private function makePartnerBooking(int $partnerId = 5): void
+    {
+        $db = DB::connection('tenant');
+        $db->table('partner_apartments')->insertOrIgnore(['id' => 5, 'apartment_name' => 'Amalia A1.9']);
+        $db->table('reservations')->where('id', 1)->update(['unit_id' => null, 'partner_apartment_id' => $partnerId, 'booking_type' => 'partner', 'status' => 'confirmed']);
+    }
+
+    private function rejectionMessage(callable $action): string
+    {
+        try {
+            $action();
+        } catch (QueryException|\Error $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            $this->assertSame('2026-11-08', $this->reservation()['check_out']);
+
+            return $exception instanceof ValidationException ? implode(' ', $exception->validator->errors()->all()) : $exception->getMessage();
+        }
+        $this->fail('The amendment should have been rejected.');
+    }
+
+    public function test_partner_booking_amendment_locks_the_partner_apartment_before_checking_overlaps(): void
+    {
+        $this->makePartnerBooking();
+        $db = DB::connection('tenant');
+        $db->table('reservations')->insert([
+            'id' => 2, 'partner_apartment_id' => 5, 'booking_type' => 'partner', 'status' => 'confirmed', 'guest_name' => 'Next guest', 'guest_phone' => '+254700000002',
+            'check_in' => '2026-11-08', 'check_out' => '2026-11-10', 'nightly_rate' => '10000.00', 'total_amount' => '20000.00', 'amount_paid' => '0.00',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $queries = [];
+        $db->listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $message = $this->rejectionMessage(fn () => $this->save(['unit_id' => null, 'partner_apartment_id' => 5, 'status' => 'confirmed', 'check_out' => '2026-11-09', 'total_amount' => '50000.00']));
+
+        $this->assertStringContainsString('another confirmed booking', $message);
+        $partnerLock = collect($queries)->search(fn (string $sql): bool => str_contains($sql, 'from "partner_apartments"'));
+        $overlapCheck = collect($queries)->search(fn (string $sql): bool => str_contains($sql, 'from "reservations"') && str_contains($sql, '"check_in" <'));
+        $this->assertNotFalse($partnerLock, 'The partner apartment row must be read in the locking phase.');
+        $this->assertNotFalse($overlapCheck);
+        $this->assertLessThan($overlapCheck, $partnerLock);
+
+        $this->save(['unit_id' => null, 'partner_apartment_id' => 5, 'status' => 'confirmed', 'check_out' => '2026-11-07', 'total_amount' => '30000.00']);
+        $this->assertSame('2026-11-07', $this->reservation()['check_out']);
+    }
+
+    public function test_partner_booking_amendment_rejects_an_unknown_partner_apartment(): void
+    {
+        $this->makePartnerBooking(99);
+
+        $message = $this->rejectionMessage(fn () => $this->save(['unit_id' => null, 'partner_apartment_id' => 99, 'status' => 'confirmed']));
+
+        $this->assertStringContainsString('partner apartment belonging to this company', $message);
     }
 
     public function test_external_calendar_blocks_prevent_date_amendment(): void
