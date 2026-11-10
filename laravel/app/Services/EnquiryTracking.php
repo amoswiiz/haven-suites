@@ -7,15 +7,13 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 
 /**
  * Guest-facing enquiry references and private tracking links that show the enquiry's pipeline progress.
  */
 class EnquiryTracking
 {
-    /** Letters and digits that cannot be confused with each other when read aloud or retyped. */
-    private const REFERENCE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
     public const CODE_PATTERN = '[A-Za-z0-9_-]{12}';
 
     public const VALID_DAYS = 180;
@@ -38,22 +36,80 @@ class EnquiryTracking
     /** @var list<string> */
     public const STEPS = ['Received', 'Reviewing', 'Options', 'Payment', 'Confirmed'];
 
-    /** Generate a short reference such as ENQ-7K3P9Q that is unused within the company. */
+    /** Company prefixes are 2–5 capital letters, such as HS. */
+    public const PREFIX_PATTERN = '[A-Z]{2,5}';
+
+    /** Failed "Track my enquiry" attempts allowed per reference before it is locked for an hour. */
+    public const LOOKUP_ATTEMPTS = 5;
+
+    /**
+     * Allocate the company's next reference for this month, such as HS-2611-042 (prefix, year and month, number).
+     *
+     * Numbers come from a locked per-company monthly counter, so concurrent enquiries never share a reference.
+     */
     public function newReference(Tenant $tenant): string
     {
-        for ($attempt = 0; $attempt < 10; $attempt++) {
-            $reference = 'ENQ-';
-            for ($index = 0; $index < 6; $index++) {
-                $reference .= self::REFERENCE_ALPHABET[random_int(0, strlen(self::REFERENCE_ALPHABET) - 1)];
-            }
-            $taken = DB::table('enquiry_tracking_links')->where('tenant_id', $tenant->id)->where('reference', $reference)->exists()
-                || DB::table('public_enquiry_receipts')->where('tenant_id', $tenant->id)->where('reference', $reference)->exists();
-            if (! $taken) {
-                return $reference;
-            }
+        $period = now($tenant->timezone ?: config('app.timezone'))->format('ym');
+
+        return DB::transaction(function () use ($tenant, $period): string {
+            DB::table('enquiry_reference_counters')->insertOrIgnore([
+                'tenant_id' => $tenant->id, 'period' => $period, 'last_number' => 0, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $counter = DB::table('enquiry_reference_counters')->where('tenant_id', $tenant->id)->where('period', $period)->lockForUpdate()->first();
+            $number = (int) $counter->last_number + 1;
+            DB::table('enquiry_reference_counters')->where('id', $counter->id)->update(['last_number' => $number, 'updated_at' => now()]);
+
+            return sprintf('%s-%s-%03d', $this->prefix($tenant), $period, $number);
+        });
+    }
+
+    /** The company's reference prefix, defaulting to the initials of its name (Haven Suites becomes HS). */
+    public function prefix(Tenant $tenant): string
+    {
+        $configured = strtoupper(trim((string) $tenant->reference_prefix));
+        if (preg_match('/^'.self::PREFIX_PATTERN.'$/D', $configured)) {
+            return $configured;
+        }
+        $words = preg_split('/[^A-Za-z]+/', (string) $tenant->name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $initials = strtoupper(implode('', array_map(fn (string $word): string => $word[0], $words)));
+        if (strlen($initials) === 1) {
+            $initials = strtoupper(substr($words[0], 0, 2));
         }
 
-        throw new \RuntimeException('Could not allocate an enquiry reference.');
+        return preg_match('/^'.self::PREFIX_PATTERN.'$/D', substr($initials, 0, 5)) ? substr($initials, 0, 5) : 'ENQ';
+    }
+
+    /** Normalise a typed reference: trim, upper-case and turn spaces into dashes ("hs 2611 042" becomes HS-2611-042). */
+    public function normalizeReference(string $reference): string
+    {
+        return (string) preg_replace('/[\s-]+/', '-', strtoupper(trim($reference)));
+    }
+
+    /**
+     * Return the tracking URL for a reference when the phone number on the enquiry ends with these four digits.
+     *
+     * Returns null for an unknown reference, wrong digits or a reference locked after repeated failures, without
+     * saying which, so the form cannot be used to discover references.
+     */
+    public function lookup(Tenant $tenant, string $reference, string $lastDigits): ?string
+    {
+        $reference = $this->normalizeReference($reference);
+        $lockKey = 'enquiry-lookup:'.$tenant->id.':'.hash('sha256', $reference);
+        if (RateLimiter::tooManyAttempts($lockKey, self::LOOKUP_ATTEMPTS)) {
+            return null;
+        }
+        $leadId = DB::table('enquiry_tracking_links')->where('tenant_id', $tenant->id)->where('reference', $reference)->value('lead_id')
+            ?? DB::table('public_enquiry_receipts')->where('tenant_id', $tenant->id)->where('reference', $reference)->value('lead_id');
+        $lead = $leadId ? DB::table('sales_leads')->where('tenant_id', $tenant->id)->where('id', $leadId)->first() : null;
+        $phoneDigits = preg_replace('/\D+/', '', (string) ($lead->phone ?? ''));
+        if (! $lead || strlen($phoneDigits) < 4 || ! preg_match('/^[0-9]{4}$/D', $lastDigits) || ! hash_equals(substr($phoneDigits, -4), $lastDigits)) {
+            RateLimiter::hit($lockKey, 3600);
+
+            return null;
+        }
+        RateLimiter::clear($lockKey);
+
+        return $this->issue($tenant, $lead)['url'];
     }
 
     /**

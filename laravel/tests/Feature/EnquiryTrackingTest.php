@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ResolveTenant;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\EnquiryTracking;
+use App\Services\PublicListingCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -106,14 +108,93 @@ class EnquiryTrackingTest extends TestCase
         $this->assertTrue(now()->parse($expiresAt)->greaterThan(now()->addMonths(9)->addDays(30)));
     }
 
-    public function test_references_avoid_look_alike_characters_and_stay_unique(): void
+    public function test_references_use_prefix_month_and_a_running_number_that_restarts_monthly(): void
     {
-        $references = [];
-        for ($index = 0; $index < 25; $index++) {
-            $reference = app(EnquiryTracking::class)->issue($this->company, $this->lead())['reference'];
-            $this->assertMatchesRegularExpression('/^ENQ-[A-HJKMNP-Z2-9]{6}$/', $reference);
-            $references[] = $reference;
+        $this->travelTo(now('Africa/Nairobi')->setDate(2026, 11, 30)->setTime(10, 0));
+        $tracking = app(EnquiryTracking::class);
+        $this->assertSame('HS-2611-001', $tracking->issue($this->company, $this->lead())['reference']);
+        $this->assertSame('HS-2611-002', $tracking->issue($this->company, $this->lead())['reference']);
+
+        $this->travelTo(now('Africa/Nairobi')->setDate(2026, 12, 1)->setTime(9, 0));
+        $this->assertSame('HS-2612-001', $tracking->issue($this->company, $this->lead())['reference']);
+
+        $this->company->update(['reference_prefix' => 'HAVEN']);
+        $this->assertSame('HAVEN-2612-002', $tracking->issue($this->company->fresh(), $this->lead())['reference']);
+    }
+
+    public function test_numbers_are_per_company_and_prefixes_may_coincide(): void
+    {
+        $other = Tenant::create(['name' => 'Highland Stays', 'slug' => 'highland', 'database_name' => 'unused_highland', 'active' => true]);
+        $tracking = app(EnquiryTracking::class);
+
+        $this->assertSame('HS', $tracking->prefix($other));
+        $this->assertSame($tracking->newReference($this->company), $tracking->newReference($other));
+        $this->assertSame('ENQ', $tracking->prefix(new Tenant(['name' => '!!!'])));
+        $this->assertSame('MA', $tracking->prefix(new Tenant(['name' => 'Malaika'])));
+    }
+
+    public function test_company_administrators_can_set_the_reference_prefix(): void
+    {
+        $admin = User::factory()->create(['active' => true]);
+        $admin->tenants()->attach($this->company, ['roles' => json_encode(['admin']), 'legacy_user_id' => 30]);
+        app()->instance('currentTenant', $this->company);
+        $this->withoutMiddleware(ResolveTenant::class)->actingAs($admin);
+        $base = ['name' => 'Haven Suites'];
+
+        $this->post('/t/tracking/company/settings', [...$base, 'reference_prefix' => 'h1'])->assertSessionHasErrors('reference_prefix');
+        $this->post('/t/tracking/company/settings', [...$base, 'reference_prefix' => ' hvn '])->assertSessionHasNoErrors();
+        $this->assertSame('HVN', $this->company->fresh()->reference_prefix);
+        $this->post('/t/tracking/company/settings', [...$base, 'reference_prefix' => ''])->assertSessionHasNoErrors();
+        $this->assertNull($this->company->fresh()->reference_prefix);
+    }
+
+    private function enableSite(): void
+    {
+        DB::table('public_sites')->insert(['tenant_id' => $this->company->id, 'enabled' => true, 'response_hours' => 24, 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    public function test_guests_can_find_their_enquiry_with_the_reference_and_last_four_phone_digits(): void
+    {
+        $this->enableSite();
+        $lead = $this->lead();
+        $tracking = app(EnquiryTracking::class)->issue($this->company, $lead);
+
+        $this->get('/stays/tracking/track')->assertOk()->assertSee('Track your enquiry')->assertSee('name="phone_last_digits"', false);
+        $this->from('/stays/tracking/track')->post('/stays/tracking/track', ['reference' => ' '.strtolower(str_replace('-', ' ', $tracking['reference'])).' ', 'phone_last_digits' => '5678'])
+            ->assertRedirect($tracking['url']);
+    }
+
+    public function test_wrong_details_get_one_generic_message_and_repeated_failures_lock_the_reference(): void
+    {
+        $this->enableSite();
+        $lead = $this->lead();
+        $reference = app(EnquiryTracking::class)->issue($this->company, $lead)['reference'];
+        $message = 'We could not find an enquiry with those details.';
+
+        $this->from('/stays/tracking/track')->post('/stays/tracking/track', ['reference' => 'HS-2611-999', 'phone_last_digits' => '5678'])
+            ->assertRedirect('/stays/tracking/track')->assertSessionHasErrors('reference');
+        $this->assertStringContainsString($message, session('errors')->first('reference'));
+        for ($attempt = 0; $attempt < EnquiryTracking::LOOKUP_ATTEMPTS; $attempt++) {
+            $this->assertNull(app(EnquiryTracking::class)->lookup($this->company, $reference, '0000'));
         }
-        $this->assertCount(25, array_unique($references));
+        $this->assertNull(app(EnquiryTracking::class)->lookup($this->company, $reference, '5678'), 'Correct digits must not work while the reference is locked.');
+    }
+
+    public function test_older_website_enquiries_without_a_tracking_link_can_still_be_looked_up(): void
+    {
+        $lead = $this->lead();
+        DB::table('public_enquiry_receipts')->insert(['tenant_id' => $this->company->id, 'lead_id' => $lead->id, 'token_hash' => str_repeat('a', 64),
+            'reference' => 'ENQ-PT4AMP', 'created_at' => now(), 'updated_at' => now()]);
+
+        $url = app(EnquiryTracking::class)->lookup($this->company, 'enq-pt4amp', '5678');
+
+        $this->assertNotNull($url);
+        $this->assertSame('ENQ-PT4AMP', app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id)['reference']);
+    }
+
+    public function test_track_page_needs_an_enabled_public_site_and_cannot_be_used_as_a_listing_address(): void
+    {
+        $this->get('/stays/tracking/track')->assertNotFound();
+        $this->assertContains('track', PublicListingCatalog::RESERVED_SLUGS);
     }
 }

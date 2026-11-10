@@ -41,7 +41,7 @@ class ImportPublicListings extends Command
                 $row['amenities'] = array_values(array_filter(array_map('trim', explode(';', $row['amenities'] ?? ''))));
                 $validation = Validator::make($row, [
                     'unit_id' => 'required|integer|min:1',
-                    'slug' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D'],
+                    'slug' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', Rule::notIn(PublicListingCatalog::RESERVED_SLUGS)],
                     'title' => 'required|string|min:3|max:180', 'description' => 'required|string|min:30|max:15000',
                     'city' => 'required|string|max:100', 'neighbourhood' => 'nullable|string|max:150',
                     'max_guests' => 'required|integer|min:1|max:100', 'min_nights' => 'required|integer|min:1|max:365',

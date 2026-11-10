@@ -71,8 +71,8 @@ class SalesController extends Controller
             $q = $filters['q'];
             $query->where(function (Builder $query) use ($q): void {
                 $query->where('name', 'like', '%'.$q.'%')->orWhere('phone', 'like', '%'.$q.'%')->orWhere('email', 'like', '%'.$q.'%');
-                $reference = strtoupper(trim($q));
-                if (str_starts_with($reference, 'ENQ-')) {
+                $reference = app(EnquiryTracking::class)->normalizeReference($q);
+                if (preg_match('/^[A-Z]{2,5}-[A-Z0-9-]{3,}$/D', $reference)) {
                     $tenantId = app('currentTenant')->id;
                     $query->orWhereIn('id', DB::table('enquiry_tracking_links')->where('tenant_id', $tenantId)->where('reference', $reference)->select('lead_id'))
                         ->orWhereIn('id', DB::table('public_enquiry_receipts')->where('tenant_id', $tenantId)->where('reference', $reference)->select('lead_id'));

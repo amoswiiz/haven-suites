@@ -288,3 +288,25 @@
         document.querySelector('[data-open-gallery]')?.addEventListener('click', () => { if (collection) collection.open = true; });
     }
 })();
+
+(() => {
+    'use strict';
+    const source = document.querySelector('[data-copy-source]');
+    const button = document.querySelector('[data-copy-button]');
+    const status = document.querySelector('[data-copy-status]');
+    if (!source || !button || !navigator.clipboard || !window.isSecureContext) {
+        return;
+    }
+    button.hidden = false;
+    button.addEventListener('click', () => {
+        navigator.clipboard.writeText(source.textContent.trim()).then(() => {
+            if (status) {
+                status.textContent = 'Reference copied.';
+            }
+        }, () => {
+            if (status) {
+                status.textContent = 'Copy did not work. Please write the reference down.';
+            }
+        });
+    });
+})();

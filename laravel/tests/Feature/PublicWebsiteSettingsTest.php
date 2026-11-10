@@ -203,6 +203,23 @@ class PublicWebsiteSettingsTest extends TestCase
         $this->assertSame('Hi, is {listing_title} free?', $listing->whatsapp_message);
     }
 
+    public function test_track_my_enquiry_can_be_a_menu_item_and_reserved_words_cannot_be_listing_addresses(): void
+    {
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'navigation_links' => [['label' => 'Stays', 'target' => 'stays'], ['label' => 'My enquiry', 'target' => 'track']],
+        ]))->assertSessionHasNoErrors();
+        $this->assertSame('track', json_decode($this->site()->navigation_links, true)[1]['target']);
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('<option value="track"', false);
+
+        $this->post(route('public-listings.store', $this->company->slug), [
+            'unit_id' => 1, 'slug' => 'track', 'title' => 'Seaview stay at Coral Gables',
+            'description' => 'A bright apartment with comfortable bedrooms, a private balcony and a convenient location near the beach.',
+            'city' => 'Mombasa', 'max_guests' => 4, 'min_nights' => 2, 'check_in_time' => '14:00', 'check_out_time' => '10:00',
+            'starting_price' => '12000.00', 'status' => 'draft', 'featured' => 0,
+        ])->assertSessionHasErrors('slug');
+        $this->assertDatabaseCount('public_listings', 0);
+    }
+
     public function test_only_administrators_can_open_or_save_website_settings(): void
     {
         foreach (['cleaner', 'sales', 'owner', 'manager'] as $role) {

@@ -105,7 +105,7 @@ class PublicListingController extends Controller
             'response_hours' => 'required|integer|min:1|max:168',
             ...$this->websiteRules(),
             'navigation_links' => 'sometimes|array|max:6', 'navigation_links.*' => 'required|array:label,target',
-            'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(['home', 'stays', 'contact'])],
+            'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(array_keys(PublicWebsiteLinks::TARGETS))],
         ]);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
@@ -172,7 +172,7 @@ class PublicListingController extends Controller
             'version' => $id ? 'required|integer|min:1' : 'nullable|integer',
             'unit_id' => 'nullable|integer|min:1|max:4294967295',
             'partner_apartment_id' => 'nullable|integer|min:1|max:4294967295',
-            'slug' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', Rule::unique('public_listings')->where('tenant_id', $tenant->id)->ignore($id)],
+            'slug' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', Rule::notIn(PublicListingCatalog::RESERVED_SLUGS), Rule::unique('public_listings')->where('tenant_id', $tenant->id)->ignore($id)],
             'title' => 'required|string|min:3|max:180', 'description' => 'required|string|min:30|max:15000',
             'city' => 'required|string|max:100', 'neighbourhood' => 'nullable|string|max:150', 'public_location' => 'nullable|string|max:255',
             'max_guests' => 'required|integer|min:1|max:100', 'min_nights' => 'required|integer|min:1|max:365',

@@ -10,6 +10,9 @@ use Illuminate\Support\Str;
 
 class PublicListingCatalog
 {
+    /** Listing addresses that clash with other public pages under /stays/{company}/. */
+    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact'];
+
     public const AMENITIES = [
         'wifi' => 'Wi-Fi', 'air_conditioning' => 'Air conditioning', 'pool' => 'Swimming pool',
         'beachfront' => 'Beachfront', 'sea_view' => 'Sea view', 'parking' => 'Parking',

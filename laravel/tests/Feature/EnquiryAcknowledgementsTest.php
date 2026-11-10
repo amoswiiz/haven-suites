@@ -67,7 +67,7 @@ class EnquiryAcknowledgementsTest extends TestCase
             'sent_by' => $this->salesperson->id, 'phone' => '+254712345678', 'status' => 'submitted', 'provider_status' => 'pending',
         ]);
         $tracking = app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id);
-        $this->assertMatchesRegularExpression('/^ENQ-[A-HJKMNP-Z2-9]{6}$/', $tracking['reference']);
+        $this->assertMatchesRegularExpression('/^HS-[0-9]{4}-[0-9]{3}$/', $tracking['reference']);
         Http::assertSent(fn ($request) => $request['phone_number'] === '+254712345678'
             && $request['text_message'] === 'Hi Amina, thanks for contacting Haven Suites! Your enquiry ref is '.$tracking['reference'].'. Track its progress here: '.$tracking['url']
             && str_starts_with($request['client_ref'], 'enquiry-'));

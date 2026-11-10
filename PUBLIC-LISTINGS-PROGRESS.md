@@ -10,9 +10,44 @@ The prepare preview showed only `0d4f2e2` files, so the earlier pilot
 `/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
 `chmod 755`.
 
+## 10 November: Phase A, readable references and "Track my enquiry"
+
+Agreed with the user: references `HS-2611-042` (prefix, year+month, monthly
+number); tracking lookup by reference + last 4 phone digits; logo will be WebP;
+locations are city + locality (e.g. Nyali in Mombasa); listing codes are our own
+(WordPress codes reused where wanted). Collections/property types: proposed
+defaults until the user changes them. Full roadmap: Phases A (this), B brand and
+navigation, C filters and listing fields, D city/collection pages and WordPress
+redirects, E listing quality and photo speed, F backups, tenant migrations, CI.
+
+- Migration `2026_11_10_131035_add_enquiry_reference_numbering`: `tenants.reference_prefix`
+  (2–5 letters, set in Company settings, default = company initials),
+  `enquiry_reference_counters` (per company and YYMM, locked increment), and
+  `public_enquiry_receipts.reference` unique per company instead of globally.
+- `EnquiryTracking::newReference()` issues `HS-YYMM-NNN` (tenant timezone; 4+
+  digits after 999). Earlier `ENQ-XXXXXX` references keep working everywhere.
+- Confirmation page: large reference with copy button, "sent by SMS to the
+  number ending in 678" only when the SMS was queued or sent, what-happens-next
+  steps with response time, Track and WhatsApp follow-up (reference prefilled).
+- `/stays/{company}/track` (`public-stays.track`): reference + last 4 digits ->
+  redirect to the private `/e/{code}` page. Generic failure message; 5 POSTs per
+  minute per visitor; a reference locks for an hour after 5 wrong attempts.
+  Older website enquiries without a tracking link get one on first lookup.
+- Menu target "Track my enquiry" (default menu and editor) and a footer link.
+- Reserved listing slugs: track, enquiries, sitemap, in, collections, search, contact.
+- Asset versions bumped to v=5.
+- Verification: full suite 584/587 (the same three pre-existing failures).
+
 ## 10 November (later): booking lock, phone input, enquiry tracking
 
-Committed after `0d4f2e2`; not yet deployed when written.
+Deployed live as `ae1c795` on 10 November 2026 (includes `2313e9c`, `f0d05ed`,
+`494085c` and the landline fix `ae1c795`); migration
+`2026_11_10_121007_create_enquiry_tracking_links_table` ran. File backup:
+`/root/haven-deploy-9Q0boplB`; central database backup:
+`/var/www/haven-suites/storage/app/private/deploy-backups/central-20261110-095646-a8e5b1ef.sqlite`.
+Post-deploy check: listing page 200 with `+254` prefill and CSS v4; unknown
+tracking code returns 404; WhatsApp links hidden until the stored invalid
+number is corrected.
 
 - `2313e9c` Partner bookings now lock the `partner_apartments` row before the
   overlap check, both when creating (`Haven\Reservations::store`) and amending

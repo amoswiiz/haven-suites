@@ -11,7 +11,7 @@ class Tenant extends Model
 
     protected $attributes = ['plan' => 'legacy', 'subscription_status' => 'legacy', 'timezone' => 'Africa/Nairobi', 'currency' => 'KES'];
 
-    protected $fillable = ['name', 'slug', 'database_name', 'active', 'contact_email', 'contact_phone', 'report_logo_path', 'report_primary_color', 'report_accent_color', 'timezone', 'currency', 'onboarding_completed_at', 'plan', 'subscription_status', 'trial_ends_at', 'subscription_ends_at', 'requested_plan'];
+    protected $fillable = ['name', 'slug', 'database_name', 'active', 'contact_email', 'contact_phone', 'report_logo_path', 'report_primary_color', 'report_accent_color', 'timezone', 'currency', 'onboarding_completed_at', 'plan', 'subscription_status', 'trial_ends_at', 'subscription_ends_at', 'requested_plan', 'reference_prefix'];
 
     protected function casts(): array
     {

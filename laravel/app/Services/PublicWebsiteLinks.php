@@ -12,7 +12,22 @@ class PublicWebsiteLinks
         ['label' => 'Home', 'target' => 'home'],
         ['label' => 'Find a stay', 'target' => 'stays'],
         ['label' => 'Contact', 'target' => 'contact'],
+        ['label' => 'Track my enquiry', 'target' => 'track'],
     ];
+
+    /** Menu destinations and their labels in the Website settings menu editor. */
+    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
+
+    /** WhatsApp link for a guest following up on an enquiry, with the reference prefilled, or null without a valid number. */
+    public function forEnquiry(Tenant $tenant, ?object $site, string $reference): ?string
+    {
+        $number = PhoneNumber::normalize($this->text($site->whatsapp_number ?? null));
+        if ($number === null || ($site && (int) ($site->tenant_id ?? 0) !== (int) $tenant->id)) {
+            return null;
+        }
+
+        return 'https://wa.me/'.substr($number, 1).'?text='.rawurlencode('Hello! I am following up on my enquiry '.$reference.' with '.$tenant->name.'.');
+    }
 
     /** @return array{public_url: string, enquiry_url: string, whatsapp_url: ?string} */
     public function forListing(Tenant $tenant, array $listing, ?object $site = null): array
@@ -53,11 +68,12 @@ class PublicWebsiteLinks
             $site = null;
         }
         $base = $this->canonicalUrl('public-stays.index', ['company' => $tenant->slug]);
+        $track = $this->canonicalUrl('public-stays.track', ['company' => $tenant->slug]);
 
         return array_map(static fn (array $link): array => [
             'label' => $link['label'],
-            'url' => $base.match ($link['target']) {
-                'home' => '', 'stays' => '#find-stay', 'contact' => '#stay-contact'
+            'url' => match ($link['target']) {
+                'home' => $base, 'stays' => $base.'#find-stay', 'contact' => $base.'#stay-contact', 'track' => $track,
             },
         ], $this->navigationForForm($site));
     }
@@ -84,8 +100,8 @@ class PublicWebsiteLinks
             if ($label === '' || ! mb_check_encoding($label, 'UTF-8') || mb_strlen($label) > 60 || preg_match('/[<>\x00-\x1f\x7f]/u', $label)) {
                 throw ValidationException::withMessages(['navigation_links.'.$index.'.label' => 'Use a plain text menu label of up to 60 characters.']);
             }
-            if (! in_array($target, ['home', 'stays', 'contact'], true) || isset($seen[$target])) {
-                throw ValidationException::withMessages(['navigation_links.'.$index.'.target' => 'Choose Home, Find a stay or Contact once each.']);
+            if (! array_key_exists($target, self::TARGETS) || isset($seen[$target])) {
+                throw ValidationException::withMessages(['navigation_links.'.$index.'.target' => 'Choose each menu destination once: Home, Find a stay, Contact or Track my enquiry.']);
             }
             $seen[$target] = true;
             $links[] = ['label' => $label, 'target' => $target];
