@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -26,7 +27,9 @@ class PublicStayController extends Controller
         [$tenant, $site] = $this->company($company, $catalog);
         $today = CarbonImmutable::now($tenant->timezone)->toDateString();
         $filters = $request->validate([
-            'q' => 'nullable|string|max:100', 'city' => 'nullable|string|max:100',
+            'q' => 'nullable|string|max:100', 'city' => 'nullable|string|max:100', 'area' => 'nullable|string|max:150',
+            'type' => ['nullable', Rule::in(array_keys(PublicListingCatalog::PROPERTY_TYPES))],
+            'collection' => ['nullable', Rule::in(array_keys(PublicListingCatalog::COLLECTIONS))],
             'guests' => 'nullable|integer|min:1|max:100', 'bedrooms' => 'nullable|integer|min:0|max:20',
             'min_price' => 'nullable|numeric|min:0|max:999999999', 'max_price' => 'nullable|numeric|min:0|max:999999999',
             'amenities' => 'nullable|array|max:14', 'amenities.*' => [Rule::in(array_keys(PublicListingCatalog::AMENITIES))],
@@ -40,16 +43,21 @@ class PublicStayController extends Controller
         $listings = $catalog->published($tenant);
         $hero = $listings->first();
         $cities = $listings->pluck('city')->unique()->sort()->values();
+        $destinations = PublicListingCatalog::groupDestinations($listings);
+        $propertyTypes = array_intersect_key(PublicListingCatalog::PROPERTY_TYPES, array_flip($listings->pluck('property_type')->filter()->unique()->all()));
         $nights = ! empty($filters['check_in']) && ! empty($filters['check_out'])
             ? (int) CarbonImmutable::parse($filters['check_in'])->diffInDays(CarbonImmutable::parse($filters['check_out'])) : null;
         if ($nights !== null && $nights > 90) {
             throw ValidationException::withMessages(['check_out' => 'Search up to 90 nights at a time. Contact our team for a longer stay.']);
         }
-        $listings = $listings->filter(function (array $listing) use ($filters, $nights): bool {
+        $matchesFilters = function (array $listing, array $filters) use ($nights): bool {
             $query = mb_strtolower(trim($filters['q'] ?? ''));
 
-            return ($query === '' || str_contains(mb_strtolower($listing['title'].' '.$listing['city'].' '.$listing['neighbourhood']), $query))
+            return ($query === '' || str_contains(mb_strtolower($listing['title'].' '.$listing['city'].' '.$listing['neighbourhood'].' '.($listing['listing_code'] ?? '')), $query))
                 && (empty($filters['city']) || $listing['city'] === $filters['city'])
+                && (empty($filters['area']) || $listing['neighbourhood'] === $filters['area'])
+                && (empty($filters['type']) || ($listing['property_type'] ?? null) === $filters['type'])
+                && (empty($filters['collection']) || in_array($filters['collection'], $listing['collections'] ?? [], true))
                 && (empty($filters['guests']) || $listing['max_guests'] >= (int) $filters['guests'])
                 && ((! isset($filters['min_price']) && ! isset($filters['max_price'])) || (float) $listing['starting_price'] > 0)
                 && (! isset($filters['bedrooms']) || $filters['bedrooms'] === null || $listing['bedrooms'] === (int) $filters['bedrooms'])
@@ -57,7 +65,13 @@ class PublicStayController extends Controller
                 && (! isset($filters['max_price']) || $filters['max_price'] === null || (float) $listing['starting_price'] <= (float) $filters['max_price'])
                 && ! array_diff($filters['amenities'] ?? [], $listing['amenities'])
                 && ($nights === null || $nights >= $listing['min_nights']);
-        })->values();
+        };
+        // Collection counts reflect every other active filter, so a chip never promises more stays than it shows.
+        $withoutCollection = array_diff_key($filters, ['collection' => true]);
+        $collectionCounts = collect(PublicListingCatalog::COLLECTIONS)->map(fn (string $label, string $key): array => ['label' => $label,
+            'count' => $listings->filter(fn (array $listing): bool => in_array($key, $listing['collections'] ?? [], true) && $matchesFilters($listing, $withoutCollection))->count()])
+            ->filter(fn (array $collection, string $key): bool => $collection['count'] > 0 || ($filters['collection'] ?? null) === $key)->all();
+        $listings = $listings->filter(fn (array $listing): bool => $matchesFilters($listing, $filters))->values();
         $states = [];
         if ($nights !== null && $listings->isNotEmpty()) {
             foreach ($listings->chunk(500) as $batch) {
@@ -87,7 +101,7 @@ class PublicStayController extends Controller
         });
         $canonicalUrl = $this->publicUrl('public-stays.index', ['company' => $tenant->slug], ! $filtered && $page > 1 ? ['page' => $page] : []);
 
-        return $this->page('public_stays.index', compact('tenant', 'site', 'stays', 'cities', 'filters', 'hero') + [
+        return $this->page('public_stays.index', compact('tenant', 'site', 'stays', 'cities', 'filters', 'hero', 'destinations', 'propertyTypes', 'collectionCounts') + [
             'amenities' => PublicListingCatalog::AMENITIES, 'today' => $today,
             'pageTitle' => ($this->plainText($site->seo_title ?? '', 180) ?: $this->plainText($tenant->name, 100).' | Find your next stay').($page > 1 ? ' | Page '.$page : ''),
             'pageDescription' => $this->plainText($site->seo_description ?? '', 320) ?: $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
@@ -129,6 +143,16 @@ class PublicStayController extends Controller
         $image = $catalog->image($tenant, $slug, $photo);
 
         return response()->file($image['path'], ['Content-Type' => $image['mime_type'], 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=60']);
+    }
+
+    public function logo(string $company, PublicListingCatalog $catalog): BinaryFileResponse
+    {
+        $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
+        $path = $catalog->settings($tenant)?->logo_path;
+        abort_unless($path && str_starts_with($path, 'public-sites/'.$tenant->id.'/') && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/webp', 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'public, max-age=31536000, immutable']);
     }
 
     public function sitemap(string $company, PublicListingCatalog $catalog): Response

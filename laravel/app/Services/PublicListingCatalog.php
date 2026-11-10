@@ -11,7 +11,16 @@ use Illuminate\Support\Str;
 class PublicListingCatalog
 {
     /** Listing addresses that clash with other public pages under /stays/{company}/. */
-    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact'];
+    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo'];
+
+    /** @var array<string, string> */
+    public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'cottage' => 'Cottage'];
+
+    /** Curated groups chosen per listing, shown as quick filters. @var array<string, string> */
+    public const COLLECTIONS = [
+        'beachfront' => 'Beachfront', 'sea_view' => 'Sea view', 'guest_favourite' => 'Guest favourite',
+        'special_offer' => 'Special offer', 'long_stay' => 'Long stays', 'business' => 'Business stays',
+    ];
 
     public const AMENITIES = [
         'wifi' => 'Wi-Fi', 'air_conditioning' => 'Air conditioning', 'pool' => 'Swimming pool',
@@ -130,6 +139,32 @@ class PublicListingCatalog
         }
     }
 
+    /**
+     * Cities with published stays and their localities, each with a stay count, for menus and filters.
+     *
+     * @param  Collection<int, array<string, mixed>>|null  $published
+     * @return list<array{city: string, count: int, areas: list<array{name: string, count: int}>}>
+     */
+    public function destinations(Tenant $tenant, ?Collection $published = null): array
+    {
+        return self::groupDestinations($published ?? $this->published($tenant));
+    }
+
+    /**
+     * Group already-loaded published stays into cities and localities with counts.
+     *
+     * @param  Collection<int, array<string, mixed>>  $published
+     * @return list<array{city: string, count: int, areas: list<array{name: string, count: int}>}>
+     */
+    public static function groupDestinations(Collection $published): array
+    {
+        return $published->groupBy('city')->sortKeys()
+            ->map(fn (Collection $stays, string $city): array => ['city' => $city, 'count' => $stays->count(),
+                'areas' => $stays->filter(fn (array $stay): bool => filled($stay['neighbourhood'] ?? null))->groupBy('neighbourhood')->sortKeys()
+                    ->map(fn (Collection $areaStays, string $area): array => ['name' => $area, 'count' => $areaStays->count()])->values()->all()])
+            ->values()->all();
+    }
+
     public function published(Tenant $tenant): Collection
     {
         if ($this->site($tenant) === null) {
@@ -203,8 +238,13 @@ class PublicListingCatalog
     private function project(Tenant $tenant, object $listing, object $unit, Collection $photos, bool $preview = false): array
     {
         $amenities = array_values(array_intersect(json_decode($listing->amenities ?? '[]', true) ?? [], array_keys(self::AMENITIES)));
+        $collections = array_values(array_intersect(json_decode($listing->collections ?? '[]', true) ?? [], array_keys(self::COLLECTIONS)));
+        $propertyType = array_key_exists((string) ($listing->property_type ?? ''), self::PROPERTY_TYPES) ? $listing->property_type : null;
 
         return [
+            'property_type' => $propertyType, 'property_type_label' => $propertyType ? self::PROPERTY_TYPES[$propertyType] : null,
+            'collections' => $collections, 'collection_labels' => array_map(fn (string $key): string => self::COLLECTIONS[$key], $collections),
+            'listing_code' => ($listing->listing_code ?? null) ?: null,
             'id' => (int) $listing->id, 'unit_id' => $listing->unit_id !== null ? (int) $listing->unit_id : null,
             'partner_apartment_id' => ($listing->partner_apartment_id ?? null) !== null ? (int) $listing->partner_apartment_id : null,
             'inventory_kind' => $unit->kind,

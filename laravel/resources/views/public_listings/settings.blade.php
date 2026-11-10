@@ -4,7 +4,7 @@
 @php($tenantSlug = app('currentTenant')->slug)
 <p><a href="{{ route('public-listings.index', $tenantSlug) }}">&larr; Public listings</a></p>
 <div class="split"><div><h1>Website settings</h1><p class="muted">Manage your public website, search appearance and guest contact options.</p></div>@if($site?->enabled)<a class="button secondary" href="{{ $websiteLinks['public_url'] }}" target="_blank" rel="noopener">View website</a>@endif</div>
-<form method="post" data-listing-save-form action="{{ route('public-listings.site.update', $tenantSlug) }}">
+<form method="post" enctype="multipart/form-data" data-listing-save-form action="{{ route('public-listings.site.update', $tenantSlug) }}">
     @csrf
     <input type="hidden" name="version" value="{{ old('version', $site->version ?? 0) }}">
     <input type="hidden" name="settings_page" value="1">
@@ -17,6 +17,10 @@
         <div><label for="enquiry_assignee_id">Assign website enquiries to</label><select id="enquiry_assignee_id" name="enquiry_assignee_id"><option value="">Choose salesperson</option>@foreach($members as $member)<option value="{{ $member->id }}" @selected((string) old('enquiry_assignee_id', $site->enquiry_assignee_id ?? '') === (string) $member->id)>{{ $member->name }}</option>@endforeach</select><small class="muted">Website enquiry form submissions enter your sales pipeline and are assigned to this active team member.</small></div>
         <div><label for="response_hours">Target response time (hours)</label><input id="response_hours" name="response_hours" type="number" min="1" max="168" required value="{{ old('response_hours', $site->response_hours ?? 24) }}"></div>
     </div><label><input type="checkbox" name="enabled" value="1" style="width:auto" @checked(old('enabled', $site->enabled ?? false))> Enable the public listings site</label></section>
+    <section class="card" aria-labelledby="site-logo-heading"><h2 id="site-logo-heading">Logo</h2><p class="muted">Shown in the website header and as the browser tab icon. Use a version that is easy to read on a white background. WebP or PNG, up to 2 MB; transparent backgrounds are kept.</p>
+        @if(!empty($site?->logo_path))<p><img src="{{ route('public-stays.logo', $tenantSlug) }}?v={{ strtotime((string) $site->logo_updated_at) }}" alt="Current logo" style="max-height:64px;width:auto;background:#fff;border:1px solid #e2e7e9;border-radius:8px;padding:8px"></p><label><input type="checkbox" name="remove_logo" value="1" style="width:auto"> Remove the logo and show the company name instead</label>@endif
+        <div><label for="logo">{{ !empty($site?->logo_path) ? 'Replace logo' : 'Upload logo' }}</label><input id="logo" name="logo" type="file" accept="image/webp,image/png"></div>
+    </section>
     <section class="card" aria-labelledby="site-seo-heading"><h2 id="site-seo-heading">Search appearance</h2><p class="muted">Use a clear website title and introduction for search engines and shared links. Leave these blank to use your company name and website introduction. Individual apartments can have their own search details.</p><div class="grid">
         <div><label for="seo_title">Website search title</label><input id="seo_title" name="seo_title" maxlength="180" value="{{ old('seo_title', $site->seo_title ?? '') }}"><small class="muted">Aim for about 50–60 characters. Maximum 180.</small></div>
         <div><label for="seo_description">Website search description</label><textarea id="seo_description" name="seo_description" maxlength="320" rows="3">{{ old('seo_description', $site->seo_description ?? '') }}</textarea><small class="muted">Summarise what guests can discover in about 150–160 characters. Maximum 320.</small></div>

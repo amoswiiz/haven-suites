@@ -170,6 +170,30 @@ class PublicStaysTest extends TestCase
         $this->get($this->catalogue(['q' => 'Nyali', 'bedrooms' => 2]))->assertOk()->assertViewHas('stays', fn ($rows): bool => $rows->total() === 1);
     }
 
+    public function test_destinations_localities_types_collections_and_codes_help_guests_find_stays(): void
+    {
+        $nyali = $this->listing('nyali-a19', ['title' => 'Nyali Seaview', 'property_type' => 'apartment', 'collections' => json_encode(['beachfront']), 'listing_code' => 'A19']);
+        $bamburi = $this->listing('bamburi-villa', ['title' => 'Bamburi Villa', 'neighbourhood' => 'Bamburi', 'property_type' => 'villa', 'collections' => json_encode(['long_stay']), 'listing_code' => 'V2']);
+        $this->listing('westlands', ['title' => 'Westlands Flat', 'city' => 'Nairobi', 'neighbourhood' => 'Westlands', 'property_type' => 'apartment']);
+        $matches = fn (array $expected) => fn ($rows): bool => $rows->pluck('id')->sort()->values()->all() === collect($expected)->sort()->values()->all();
+
+        $this->get($this->catalogue())->assertOk()
+            ->assertSee('data-destinations-menu', false)->assertSee('Mombasa <span>(2)</span>', false)->assertSee('Bamburi <span>(1)</span>', false)
+            ->assertSee('Mombasa (2)')->assertSee('<optgroup label="Mombasa">', false)->assertSee('id="stay-type"', false)
+            ->assertSee('Beachfront <span>1</span>', false)->assertSee('Long stays <span>1</span>', false)->assertDontSee('Business stays')
+            ->assertSee('Code A19')->assertSee('Find a stay')->assertSee('Serviced apartments &amp; short stays in Kenya', false);
+
+        $this->get($this->catalogue(['city' => 'Mombasa', 'area' => 'Nyali']))->assertOk()->assertViewHas('stays', $matches([$nyali['id']]));
+        $this->get($this->catalogue(['type' => 'villa']))->assertOk()->assertViewHas('stays', $matches([$bamburi['id']]));
+        $this->get($this->catalogue(['collection' => 'beachfront']))->assertOk()->assertViewHas('stays', $matches([$nyali['id']]))
+            ->assertSee('aria-current="true"', false)->assertSee('stay-active-filters', false);
+        $this->get($this->catalogue(['q' => 'v2']))->assertOk()->assertViewHas('stays', $matches([$bamburi['id']]));
+        $this->get($this->catalogue(['city' => 'Nairobi']))->assertOk()->assertDontSee('Beachfront <span>', false);
+        $this->get($this->catalogue(['city' => 'Mombasa', 'area' => 'Bamburi']))->assertOk()->assertSee('Long stays <span>1</span>', false)->assertDontSee('Beachfront <span>', false);
+        $this->get($this->catalogue(['collection' => 'not-a-collection']))->assertSessionHasErrors('collection');
+        $this->get(route('public-stays.show', [$this->company->slug, 'nyali-a19']))->assertOk()->assertSee('Code A19')->assertSee('Beachfront');
+    }
+
     public function test_pagination_and_invalid_search_dates_and_prices_are_handled(): void
     {
         for ($number = 1; $number <= 13; $number++) {

@@ -10,6 +10,41 @@ The prepare preview showed only `0d4f2e2` files, so the earlier pilot
 `/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
 `chmod 755`.
 
+## 10 November: Phases B and C, brand, navigation and filters
+
+- Brand: colour tokens in `public-stays.css` (orange `#FF6E00` buttons with dark
+  text, navy `#004274` headings/footer, sky `#00AEFF` accents, accessible
+  `--accent-text` and `--focus`), Roboto-first system font stack (no external
+  font requests), Georgia removed. Asset versions v=6.
+- Logo: Website settings upload (WebP/PNG, max 2 MB, re-encoded to WebP with
+  transparency, fitted to 800×400), stored `public_sites.logo_path` /
+  `logo_updated_at` (migration `2026_11_10_132636_add_logo_to_public_sites`),
+  served at `/stays/{company}/logo` with a year-long cache and version query.
+  Shown in the header and as the browser tab icon; theme-color #004274.
+  Requires GD with WebP on the server.
+- Header: logo or name, Destinations dropdown (cities with counts and
+  localities, from published stays), saved menu links, "WhatsApp us" and
+  "Find a stay" (the misleading "Enquire" header button is gone). Footer reads
+  "Serviced apartments & short stays in Kenya"; staff link de-emphasised.
+- Hero search: the search card overlaps the hero so it is visible without
+  scrolling; on phones the hero photo is shorter.
+- Listing fields (migration `2026_11_10_132948_add_type_collections_and_code_to_public_listings`):
+  `property_type` (apartment, studio, villa, townhouse, cottage), `collections`
+  (beachfront, sea_view, guest_favourite, special_offer, long_stay, business),
+  `listing_code` (unique per company, upper-cased). Editor suggests existing
+  cities/localities so spellings stay consistent.
+- Catalogue: city select with counts, collection chips (counts respect the
+  other active filters), More filters with locality (grouped by city), type
+  (only when more than one type is published), name/area/code search,
+  bedrooms, price, amenities; removable active-filter chips; empty state with
+  WhatsApp. Cards and listing pages show code and collections.
+- Reserved slugs now also include `logo`.
+- Verified with headless Chrome screenshots at 1440px and a true 390px frame
+  using fake data (no real records). Full suite 587/590 (same three
+  pre-existing failures).
+- Next: push/deploy, upload the WebP logo, set type/collections/codes on the
+  listings, then Phase E (listing quality warnings, faster photos) and D.
+
 ## 10 November: Phase A, readable references and "Track my enquiry"
 
 Agreed with the user: references `HS-2611-042` (prefix, year+month, monthly

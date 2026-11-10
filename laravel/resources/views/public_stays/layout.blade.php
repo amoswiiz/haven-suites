@@ -7,6 +7,8 @@
         ['label' => 'Contact', 'url' => $publicBrowseUrl.'#stay-contact'],
     ];
     $contactLinks = $websiteContactLinks ?? ['public_url' => $publicBrowseUrl, 'enquiry_url' => $publicBrowseUrl.'#find-stay', 'whatsapp_url' => null];
+    $logoUrl = !empty($site?->logo_path) ? route('public-stays.logo', $tenant->slug).'?v='.strtotime((string) $site->logo_updated_at) : null;
+    $menuDestinations = $destinations ?? (empty($preview) && !empty($site?->enabled) ? rescue(fn () => app(\App\Services\PublicListingCatalog::class)->destinations($tenant), []) : []);
 @endphp
 <!doctype html>
 <html lang="en">
@@ -31,20 +33,36 @@
         <meta name="twitter:image" content="{{ $socialImage['url'] }}">
         <meta name="twitter:image:alt" content="{{ $socialImage['caption'] ?? $pageTitle }}">
     @endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=5">
+    <meta name="theme-color" content="#004274">
+    @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=6">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">
     <a class="stay-skip" href="#stay-content">Skip to content</a>
     <div class="stay-header-wrap">
         <header class="stay-header" data-public-header>
-            <a class="stay-brand" href="{{ $browseUrl }}">{{ $tenant->name }}<span>Make yourself at home</span></a>
+            <a class="stay-brand{{ $logoUrl ? ' has-logo' : '' }}" href="{{ $browseUrl }}">@if($logoUrl)<img src="{{ $logoUrl }}" alt="{{ $tenant->name }}" height="52">@else{{ $tenant->name }}<span>Make yourself at home</span>@endif</a>
             <button class="stay-menu-toggle" type="button" aria-expanded="false" aria-controls="stay-public-menu" data-menu-toggle hidden><span class="stay-menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>Menu</button>
             <div class="stay-header-menu" id="stay-public-menu" data-public-menu>
-                <nav aria-label="Main navigation">@foreach($navigationItems as $menuItem)<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach</nav>
+                <nav aria-label="Main navigation">
+                    @if(count($menuDestinations) > 1)
+                        <details class="stay-destinations" data-destinations-menu>
+                            <summary>Destinations</summary>
+                            <ul>
+                                @foreach($menuDestinations as $destination)
+                                    <li><a href="{{ $publicBrowseUrl }}?city={{ rawurlencode($destination['city']) }}#find-stay">{{ $destination['city'] }} <span>({{ $destination['count'] }})</span></a>
+                                        @if(count($destination['areas']) > 1)<ul>@foreach($destination['areas'] as $area)<li><a href="{{ $publicBrowseUrl }}?city={{ rawurlencode($destination['city']) }}&amp;area={{ rawurlencode($area['name']) }}#find-stay">{{ $area['name'] }} <span>({{ $area['count'] }})</span></a></li>@endforeach</ul>@endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </details>
+                    @endif
+                    @foreach($navigationItems as $menuItem)<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach
+                </nav>
                 <div class="stay-header-actions">
-                    @if(!empty($contactLinks['whatsapp_url']))<a class="stay-whatsapp-link" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp <span aria-hidden="true">&nearr;</span></a>@endif
-                    <a class="stay-button" href="{{ $contactLinks['enquiry_url'] ?? $publicBrowseUrl.'#find-stay' }}">Enquire <span aria-hidden="true">&rarr;</span></a>
+                    @if(!empty($contactLinks['whatsapp_url']))<a class="stay-button secondary stay-header-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp us <span aria-hidden="true">&nearr;</span></a>@endif
+                    <a class="stay-button" href="{{ $publicBrowseUrl }}#find-stay">Find a stay <span aria-hidden="true">&rarr;</span></a>
                 </div>
             </div>
         </header>
@@ -59,8 +77,8 @@
             <div><strong>Explore</strong><nav class="stay-footer-nav" aria-label="Footer navigation">@foreach($navigationItems as $menuItem)<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach</nav></div>
             <div><strong>Let's plan your stay</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif<p><a href="{{ route('public-stays.track', $tenant->slug) }}">Track an enquiry &rarr;</a></p><p class="stay-contact-note">We use your contact details to respond to your enquiry and help arrange your stay.</p></div>
         </div>
-        <div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><span>BNBs &amp; STR homes</span><a href="{{ route('login') }}">Staff sign in</a></div>
+        <div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><span>Serviced apartments &amp; short stays in Kenya</span><a class="stay-staff-link" href="{{ route('login') }}">Staff sign in</a></div>
     </footer>
-    <script src="{{ asset('assets/js/public-stays.js') }}?v=5" defer></script>
+    <script src="{{ asset('assets/js/public-stays.js') }}?v=6" defer></script>
 </body>
 </html>

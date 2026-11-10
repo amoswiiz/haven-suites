@@ -51,6 +51,8 @@ class PublicWebsiteIntegrationTest extends TestCase
             $mock->shouldReceive('site')->andReturnUsing(fn (): object => $this->site);
             $mock->shouldReceive('published')->andReturnUsing(fn () => collect([$this->listing]));
             $mock->shouldReceive('findPublished')->andReturnUsing(fn (): array => $this->listing);
+            $mock->shouldReceive('destinations')->andReturnUsing(fn () => [['city' => 'Mombasa', 'count' => 1, 'areas' => [['name' => 'Nyali', 'count' => 1]]]]);
+            $mock->shouldReceive('settings')->andReturnUsing(fn (): object => $this->site);
         });
         $this->mock(ListingAvailability::class, function ($mock): void {
             $mock->shouldReceive('calendar')->andReturn(['blocked' => [], 'fresh' => true, 'last_synced_at' => null, 'requires_confirmation' => true]);

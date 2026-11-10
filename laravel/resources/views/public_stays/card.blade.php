@@ -9,6 +9,7 @@
     <div class="stay-card-body">
         <p class="stay-location">{{ $stay['neighbourhood'] ? $stay['neighbourhood'].' · ' : '' }}{{ $stay['city'] }}</p>
         <h3><a href="{{ $stayUrl }}">{{ $stay['title'] }}</a></h3>
+        @if(!empty($stay['collection_labels']) || !empty($stay['listing_code']))<p class="stay-card-tags">@foreach(array_slice($stay['collection_labels'] ?? [], 0, 2) as $collectionLabel)<span class="stay-tag">{{ $collectionLabel }}</span>@endforeach @if(!empty($stay['listing_code']))<span class="stay-code">Code {{ $stay['listing_code'] }}</span>@endif</p>@endif
         @if(!empty($stay['availability']))
             <span class="stay-pill {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
         @endif

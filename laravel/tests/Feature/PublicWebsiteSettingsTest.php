@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -218,6 +219,56 @@ class PublicWebsiteSettingsTest extends TestCase
             'starting_price' => '12000.00', 'status' => 'draft', 'featured' => 0,
         ])->assertSessionHasErrors('slug');
         $this->assertDatabaseCount('public_listings', 0);
+    }
+
+    public function test_logo_is_reencoded_served_replaced_and_removed(): void
+    {
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['logo' => UploadedFile::fake()->image('logo.jpg', 400, 120)]))
+            ->assertSessionHasErrors('logo');
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['logo' => UploadedFile::fake()->image('logo.png', 1600, 400)]))
+            ->assertSessionHasNoErrors();
+        $first = $this->site()->logo_path;
+        $this->assertMatchesRegularExpression('#^public-sites/'.$this->company->id.'/logo-[A-Za-z0-9]{16}\.webp$#', $first);
+        Storage::disk('local')->assertExists($first);
+        [$width, $height] = getimagesizefromstring(Storage::disk('local')->get($first));
+        $this->assertSame([800, 200], [$width, $height]);
+        $this->get(route('public-stays.logo', $this->company->slug))->assertOk()
+            ->assertHeader('Content-Type', 'image/webp')->assertHeader('Cache-Control', 'immutable, max-age=31536000, public');
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 1, 'logo' => UploadedFile::fake()->image('new.png', 300, 100)]))
+            ->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($first);
+        $second = $this->site()->logo_path;
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Remove the logo');
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 2, 'remove_logo' => 1]))->assertSessionHasNoErrors();
+        $this->assertNull($this->site()->logo_path);
+        Storage::disk('local')->assertMissing($second);
+        $this->get(route('public-stays.logo', $this->company->slug))->assertNotFound();
+    }
+
+    public function test_listing_type_collections_and_code_are_validated_and_saved(): void
+    {
+        $listing = fn (array $overrides): array => array_replace([
+            'unit_id' => 1, 'slug' => 'coral-gables-f5', 'title' => 'Seaview stay at Coral Gables',
+            'description' => 'A bright apartment with comfortable bedrooms, a private balcony and a convenient location near the beach.',
+            'city' => 'Mombasa', 'neighbourhood' => 'Nyali', 'max_guests' => 4, 'min_nights' => 2, 'check_in_time' => '14:00', 'check_out_time' => '10:00',
+            'starting_price' => '12000.00', 'status' => 'draft', 'featured' => 0,
+        ], $overrides);
+
+        $this->post(route('public-listings.store', $this->company->slug), $listing(['property_type' => 'castle', 'collections' => ['beachfront', 'bogus'], 'listing_code' => 'A 19!']))
+            ->assertSessionHasErrors(['property_type', 'collections.1', 'listing_code']);
+        $this->post(route('public-listings.store', $this->company->slug), $listing(['property_type' => 'apartment', 'collections' => ['beachfront', 'sea_view'], 'listing_code' => ' a19 ']))
+            ->assertSessionHasNoErrors();
+        $saved = DB::table('public_listings')->where('tenant_id', $this->company->id)->first();
+        $this->assertSame('apartment', $saved->property_type);
+        $this->assertSame(['beachfront', 'sea_view'], json_decode($saved->collections, true));
+        $this->assertSame('A19', $saved->listing_code);
+
+        $this->post(route('public-listings.store', $this->company->slug), $listing(['slug' => 'second-listing', 'listing_code' => 'a19']))->assertSessionHasErrors('listing_code');
+        $this->get(route('public-listings.create', $this->company->slug))->assertOk()->assertSee('<option value="Mombasa">', false)->assertSee('<option value="Nyali">', false)
+            ->assertSee('name="collections[]"', false)->assertSee('id="listing_code"', false);
     }
 
     public function test_only_administrators_can_open_or_save_website_settings(): void

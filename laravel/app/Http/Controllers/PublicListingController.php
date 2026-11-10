@@ -13,6 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -54,7 +55,16 @@ class PublicListingController extends Controller
     {
         $this->authorizeAccess();
 
-        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'videos' => [], 'amenities' => PublicListingCatalog::AMENITIES]);
+        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'videos' => [], 'amenities' => PublicListingCatalog::AMENITIES, ...$this->placeSuggestions()]);
+    }
+
+    /** @return array{knownCities: list<string>, knownAreas: list<string>} */
+    private function placeSuggestions(): array
+    {
+        $places = DB::table('public_listings')->where('tenant_id', app('currentTenant')->id)->get(['city', 'neighbourhood']);
+
+        return ['knownCities' => $places->pluck('city')->filter()->unique()->sort()->values()->all(),
+            'knownAreas' => $places->pluck('neighbourhood')->filter()->unique()->sort()->values()->all()];
     }
 
     public function edit(string $tenant, int $id, PublicListingCatalog $catalog): View
@@ -67,6 +77,7 @@ class PublicListingController extends Controller
             'photos' => DB::table('public_listing_photos')->where('tenant_id', app('currentTenant')->id)->where('listing_id', $id)->orderBy('sort_order')->orderBy('id')->get(),
             'amenities' => PublicListingCatalog::AMENITIES,
             'videos' => app(YouTubeListingVideos::class)->forForm($listing->youtube_videos ?? null),
+            ...$this->placeSuggestions(),
         ]);
     }
 
@@ -106,32 +117,55 @@ class PublicListingController extends Controller
             ...$this->websiteRules(),
             'navigation_links' => 'sometimes|array|max:6', 'navigation_links.*' => 'required|array:label,target',
             'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(array_keys(PublicWebsiteLinks::TARGETS))],
-        ]);
+            'logo' => 'nullable|file|mimes:webp,png|max:2048', 'remove_logo' => 'sometimes|boolean',
+        ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
         }
-        unset($data['settings_page']);
-        $data = $this->normalizePhones($data, ['whatsapp_number']);
-        $data = $this->normalizePhones($data, ['contact_phone'], mobileOnly: false);
         $data['enabled'] = $request->boolean('enabled');
         if ($data['enabled'] && (empty($data['enquiry_assignee_id']) || ($tenant->modules['sales'] ?? true) === false)) {
             throw ValidationException::withMessages(['enquiry_assignee_id' => 'Choose an active salesperson and enable the Sales module before opening the public site.']);
         }
-        DB::transaction(function () use ($tenant, $data): void {
-            $before = DB::table('public_sites')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
-            if ((int) $data['version'] !== (int) ($before->version ?? 0)) {
-                throw ValidationException::withMessages(['site' => 'These site settings changed. Reload the page before saving.']);
+        $newLogo = null;
+        if ($request->hasFile('logo')) {
+            $newLogo = 'public-sites/'.$tenant->id.'/logo-'.Str::random(16).'.webp';
+            Storage::disk('local')->put($newLogo, $this->encodeLogo($request->file('logo')));
+            $data['logo_path'] = $newLogo;
+            $data['logo_updated_at'] = now();
+        } elseif ($request->boolean('remove_logo')) {
+            $data['logo_path'] = null;
+            $data['logo_updated_at'] = now();
+        }
+        unset($data['settings_page'], $data['logo'], $data['remove_logo']);
+        $data = $this->normalizePhones($data, ['whatsapp_number']);
+        $data = $this->normalizePhones($data, ['contact_phone'], mobileOnly: false);
+        try {
+            $previousLogo = DB::transaction(function () use ($tenant, $data): ?string {
+                $before = DB::table('public_sites')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
+                if ((int) $data['version'] !== (int) ($before->version ?? 0)) {
+                    throw ValidationException::withMessages(['site' => 'These site settings changed. Reload the page before saving.']);
+                }
+                $changes = $data;
+                $changes['version'] = (int) $data['version'] + 1;
+                $changes['updated_at'] = now();
+                if ($before) {
+                    DB::table('public_sites')->where('id', $before->id)->update($changes);
+                } else {
+                    DB::table('public_sites')->insert($changes + ['tenant_id' => $tenant->id, 'created_at' => now()]);
+                }
+                $this->audit(null, 'site_updated', $before, DB::table('public_sites')->where('tenant_id', $tenant->id)->first());
+
+                return array_key_exists('logo_path', $data) ? ($before->logo_path ?? null) : null;
+            });
+        } catch (\Throwable $exception) {
+            if ($newLogo !== null) {
+                Storage::disk('local')->delete($newLogo);
             }
-            $changes = $data;
-            $changes['version'] = (int) $data['version'] + 1;
-            $changes['updated_at'] = now();
-            if ($before) {
-                DB::table('public_sites')->where('id', $before->id)->update($changes);
-            } else {
-                DB::table('public_sites')->insert($changes + ['tenant_id' => $tenant->id, 'created_at' => now()]);
-            }
-            $this->audit(null, 'site_updated', $before, DB::table('public_sites')->where('tenant_id', $tenant->id)->first());
-        });
+            throw $exception;
+        }
+        if ($previousLogo !== null && str_starts_with($previousLogo, 'public-sites/'.$tenant->id.'/')) {
+            Storage::disk('local')->delete($previousLogo);
+        }
 
         return $this->saved($request, route($request->boolean('settings_page') ? 'public-listings.settings' : 'public-listings.index', $tenant->slug), 'Public site settings saved.');
     }
@@ -155,7 +189,8 @@ class PublicListingController extends Controller
         $this->authorizeAccess();
         $tenant = app('currentTenant');
         $before = $id ? $this->listing($id) : null;
-        $request->merge(['amenities' => $request->input('amenities', [])]);
+        $request->merge(['amenities' => $request->input('amenities', []), 'collections' => $request->input('collections', []),
+            'listing_code' => is_string($request->input('listing_code')) ? strtoupper(trim($request->input('listing_code'))) : $request->input('listing_code')]);
         if ($request->filled('apartment_ref')) {
             $reference = $request->input('apartment_ref');
             if (! is_string($reference) || ! preg_match('/^(unit|partner):([1-9][0-9]{0,9})$/D', $reference, $parts) || (int) $parts[2] > 4294967295) {
@@ -179,6 +214,9 @@ class PublicListingController extends Controller
             'check_in_time' => 'required|date_format:H:i', 'check_out_time' => 'required|date_format:H:i',
             'starting_price' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999.99', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
             'amenities' => 'nullable|array|max:30', 'amenities.*' => ['string', Rule::in(array_keys(PublicListingCatalog::AMENITIES))],
+            'property_type' => ['nullable', Rule::in(array_keys(PublicListingCatalog::PROPERTY_TYPES))],
+            'collections' => 'nullable|array|max:6', 'collections.*' => ['string', Rule::in(array_keys(PublicListingCatalog::COLLECTIONS))],
+            'listing_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Z0-9][A-Z0-9-]*$/D', Rule::unique('public_listings')->where('tenant_id', $tenant->id)->ignore($id)],
             'house_rules' => 'nullable|string|max:5000', 'status' => 'required|in:draft,published,paused', 'featured' => 'sometimes|boolean',
             'photos' => 'nullable|array|max:10', 'photos.*' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120',
             'remove_photos' => 'nullable|array|max:30', 'remove_photos.*' => 'required|integer',
@@ -233,6 +271,9 @@ class PublicListingController extends Controller
                 }
                 $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message']));
                 $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null];
+                $changes['property_type'] = $data['property_type'] ?? null;
+                $changes['listing_code'] = ($data['listing_code'] ?? null) ?: null;
+                $changes['collections'] = json_encode(array_values(array_unique($data['collections'] ?? [])), JSON_THROW_ON_ERROR);
                 $changes['amenities'] = json_encode(array_values(array_unique($data['amenities'] ?? [])), JSON_THROW_ON_ERROR);
                 if (array_key_exists('youtube_videos', $data)) {
                     $changes['youtube_videos'] = json_encode($data['youtube_videos'], JSON_THROW_ON_ERROR);
@@ -339,6 +380,43 @@ class PublicListingController extends Controller
         }
 
         return redirect()->to($url)->with('success', $message);
+    }
+
+    /** Re-encode an uploaded logo as WebP, keeping transparency and fitting it within 800 × 400 pixels. */
+    private function encodeLogo(UploadedFile $file): string
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagewebp')) {
+            throw ValidationException::withMessages(['logo' => 'Image processing is unavailable. Ask an administrator to enable WebP support in the PHP GD extension.']);
+        }
+        $dimensions = @getimagesize($file->getPathname());
+        if (! $dimensions || $dimensions[0] < 16 || $dimensions[1] < 16 || $dimensions[0] > 4000 || $dimensions[1] > 4000) {
+            throw ValidationException::withMessages(['logo' => 'Use a logo between 16 and 4,000 pixels per side.']);
+        }
+        $image = @imagecreatefromstring((string) file_get_contents($file->getPathname()));
+        if (! $image) {
+            throw ValidationException::withMessages(['logo' => 'The logo could not be read. Upload a WebP or PNG image.']);
+        }
+        try {
+            $ratio = min(1, 800 / imagesx($image), 400 / imagesy($image));
+            $width = max(1, (int) round(imagesx($image) * $ratio));
+            $height = max(1, (int) round(imagesy($image) * $ratio));
+            $canvas = imagecreatetruecolor($width, $height);
+            imagealphablending($canvas, false);
+            imagesavealpha($canvas, true);
+            imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
+            imagecopyresampled($canvas, $image, 0, 0, 0, 0, $width, $height, imagesx($image), imagesy($image));
+            ob_start();
+            $written = imagewebp($canvas, null, 90);
+            $encoded = (string) ob_get_clean();
+            imagedestroy($canvas);
+            if (! $written || $encoded === '') {
+                throw ValidationException::withMessages(['logo' => 'The logo could not be processed. Try another WebP or PNG file.']);
+            }
+
+            return $encoded;
+        } finally {
+            imagedestroy($image);
+        }
     }
 
     private function encode(UploadedFile $file): array
