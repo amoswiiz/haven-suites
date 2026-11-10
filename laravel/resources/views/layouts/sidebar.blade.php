@@ -29,6 +29,7 @@ $groups = [
         ['label' => 'Reservations', 'path' => 'reservations', 'icon' => 'calendar', 'permission' => 'reservations.view'],
         ['label' => 'Quotations', 'path' => 'quotations', 'icon' => 'file-text', 'permission' => 'reservations.view'],
         ['label' => 'Availability', 'path' => 'availability', 'icon' => 'calendar-days', 'permission' => 'availability.view'],
+        ['label' => 'Partner apartments', 'path' => 'partners', 'icon' => 'handshake', 'permission' => 'availability.view'],
         ['label' => 'External calendars', 'path' => 'availability/external', 'icon' => 'calendar-sync', 'permission' => 'availability.view'],
         ['label' => 'Customers', 'path' => 'customers', 'icon' => 'contact', 'permission' => 'finance.view'],
         ['label' => 'Guest KYC', 'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'finance.view'],

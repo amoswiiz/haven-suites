@@ -25,13 +25,13 @@ class PublicWebsiteLinks
      * @param  array{name: ?string, whatsapp: ?string}|null  $owner
      * @param  array{check_in?: string, check_out?: string, guests?: int|string}  $stay
      */
-    public function ownerWhatsappUrl(?array $owner, Tenant $tenant, string $apartment, array $stay = []): ?string
+    public function ownerWhatsappUrl(?array $owner, Tenant $tenant, string $apartment, array $stay = [], ?string $question = null): ?string
     {
         if (empty($owner['whatsapp'])) {
             return null;
         }
         $firstName = trim(explode(' ', trim((string) ($owner['name'] ?? '')))[0] ?? '');
-        $message = implode("\n", ['Hello'.($firstName !== '' ? ' '.$firstName : '').', this is '.$tenant->name.'. Is '.$apartment.' available?', ...self::stayLines(null, $stay)]);
+        $message = implode("\n", ['Hello'.($firstName !== '' ? ' '.$firstName : '').', this is '.$tenant->name.'. '.($question ?? 'Is '.$apartment.' available?'), ...self::stayLines(null, $stay)]);
 
         return 'https://wa.me/'.$owner['whatsapp'].'?text='.rawurlencode($message);
     }

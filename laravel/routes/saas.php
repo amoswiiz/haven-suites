@@ -8,6 +8,7 @@ use App\Http\Controllers\DueCommunicationController;
 use App\Http\Controllers\GuestCommunicationController;
 use App\Http\Controllers\InvestorController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\PartnerDirectoryController;
 use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PlatformController;
@@ -57,6 +58,13 @@ Route::middleware('auth')->group(function (): void {
     });
 });
 Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
+    Route::prefix('partners')->name('partners.')->group(function (): void {
+        Route::get('/', [PartnerDirectoryController::class, 'index'])->middleware('permission:availability.view')->name('index');
+        Route::get('new', [PartnerDirectoryController::class, 'create'])->middleware('permission:reservations.manage')->name('create');
+        Route::post('/', [PartnerDirectoryController::class, 'store'])->middleware(['permission:reservations.manage', 'throttle:30,1'])->name('store');
+        Route::get('{id}/edit', [PartnerDirectoryController::class, 'edit'])->whereNumber('id')->middleware('permission:reservations.manage')->name('edit');
+        Route::post('{id}', [PartnerDirectoryController::class, 'update'])->whereNumber('id')->middleware(['permission:reservations.manage', 'throttle:30,1'])->name('update');
+    });
     Route::prefix('public-listings')->middleware('permission:properties.manage')->name('public-listings.')->group(function (): void {
         Route::get('/', [PublicListingController::class, 'index'])->name('index');
         Route::get('new', [PublicListingController::class, 'create'])->name('create');
