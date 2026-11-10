@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -165,7 +166,7 @@ class PartnerDirectoryTest extends TestCase
         $response->assertSee('data-owner-request-form', false);
         $location = $this->actingAs($this->admin)->post(route('partners.ask', [$this->company->slug, 1]))->headers->get('Location');
         parse_str(parse_url($location, PHP_URL_QUERY), $asked);
-        $this->assertStringContainsString("Dates: to be confirmed\nListing: https://app.havensuitesbnb.com/stays/haven/baharini-b09\nReply with one tap: https://app.havensuitesbnb.com/p/", $asked['text']);
+        $this->assertMatchesRegularExpression('#available\?\nSee the unit and reply: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}\nDates: to be confirmed\nListing: https://app\.havensuitesbnb\.com/stays/haven/baharini-b09$#u', $asked['text']);
     }
 
     public function test_asking_creates_a_private_request_the_owner_answers_with_one_tap(): void
@@ -176,12 +177,26 @@ class PartnerDirectoryTest extends TestCase
         $location = $ask()->assertRedirect()->headers->get('Location');
         $this->assertStringStartsWith('https://wa.me/254712000001?text=', $location);
         parse_str(parse_url($location, PHP_URL_QUERY), $query);
-        $this->assertMatchesRegularExpression('#^Hello Jane, this is Haven Suites\. Is Baharini Cottages, B09 \(2BR\) available\?\nDates: Sat 12 Dec 2026 – Tue 15 Dec 2026 \(3 nights\)\nGuests: 2\nReply with one tap: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}$#u', $query['text']);
+        $this->assertMatchesRegularExpression('#^Hello Jane, this is Haven Suites\. Is Baharini Cottages, B09 \(2BR\) in Diani available\?\nSee the unit and reply: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}\nDates: Sat 12 Dec 2026 – Tue 15 Dec 2026 \(3 nights\)\nGuests: 2$#u', $query['text']);
         $this->assertSame($location, $ask()->headers->get('Location'), 'Asking again for the same request reuses the link.');
         $this->assertDatabaseCount('partner_availability_requests', 1);
 
-        $path = parse_url(substr($query['text'], strrpos($query['text'], 'https://')), PHP_URL_PATH);
-        $this->get($path)->assertOk()->assertSee('Baharini Cottages, B09 (2BR)')->assertSee('Sat 12 Dec 2026')->assertSee("Yes, it's available", false)
+        preg_match('#/p/[A-Za-z0-9_-]{12}#', $query['text'], $match);
+        $path = $match[0];
+        Storage::fake('local');
+        $listingId = DB::table('public_listings')->insertGetId(['tenant_id' => $this->company->id, 'partner_apartment_id' => 1, 'slug' => 'baharini-draft', 'title' => 'Baharini',
+            'description' => 'x', 'city' => 'Diani', 'max_guests' => 4, 'min_nights' => 1, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()]);
+        $photoKey = 'listing-photos/'.$this->company->id.'/'.$listingId.'/'.str_repeat('a', 48).'.jpg';
+        Storage::disk('local')->put($photoKey, 'jpeg-bytes');
+        $photoId = DB::table('public_listing_photos')->insertGetId(['tenant_id' => $this->company->id, 'listing_id' => $listingId, 'storage_key' => $photoKey, 'mime_type' => 'image/jpeg', 'caption' => 'Sea-facing balcony', 'sort_order' => 0]);
+        $this->get($path)->assertOk()->assertSee('Unit number')->assertSee('B09')->assertSee('Diani')->assertSee('2 bedrooms &middot; 2 bathrooms', false)
+            ->assertSee($path.'/photos/'.$photoId, false)->assertSee('Sea-facing balcony')->assertDontSee('See this apartment&#039;s public listing', false);
+        $this->get($path.'/photos/'.$photoId)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        $otherListing = DB::table('public_listings')->insertGetId(['tenant_id' => $this->company->id, 'partner_apartment_id' => 2, 'slug' => 'galu', 'title' => 'Galu',
+            'description' => 'x', 'city' => 'Diani', 'max_guests' => 4, 'min_nights' => 1, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()]);
+        $otherPhoto = DB::table('public_listing_photos')->insertGetId(['tenant_id' => $this->company->id, 'listing_id' => $otherListing, 'storage_key' => $photoKey, 'mime_type' => 'image/jpeg', 'sort_order' => 0]);
+        $this->get($path.'/photos/'.$otherPhoto)->assertNotFound();
+        $this->get($path)->assertOk()->assertSee('Baharini Cottages')->assertSee('<dd>B09</dd>', false)->assertSee('Sat 12 Dec 2026')->assertSee("Yes, it's available", false)
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow')->assertDontSee('+254712000001')->assertDontSee('jane@example.test');
         $this->post($path, ['response' => 'maybe'])->assertSessionHasErrors('response');
         $this->post($path, ['response' => 'available', 'nightly_price' => 9000, 'note' => 'Check-in from 2 pm'])->assertRedirect($path);

@@ -62,6 +62,40 @@ class PartnerAvailabilityRequests
         return $tenant ? ['request' => $request, 'tenant' => $tenant] : null;
     }
 
+    /**
+     * What the owner sees about the unit being asked about: its description and, when it has a website listing
+     * (published or not), up to eight photos. Owner contact details are never included.
+     *
+     * @return array{unit: ?object, listing: ?object, photos: Collection<int, object>}
+     */
+    public function unitDetails(Tenant $tenant, object $request): array
+    {
+        $config = config('database.connections.tenant');
+        $config['database'] = $tenant->database_name;
+        $db = DB::build($config);
+        try {
+            $unit = $db->getSchemaBuilder()->hasTable('partner_apartments')
+                ? $db->table('partner_apartments')->where('id', $request->partner_apartment_id)
+                    ->first(['apartment_name', 'building_name', 'unit_number', 'location', 'bedrooms', 'bathrooms'])
+                : null;
+        } finally {
+            $db->disconnect();
+        }
+        $listing = $this->listing($tenant, $request);
+
+        return ['unit' => $unit, 'listing' => $listing, 'photos' => $listing
+            ? DB::table('public_listing_photos')->where('tenant_id', $tenant->id)->where('listing_id', $listing->id)
+                ->orderBy('sort_order')->orderBy('id')->limit(8)->get(['id', 'caption'])
+            : collect()];
+    }
+
+    /** The unit's website listing, if any, excluding archived ones. */
+    public function listing(Tenant $tenant, object $request): ?object
+    {
+        return DB::table('public_listings')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $request->partner_apartment_id)
+            ->where('status', '!=', 'archived')->orderByRaw("CASE WHEN status = 'published' THEN 0 ELSE 1 END")->first(['id', 'slug', 'status', 'title']);
+    }
+
     public function respond(object $request, string $response, ?float $nightlyPrice, ?string $note): void
     {
         DB::table('partner_availability_requests')->where('id', $request->id)->update([

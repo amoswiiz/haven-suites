@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /** The page a partner owner opens from a WhatsApp availability request to answer it. */
 class PartnerRequestController extends Controller
@@ -19,9 +20,14 @@ class PartnerRequestController extends Controller
             return $this->notFound();
         }
         ['request' => $availability, 'tenant' => $tenant] = $found;
+        $site = $catalog->site($tenant);
+        $details = $requests->unitDetails($tenant, $availability);
+        $listingUrl = $site && $details['listing']?->status === 'published'
+            ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $details['listing']->slug], false) : null;
 
         return response()->view('partners.request', [
-            'tenant' => $tenant, 'site' => $catalog->site($tenant), 'availability' => $availability, 'code' => $code,
+            'tenant' => $tenant, 'site' => $site, 'availability' => $availability, 'code' => $code,
+            'unit' => $details['unit'], 'photos' => $details['photos'], 'listingUrl' => $listingUrl,
             'pageTitle' => 'Availability request | '.$tenant->name, 'robotsContent' => 'noindex, nofollow', 'websiteMenu' => [],
         ])->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
     }
@@ -39,6 +45,20 @@ class PartnerRequestController extends Controller
         $requests->respond($found['request'], $data['response'], isset($data['nightly_price']) ? (float) $data['nightly_price'] : null, $data['note'] ?? null);
 
         return redirect()->route('partner-request.show', $code)->with('success', 'Thank you. Your reply has been sent to '.$found['tenant']->name.'.');
+    }
+
+    /** A photo of the unit being asked about, served only through the owner's private link. */
+    public function photo(string $code, int $photo, PartnerAvailabilityRequests $requests, PublicListingCatalog $catalog): BinaryFileResponse|Response
+    {
+        $found = $requests->find($code);
+        $listing = $found ? $requests->listing($found['tenant'], $found['request']) : null;
+        if (! $listing) {
+            return $this->notFound();
+        }
+        $image = $catalog->imageForListing($found['tenant'], (int) $listing->id, $photo);
+
+        return response()->file($image['path'], ['Content-Type' => $image['mime_type'], 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=3600', 'X-Robots-Tag' => 'noindex, nofollow']);
     }
 
     private function notFound(): Response

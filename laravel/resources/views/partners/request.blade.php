@@ -10,8 +10,15 @@
     <span class="stay-eyebrow">Availability request from {{ $tenant->name }}</span>
     <h1 id="request-heading">Is your apartment available?</h1>
     @if(session('success'))<div class="stay-track-status" role="status"><strong>{{ session('success') }}</strong></div>@endif
+    @if($photos->isNotEmpty())
+        <div class="stay-request-photos">@foreach($photos as $photo)<img src="{{ route('partner-request.photo', [$code, $photo->id]) }}" alt="{{ $photo->caption ?: $availability->apartment_label }}" loading="lazy" width="320" height="220">@endforeach</div>
+    @endif
     <dl class="stay-track-details">
-        <div><dt>Apartment</dt><dd>{{ $availability->apartment_label }}</dd></div>
+        <div><dt>Apartment</dt><dd>{{ $unit->apartment_name ?? $availability->apartment_label }}</dd></div>
+        @if(!empty($unit->building_name) && mb_strtolower($unit->building_name) !== mb_strtolower($unit->apartment_name ?? ''))<div><dt>Building / block</dt><dd>{{ $unit->building_name }}</dd></div>@endif
+        @if(!empty($unit->unit_number))<div><dt>Unit number</dt><dd>{{ $unit->unit_number }}</dd></div>@endif
+        @if(!empty($unit->location))<div><dt>Area</dt><dd>{{ $unit->location }}</dd></div>@endif
+        @if($unit)<div><dt>Size</dt><dd>{{ (int) $unit->bedrooms === 0 ? 'Studio' : $unit->bedrooms.' bedroom'.((int) $unit->bedrooms === 1 ? '' : 's') }}@if($unit->bathrooms !== null) &middot; {{ $unit->bathrooms }} bathroom{{ (int) $unit->bathrooms === 1 ? '' : 's' }}@endif</dd></div>@endif
         <div><dt>Dates</dt><dd>@if($availability->check_in && $availability->check_out){{ $date($availability->check_in) }} &rarr; {{ $date($availability->check_out) }}@elseif($availability->check_in)From {{ $date($availability->check_in) }}@else To be confirmed @endif</dd></div>
         <div><dt>Guests</dt><dd>{{ $availability->guests ?: 'To be confirmed' }}</dd></div>
     </dl>
@@ -27,7 +34,8 @@
             <button type="submit" name="response" value="unavailable" class="stay-button secondary">Not available</button>
         </div>
     </form>
-    <p class="stay-help">Your reply goes straight to the {{ $tenant->name }} team. You can also reply in WhatsApp.</p>
+    @if($listingUrl)<p><a href="{{ $listingUrl }}" target="_blank" rel="noopener noreferrer">See this apartment's public listing &nearr;</a></p>@endif
+    <p class="stay-help">Not the right unit? Reply in WhatsApp and let us know. Your reply goes straight to the {{ $tenant->name }} team.</p>
 </section>
 </div>
 @endsection

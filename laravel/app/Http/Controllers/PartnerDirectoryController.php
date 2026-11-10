@@ -102,10 +102,11 @@ class PartnerDirectoryController extends Controller
         $label = $this->label($partner);
         $availability = app(PartnerAvailabilityRequests::class)->issue($company, $partner, $label, $stay, auth()->id());
         $links = app(PublicWebsiteLinks::class);
+        $where = filled($partner->location) ? $label.' in '.$partner->location : $label;
         $message = implode("\n", [
-            $links->ownerGreeting(['name' => $partner->owner_name], $company, $label),
+            $links->ownerGreeting(['name' => $partner->owner_name], $company, $where),
+            'See the unit and reply: '.$availability['url'],
             ...PublicWebsiteLinks::ownerRequestLines($stay, $this->listingLink($company, (int) $partner->id)),
-            'Reply with one tap: '.$availability['url'],
         ]);
 
         return redirect()->away('https://wa.me/'.substr($mobile, 1).'?text='.rawurlencode($message));
