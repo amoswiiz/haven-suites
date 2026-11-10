@@ -33,9 +33,9 @@
         <meta name="twitter:image" content="{{ $socialImage['url'] }}">
         <meta name="twitter:image:alt" content="{{ $socialImage['caption'] ?? $pageTitle }}">
     @endif
-    <meta name="theme-color" content="#004274">
+    <meta name="theme-color" content="#1f4ba8">
     @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=12">
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=13">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">

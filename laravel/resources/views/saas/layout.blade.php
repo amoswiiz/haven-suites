@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@yield('title', 'Your business') | {{ app()->bound('currentTenant') ? app('currentTenant')->name : 'Haven Suites' }}</title>
 @auth
 <link rel="stylesheet" href="{{ asset('assets/css/dashboard.css') }}">
-<link rel="stylesheet" href="{{ asset('assets/css/haven-brand.css') }}?v=4">
+<link rel="stylesheet" href="{{ asset('assets/css/haven-brand.css') }}?v=5">
 @endauth
 @stack('styles')
 <style>
