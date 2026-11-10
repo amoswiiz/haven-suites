@@ -46,6 +46,8 @@ $groups = [
     ]],
     ['label' => 'Website & listings', 'icon' => 'globe', 'items' => [
         ['label' => 'Manage listings', 'path' => 'public-listings', 'permission' => 'properties.manage', 'icon' => 'building-2', 'keywords' => 'listings create listing'],
+        ['label' => 'Blog', 'path' => 'public-listings/blog', 'permission' => 'properties.manage', 'icon' => 'newspaper', 'keywords' => 'blog posts articles guides news'],
+        ['label' => 'Area pages', 'path' => 'public-listings/areas', 'permission' => 'properties.manage', 'icon' => 'map-pin', 'keywords' => 'areas neighbourhoods destinations city guides'],
         ['label' => 'Guest reviews', 'path' => 'public-listings/reviews', 'permission' => 'properties.manage', 'icon' => 'star', 'keywords' => 'reviews ratings testimonials feedback'],
         ['label' => 'Website settings', 'path' => 'public-listings/settings', 'permission' => 'properties.manage', 'icon' => 'settings', 'keywords' => 'website seo whatsapp logo menu faq policies'],
         ['label' => 'Public website', 'path' => 'public-listings/public-website', 'access_path' => 'public-listings', 'public_site' => true, 'permission' => 'properties.manage', 'icon' => 'external-link', 'keywords' => 'public website stays'],

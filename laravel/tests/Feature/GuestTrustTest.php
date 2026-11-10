@@ -9,8 +9,10 @@ use App\Services\PublicEnquiries;
 use App\Services\PublicReviews;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class GuestTrustTest extends TestCase
@@ -189,5 +191,70 @@ class GuestTrustTest extends TestCase
         $this->assertSame(15, (int) $listing->weekly_discount_percent);
         $this->assertNull($listing->monthly_discount_percent);
         $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'weekly_discount_percent' => 95] + $payload)->assertSessionHasErrors('weekly_discount_percent');
+    }
+
+    public function test_blog_drafts_stay_private_and_published_posts_render_safely(): void
+    {
+        Storage::fake('local');
+        $this->get('/stays/trust-stays')->assertOk()->assertDontSee('/stays/trust-stays/blog"', false);
+        $this->get('/stays/trust-stays/blog')->assertOk()->assertSee('New guides are on the way');
+
+        $body = "Kilimani is close to Yaya Centre.\n\n## Getting around\n\n- Take a taxi from JKIA\n- **Avoid** rush hour\n\n<script>alert('x')</script>\n\n[Unsafe](javascript:alert(1)) and [our stays](https://example.com/stays).";
+        $this->staff()->post(route('public-listings.blog.store', $this->company->slug), [
+            'title' => 'Best areas to stay in Nairobi', 'body' => $body, 'status' => 'draft',
+            'cover' => UploadedFile::fake()->image('kilimani.jpg', 1200, 700), 'cover_caption' => 'Kilimani at sunset',
+        ])->assertSessionHasNoErrors();
+        $post = DB::table('public_posts')->first();
+        $this->assertSame('best-areas-to-stay-in-nairobi', $post->slug);
+        $this->assertMatchesRegularExpression('#^public-posts/'.$this->company->id.'/[A-Za-z0-9]{32}\.jpg$#', $post->cover_path);
+        Storage::disk('local')->assertExists($post->cover_path);
+        $this->get(route('public-listings.blog', $this->company->slug))->assertOk()->assertSee('Best areas to stay in Nairobi')->assertSee('Draft');
+
+        auth()->logout();
+        $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi')->assertNotFound();
+        $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi/cover')->assertNotFound();
+
+        $this->staff()->post(route('public-listings.blog.update', [$this->company->slug, $post->id]), [
+            'version' => 1, 'title' => 'Best areas to stay in Nairobi', 'slug' => $post->slug, 'body' => $body, 'status' => 'published', 'cover_caption' => 'Kilimani at sunset',
+        ])->assertSessionHasNoErrors();
+        auth()->logout();
+        $page = $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi')->assertOk();
+        $page->assertSee('<h2>Getting around</h2>', false)->assertSee('<strong>Avoid</strong>', false)->assertSee('href="https://example.com/stays"', false)
+            ->assertDontSee("<script>alert('x')</script>", false)->assertDontSee('javascript:alert', false)
+            ->assertSee('"@type":"BlogPosting"', false)->assertSee('By Amos M.')->assertSee('Kilimani at sunset');
+        $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi/cover')->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        $this->get('/stays/trust-stays/blog')->assertOk()->assertSee('Best areas to stay in Nairobi')->assertSee('min read');
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('http://localhost/stays/trust-stays/blog', false);
+        $this->get('/stays/trust-stays/sitemap.xml')->assertOk()->assertSee('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi', false);
+
+        $this->staff()->post(route('public-listings.blog.update', [$this->company->slug, $post->id]), [
+            'version' => 2, 'title' => 'Best areas to stay in Nairobi', 'slug' => $post->slug, 'body' => $body, 'status' => 'published', 'published_at' => now()->addWeek()->format('Y-m-d\TH:i'),
+        ])->assertSessionHasNoErrors();
+        $this->get(route('public-listings.blog', $this->company->slug))->assertSee('Scheduled');
+        auth()->logout();
+        $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi')->assertNotFound();
+
+        $this->staff()->post(route('public-listings.blog.update', [$this->company->slug, $post->id]), ['version' => 1, 'title' => 'Stale edit', 'slug' => $post->slug, 'body' => $body, 'status' => 'draft'])
+            ->assertSessionHasErrors('post');
+        $this->post(route('public-listings.blog.destroy', [$this->company->slug, $post->id]))->assertRedirect();
+        Storage::disk('local')->assertMissing($post->cover_path);
+        $this->assertDatabaseCount('public_posts', 0);
+    }
+
+    public function test_area_pages_list_local_stays_with_editable_introductions(): void
+    {
+        $this->get('/stays/trust-stays/in/mombasa')->assertOk()->assertSee('Stays in Mombasa')->assertSee('Sea View Retreat')->assertSee('1 stay in Mombasa');
+        $this->get('/stays/trust-stays/in/mombasa/nyali')->assertOk()->assertSee('Stays in Nyali, Mombasa')->assertSee('Sea View Retreat')
+            ->assertSee('<link rel="canonical" href="http://localhost/stays/trust-stays/in/mombasa/nyali">', false)->assertSee('"@type":"BreadcrumbList"', false);
+        $this->get('/stays/trust-stays/in/nairobi')->assertNotFound();
+        $this->get('/stays/trust-stays/in/mombasa/kilimani')->assertNotFound();
+        $this->get('/stays/trust-stays/sitemap.xml')->assertOk()->assertSee('http://localhost/stays/trust-stays/in/mombasa/nyali', false);
+
+        $this->staff()->get(route('public-listings.areas', $this->company->slug))->assertOk()->assertSee('Nyali, Mombasa')->assertSee('Standard introduction');
+        $this->post(route('public-listings.areas.save', $this->company->slug), ['city' => 'Mombasa', 'area' => 'Nyali', 'intro' => 'Nyali is a calm beach suburb north of Mombasa island.', 'highlights' => "5 minutes to Nyali Beach\nCity Mall nearby"])
+            ->assertSessionHasNoErrors();
+        $this->post(route('public-listings.areas.save', $this->company->slug), ['city' => 'Atlantis', 'intro' => 'Made-up place.'])->assertSessionHasErrors('city');
+        auth()->logout();
+        $this->get('/stays/trust-stays/in/mombasa/nyali')->assertOk()->assertSee('Nyali is a calm beach suburb north of Mombasa island.')->assertSee('City Mall nearby');
     }
 }

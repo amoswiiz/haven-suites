@@ -13,13 +13,14 @@ class PublicWebsiteLinks
         ['label' => 'Home', 'target' => 'home'],
         ['label' => 'Find a stay', 'target' => 'stays'],
         ['label' => 'About us', 'target' => 'about'],
+        ['label' => 'Blog', 'target' => 'blog'],
         ['label' => 'FAQ', 'target' => 'faq'],
         ['label' => 'Contact', 'target' => 'contact'],
         ['label' => 'Track my enquiry', 'target' => 'track'],
     ];
 
     /** Menu destinations and their labels in the Website settings menu editor. */
-    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'faq' => 'FAQ', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
+    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'blog' => 'Blog', 'faq' => 'FAQ', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
 
     /**
      * WhatsApp link for staff to ask an apartment owner about availability, with the apartment and any stay details.
@@ -154,13 +155,15 @@ class PublicWebsiteLinks
         $track = $this->canonicalUrl('public-stays.track', ['company' => $tenant->slug]);
         $aboutUrl = $this->canonicalUrl('public-stays.about', ['company' => $tenant->slug]);
         $faqUrl = $this->canonicalUrl('public-stays.faq', ['company' => $tenant->slug]);
+        $blogUrl = $this->canonicalUrl('public-stays.blog', ['company' => $tenant->slug]);
+        $hasBlog = app(PublicBlog::class)->hasPublished($tenant);
 
         return array_map(static fn (array $link): array => [
             'label' => $link['label'],
             'url' => match ($link['target']) {
-                'home' => $base, 'stays' => $base.'#find-stay', 'contact' => $base.'#stay-contact', 'track' => $track, 'about' => $aboutUrl, 'faq' => $faqUrl,
+                'home' => $base, 'stays' => $base.'#find-stay', 'contact' => $base.'#stay-contact', 'track' => $track, 'about' => $aboutUrl, 'faq' => $faqUrl, 'blog' => $blogUrl,
             },
-        ], $this->navigationForForm($site));
+        ], array_values(array_filter($this->navigationForForm($site), static fn (array $link): bool => $link['target'] !== 'blog' || $hasBlog)));
     }
 
     /** @return list<array{label: string, target: string}> */
@@ -186,7 +189,7 @@ class PublicWebsiteLinks
                 throw ValidationException::withMessages(['navigation_links.'.$index.'.label' => 'Use a plain text menu label of up to 60 characters.']);
             }
             if (! array_key_exists($target, self::TARGETS) || isset($seen[$target])) {
-                throw ValidationException::withMessages(['navigation_links.'.$index.'.target' => 'Choose each menu destination once: Home, Find a stay, About us, FAQ, Contact or Track my enquiry.']);
+                throw ValidationException::withMessages(['navigation_links.'.$index.'.target' => 'Choose each menu destination once: Home, Find a stay, About us, Blog, FAQ, Contact or Track my enquiry.']);
             }
             $seen[$target] = true;
             $links[] = ['label' => $label, 'target' => $target];

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use App\Services\ListingAvailability;
 use App\Services\PublicAboutPage;
+use App\Services\PublicAreaGuides;
+use App\Services\PublicBlog;
 use App\Services\PublicEnquiries;
 use App\Services\PublicGuestInfo;
 use App\Services\PublicListingCatalog;
@@ -17,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -194,6 +197,89 @@ class PublicStayController extends Controller
         ]);
     }
 
+    public function blog(Request $request, string $company, PublicListingCatalog $catalog, PublicBlog $blog): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $posts = $blog->published($tenant);
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $paginator = new LengthAwarePaginator($posts->forPage($page, 9)->values(), $posts->count(), 9, $page, ['path' => route('public-stays.blog', $tenant->slug)]);
+        abort_if($page > max(1, $paginator->lastPage()), 404);
+
+        return $this->page('public_stays.blog', [
+            'tenant' => $tenant, 'site' => $site, 'posts' => $paginator,
+            'pageTitle' => 'Travel tips and guides | '.$this->plainText($tenant->name, 100).($page > 1 ? ' | Page '.$page : ''),
+            'pageDescription' => $this->plainText('Neighbourhood guides, travel tips and news from '.$tenant->name.' to help you plan your stay in Kenya.', 320),
+            'canonicalUrl' => $this->publicUrl('public-stays.blog', ['company' => $tenant->slug], $page > 1 ? ['page' => $page] : []),
+            'socialImage' => ($first = $posts->first()) && $first->cover_url ? ['url' => $first->cover_url, 'caption' => $first->title] : null,
+        ]);
+    }
+
+    public function post(string $company, string $slug, PublicListingCatalog $catalog, PublicBlog $blog): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $post = $blog->find($tenant, $slug);
+        abort_unless($post, 404);
+        $canonicalUrl = $this->publicUrl('public-stays.blog.show', ['company' => $tenant->slug, 'slug' => $post->slug]);
+        $related = $blog->published($tenant, 4)->reject(fn (object $other): bool => $other->id === $post->id)->take(3)->values();
+        $author = $post->author_id ? DB::table('users')->where('id', $post->author_id)->value('name') : null;
+
+        return $this->page('public_stays.post', [
+            'tenant' => $tenant, 'site' => $site, 'post' => $post, 'html' => $blog->html($post->body), 'related' => $related,
+            'authorName' => $author ? PublicReviews::displayName($author) : null,
+            'pageTitle' => $this->plainText($post->seo_title ?? '', 180) ?: $this->plainText($post->title, 180).' | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => $this->plainText($post->seo_description ?? '', 320) ?: $this->plainText($post->summary, 320),
+            'canonicalUrl' => $canonicalUrl,
+            'socialImage' => $post->cover_url ? ['url' => rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH), 'caption' => $post->cover_caption ?: $post->title] : null,
+            'structuredData' => array_filter(['@context' => 'https://schema.org', '@type' => 'BlogPosting', 'headline' => $this->plainText($post->title, 110),
+                'description' => $this->plainText($post->summary, 300), 'url' => $canonicalUrl, 'mainEntityOfPage' => $canonicalUrl,
+                'datePublished' => CarbonImmutable::parse($post->published_at)->toAtomString(), 'dateModified' => CarbonImmutable::parse($post->updated_at)->toAtomString(),
+                'image' => $post->cover_url ? rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH) : null,
+                'author' => ['@type' => 'Organization', 'name' => $tenant->name], 'publisher' => ['@type' => 'Organization', 'name' => $tenant->name]]),
+        ]);
+    }
+
+    public function blogCover(string $company, string $slug, PublicListingCatalog $catalog, PublicBlog $blog): BinaryFileResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        $post = $blog->find($tenant, $slug);
+        $path = $post?->cover_path;
+        abort_unless($path && preg_match('#^public-posts/'.(int) $tenant->id.'/[A-Za-z0-9]{32}\.jpg$#D', $path) && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=86400']);
+    }
+
+    public function area(Request $request, string $company, string $city, PublicListingCatalog $catalog, PublicAreaGuides $guides, ?string $area = null): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $published = $catalog->published($tenant);
+        $destinations = PublicListingCatalog::groupDestinations($published);
+        $place = $guides->resolve($destinations, $city, $area);
+        abort_unless($place, 404);
+        $ratings = app(PublicReviews::class)->summaries($tenant);
+        $stays = $published->filter(fn (array $listing): bool => $listing['city'] === $place['city'] && ($place['area'] === null || $listing['neighbourhood'] === $place['area']))
+            ->map(function (array $listing) use ($tenant, $site, $request, $ratings): array {
+                $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
+                $listing['rating'] = $ratings[$listing['id']] ?? null;
+
+                return $listing;
+            })->values();
+        $name = $place['area'] ? $place['area'].', '.$place['city'] : $place['city'];
+        $canonicalUrl = rtrim(config('app.url'), '/').parse_url($guides->url($tenant, $place['city'], $place['area']), PHP_URL_PATH);
+
+        return $this->page('public_stays.area', [
+            'tenant' => $tenant, 'site' => $site, 'place' => $place, 'stays' => $stays, 'destinations' => $destinations,
+            'guide' => $guides->content($tenant, $place['city'], $place['area'], $stays->count()), 'areaGuides' => $guides,
+            'pageTitle' => 'Serviced apartments in '.$this->plainText($name, 150).' | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => $this->plainText('Browse '.$stays->count().' short-stay '.($stays->count() === 1 ? 'apartment' : 'apartments').' in '.$name.' with '.$tenant->name.'. See photos, amenities and prices, and enquire for your dates.', 320),
+            'canonicalUrl' => $canonicalUrl, 'socialImage' => $this->socialImage($stays->first()['photos'][0] ?? null),
+            'structuredData' => ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => array_values(array_filter([
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Find a stay', 'item' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => $this->plainText($place['city'], 100), 'item' => $this->publicUrl('public-stays.city', ['company' => $tenant->slug, 'city' => $city])],
+                $place['area'] ? ['@type' => 'ListItem', 'position' => 3, 'name' => $this->plainText($place['area'], 150), 'item' => $canonicalUrl] : null,
+            ]))],
+        ]);
+    }
+
     public function logo(string $company, PublicListingCatalog $catalog): BinaryFileResponse
     {
         $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
@@ -209,7 +295,26 @@ class PublicStayController extends Controller
         [$tenant] = $this->company($company, $catalog);
         $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])], ['url' => $this->publicUrl('public-stays.about', ['company' => $tenant->slug])],
             ['url' => $this->publicUrl('public-stays.faq', ['company' => $tenant->slug])]];
-        foreach ($catalog->published($tenant) as $listing) {
+        $published = $catalog->published($tenant);
+        $guides = app(PublicAreaGuides::class);
+        foreach (PublicListingCatalog::groupDestinations($published) as $destination) {
+            $entries[] = ['url' => rtrim(config('app.url'), '/').parse_url($guides->url($tenant, $destination['city']), PHP_URL_PATH)];
+            foreach ($destination['areas'] as $area) {
+                if (Str::slug($area['name']) !== '') {
+                    $entries[] = ['url' => rtrim(config('app.url'), '/').parse_url($guides->url($tenant, $destination['city'], $area['name']), PHP_URL_PATH)];
+                }
+            }
+        }
+        $posts = app(PublicBlog::class)->published($tenant);
+        if ($posts->isNotEmpty()) {
+            $entries[] = ['url' => $this->publicUrl('public-stays.blog', ['company' => $tenant->slug])];
+            foreach ($posts as $post) {
+                $entries[] = ['url' => $this->publicUrl('public-stays.blog.show', ['company' => $tenant->slug, 'slug' => $post->slug]),
+                    'lastmod' => CarbonImmutable::parse($post->updated_at, config('app.timezone'))->min(now())->toAtomString(),
+                    'photos' => $post->cover_url ? [rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH)] : []];
+            }
+        }
+        foreach ($published as $listing) {
             $entry = ['url' => $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]), 'photos' => array_column($listing['photos'], 'url')];
             try {
                 if (! empty($listing['updated_at'])) {

@@ -12,6 +12,11 @@ Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'
     Route::get('logo', [PublicStayController::class, 'logo'])->name('logo');
     Route::get('about', [PublicStayController::class, 'about'])->name('about');
     Route::get('faq', [PublicStayController::class, 'faq'])->name('faq');
+    Route::get('blog', [PublicStayController::class, 'blog'])->name('blog');
+    Route::get('blog/{slug}', [PublicStayController::class, 'post'])->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('blog.show');
+    Route::get('blog/{slug}/cover', [PublicStayController::class, 'blogCover'])->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('blog.cover');
+    Route::get('in/{city}', [PublicStayController::class, 'area'])->where('city', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('city');
+    Route::get('in/{city}/{area}', [PublicStayController::class, 'area'])->where(['city' => '[a-z0-9]+(?:-[a-z0-9]+)*', 'area' => '[a-z0-9]+(?:-[a-z0-9]+)*'])->name('area');
     Route::get('review/{token}', [PublicReviewController::class, 'show'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:30,1')->name('review');
     Route::post('review/{token}', [PublicReviewController::class, 'submit'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:5,1')->name('review.submit');
     Route::get('track', [PublicEnquiryController::class, 'lookupForm'])->name('track');
