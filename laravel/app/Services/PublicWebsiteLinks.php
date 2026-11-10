@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Support\PhoneNumber;
+use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
 class PublicWebsiteLinks
@@ -29,8 +30,14 @@ class PublicWebsiteLinks
         return 'https://wa.me/'.substr($number, 1).'?text='.rawurlencode('Hello! I am following up on my enquiry '.$reference.' with '.$tenant->name.'.');
     }
 
-    /** @return array{public_url: string, enquiry_url: string, whatsapp_url: ?string} */
-    public function forListing(Tenant $tenant, array $listing, ?object $site = null): array
+    /**
+     * Public, enquiry and WhatsApp links for a listing. The WhatsApp message includes the listing code and any chosen
+     * dates and guest count; whatsapp_number and whatsapp_base let the page rebuild it as the guest changes dates.
+     *
+     * @param  array{check_in?: string, check_out?: string, guests?: int|string}  $stay
+     * @return array{public_url: string, enquiry_url: string, whatsapp_url: ?string, whatsapp_number: ?string, whatsapp_base: ?string, listing_code: ?string}
+     */
+    public function forListing(Tenant $tenant, array $listing, ?object $site = null, array $stay = []): array
     {
         if (isset($listing['tenant_id']) && (int) $listing['tenant_id'] !== (int) $tenant->id) {
             throw new \InvalidArgumentException('Listing and company must match.');
@@ -42,9 +49,14 @@ class PublicWebsiteLinks
         $publicUrl = $this->canonicalUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]);
         $number = $this->text($listing['whatsapp_number'] ?? null) ?: $this->text($site->whatsapp_number ?? null);
         $template = $this->text($listing['whatsapp_message'] ?? null) ?: $this->text($site->whatsapp_message ?? null);
+        $normalized = PhoneNumber::normalize($number);
+        $base = $this->whatsappMessage($template, $this->text($listing['title'] ?? null), $publicUrl, $listing['slug']);
+        $message = implode("\n", [$base, ...self::stayLines($listing['listing_code'] ?? null, $stay)]);
 
         return ['public_url' => $publicUrl, 'enquiry_url' => $publicUrl.'#enquire',
-            'whatsapp_url' => $this->whatsappUrl($number, $template, $this->text($listing['title'] ?? null), $publicUrl, $listing['slug'])];
+            'whatsapp_url' => $normalized ? 'https://wa.me/'.substr($normalized, 1).'?text='.rawurlencode($message) : null,
+            'whatsapp_number' => $normalized ? substr($normalized, 1) : null, 'whatsapp_base' => $normalized ? $base : null,
+            'listing_code' => $listing['listing_code'] ?? null];
     }
 
     /** @return array{public_url: string, enquiry_url: string, whatsapp_url: ?string} */
@@ -141,10 +153,13 @@ class PublicWebsiteLinks
 
     private function whatsappUrl(string $number, string $template, string $title, string $url, string $reference): ?string
     {
-        $number = PhoneNumber::normalize($number) ?? '';
-        if ($number === '') {
-            return null;
-        }
+        $number = PhoneNumber::normalize($number);
+
+        return $number === null ? null : 'https://wa.me/'.substr($number, 1).'?text='.rawurlencode($this->whatsappMessage($template, $title, $url, $reference));
+    }
+
+    private function whatsappMessage(string $template, string $title, string $url, string $reference): string
+    {
         if ($template === '' || mb_strlen($template) > 1000) {
             $template = 'Hello! I am interested in {listing_title}: {listing_url}';
         }
@@ -156,7 +171,46 @@ class PublicWebsiteLinks
             $message .= "\n".$url;
         }
 
-        return 'https://wa.me/'.substr($number, 1).'?text='.rawurlencode($message);
+        return $message;
+    }
+
+    /**
+     * Lines describing the requested stay, appended to a listing's WhatsApp message.
+     *
+     * @param  array{check_in?: string, check_out?: string, guests?: int|string}  $stay
+     * @return list<string>
+     */
+    public static function stayLines(?string $listingCode, array $stay): array
+    {
+        $lines = [];
+        if (filled($listingCode)) {
+            $lines[] = 'Code: '.$listingCode;
+        }
+        $date = static function (mixed $value): ?CarbonImmutable {
+            if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value)) {
+                return null;
+            }
+            try {
+                $parsed = CarbonImmutable::createFromFormat('!Y-m-d', $value);
+            } catch (\Throwable) {
+                return null;
+            }
+
+            return $parsed && $parsed->format('Y-m-d') === $value ? $parsed : null;
+        };
+        $checkIn = $date($stay['check_in'] ?? null);
+        $checkOut = $date($stay['check_out'] ?? null);
+        if ($checkIn && $checkOut && $checkOut->greaterThan($checkIn)) {
+            $nights = (int) $checkIn->diffInDays($checkOut);
+            $lines[] = 'Dates: '.$checkIn->format('D j M Y').' – '.$checkOut->format('D j M Y').' ('.$nights.' night'.($nights === 1 ? '' : 's').')';
+        } elseif ($checkIn) {
+            $lines[] = 'Check-in: '.$checkIn->format('D j M Y');
+        }
+        if ((int) ($stay['guests'] ?? 0) > 0) {
+            $lines[] = 'Guests: '.(int) $stay['guests'];
+        }
+
+        return $lines;
     }
 
     private function text(mixed $value): string

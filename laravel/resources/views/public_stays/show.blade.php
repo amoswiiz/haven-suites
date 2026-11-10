@@ -21,7 +21,7 @@
     @if(!$preview && ($canEnquire || !empty($listingLinks['whatsapp_url'])))
         <div class="stay-listing-actions" data-quick-contact>
             @if($canEnquire)<a class="stay-button" href="{{ $listingLinks['enquiry_url'] }}" aria-label="Enquire about {{ $listing['title'] }}">Enquire now <span aria-hidden="true">&rarr;</span></a>@endif
-            @if(!empty($listingLinks['whatsapp_url']))<a class="stay-button secondary stay-whatsapp-button" href="{{ $listingLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp us <span aria-hidden="true">&nearr;</span></a>@endif
+            @if(!empty($listingLinks['whatsapp_url']))<a class="stay-button secondary stay-whatsapp-button" href="{{ $listingLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer" data-whatsapp-enquiry data-wa-number="{{ $listingLinks['whatsapp_number'] ?? '' }}" data-wa-base="{{ $listingLinks['whatsapp_base'] ?? '' }}" data-wa-code="{{ $listing['listing_code'] ?? '' }}">WhatsApp us <span aria-hidden="true">&nearr;</span></a>@endif
             <span class="stay-quick-note">Our team confirms your dates and final price.</span>
         </div>
     @endif
@@ -62,7 +62,7 @@
                 <div class="stay-field"><label for="enquiry-message">Anything you'd like us to know?</label><textarea id="enquiry-message" name="message" rows="3" maxlength="3000" placeholder="A special occasion, accessibility needs or a question…">{{ $enquiryValue('message') }}</textarea></div>
                 <label class="stay-check stay-field"><input type="checkbox" name="flexible_dates" value="1" @checked(old('flexible_dates'))><span>My dates are flexible. Please suggest alternatives if needed.</span></label>
                 <label class="stay-check stay-field"><input type="checkbox" name="consent" value="1" required @checked(old('consent'))><span>I agree to be contacted by {{ $tenant->name }} about this enquiry, including an acknowledgement SMS.</span></label>
-                <button type="submit" class="stay-button wide">Enquire about these dates &rarr;</button><p class="stay-help" data-enquiry-status aria-live="polite">No payment is taken here. Sending an enquiry does not reserve the apartment.</p>
+                <button type="submit" class="stay-button wide">Enquire about these dates &rarr;</button>@if(!empty($listingLinks['whatsapp_url']))<a class="stay-button secondary wide stay-whatsapp-enquire" href="{{ $listingLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer" data-whatsapp-enquiry data-wa-number="{{ $listingLinks['whatsapp_number'] ?? '' }}" data-wa-base="{{ $listingLinks['whatsapp_base'] ?? '' }}" data-wa-code="{{ $listing['listing_code'] ?? '' }}">Enquire on WhatsApp instead <span aria-hidden="true">&nearr;</span></a>@endif<p class="stay-help" data-enquiry-status aria-live="polite">No payment is taken here. Sending an enquiry does not reserve the apartment.</p>
             </form>
         @else
             <div class="stay-notice">{{ $preview ? 'This is a staff preview. Guest enquiries are enabled only on the published page.' : 'Please contact our team directly to plan this stay.' }}</div>

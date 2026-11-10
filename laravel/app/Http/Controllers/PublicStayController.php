@@ -274,8 +274,8 @@ class PublicStayController extends Controller
     /** @return array{public_url: string, enquiry_url: string, whatsapp_url: ?string} */
     private function listingLinks(Tenant $tenant, array $listing, object $site, Request $request): array
     {
-        $links = app(PublicWebsiteLinks::class)->forListing($tenant, $listing, $site);
         $selection = $this->enquiryDefaults($request);
+        $links = app(PublicWebsiteLinks::class)->forListing($tenant, $listing, $site, $selection);
         $links['enquiry_url'] = $links['public_url'].($selection === [] ? '' : '?'.http_build_query($selection, '', '&', PHP_QUERY_RFC3986)).'#enquire';
 
         return $links;

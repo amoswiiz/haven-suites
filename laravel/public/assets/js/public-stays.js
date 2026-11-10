@@ -328,3 +328,54 @@
         }
     });
 })();
+(() => {
+    'use strict';
+    const buttons = document.querySelectorAll('[data-whatsapp-enquiry]');
+    const checkIn = document.getElementById('enquiry-check-in');
+    const checkOut = document.getElementById('enquiry-check-out');
+    const guests = document.getElementById('enquiry-guests');
+    if (!buttons.length || !checkIn || !checkOut) {
+        return;
+    }
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const parse = (value) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) {
+            return null;
+        }
+        const date = new Date(value + 'T12:00:00Z');
+        return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
+    };
+    const label = (date) => `${days[date.getUTCDay()]} ${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+    const update = () => {
+        const start = parse(checkIn.value);
+        const end = parse(checkOut.value);
+        const people = Number.parseInt(guests?.value || '', 10);
+        buttons.forEach((button) => {
+            const number = button.dataset.waNumber;
+            const base = button.dataset.waBase;
+            if (!number || !base) {
+                return;
+            }
+            const lines = [base];
+            if (button.dataset.waCode) {
+                lines.push(`Code: ${button.dataset.waCode}`);
+            }
+            if (start && end && end > start) {
+                const nights = Math.round((end - start) / 86400000);
+                lines.push(`Dates: ${label(start)} – ${label(end)} (${nights} night${nights === 1 ? '' : 's'})`);
+            } else if (start) {
+                lines.push(`Check-in: ${label(start)}`);
+            }
+            if (people > 0) {
+                lines.push(`Guests: ${people}`);
+            }
+            button.href = `https://wa.me/${number}?text=${encodeURIComponent(lines.join('\n'))}`;
+        });
+    };
+    [checkIn, checkOut, guests].forEach((field) => {
+        field?.addEventListener('input', update);
+        field?.addEventListener('change', update);
+    });
+    update();
+})();

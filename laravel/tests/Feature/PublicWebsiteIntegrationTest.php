@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Services\ListingAvailability;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
+use App\Services\PublicWebsiteLinks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -86,6 +87,9 @@ class PublicWebsiteIntegrationTest extends TestCase
         parse_str(parse_url($links['whatsapp_url'], PHP_URL_QUERY), $query);
         $this->assertStringContainsString($this->listing['title'], $query['text']);
         $this->assertStringContainsString($links['public_url'], $query['text']);
+        $this->assertStringContainsString("Dates: Tue 10 Nov 2026 – Thu 12 Nov 2026 (2 nights)\nGuests: 3", $query['text']);
+        $this->assertSame('254700000002', $links['whatsapp_number']);
+        $response->assertSee('Enquire on WhatsApp instead', false)->assertSee('data-whatsapp-enquiry', false)->assertSee('data-wa-number="254700000002"', false);
         $this->assertSame(['check_in' => '2026-11-10', 'check_out' => '2026-11-12', 'guests' => 3], $response->viewData('enquiryDefaults'));
         $response->assertSee('id="enquiry-phone"', false)->assertSee('value="+254 "', false);
         $this->assertDatabaseCount('sales_leads', 0);
@@ -118,5 +122,13 @@ class PublicWebsiteIntegrationTest extends TestCase
         $response = $this->get('/stays/'.$this->tenant->slug.'/coral-gables-f2');
         $response->assertOk()->assertSee('Coral Gables / F2 | Nyali, Mombasa | Haven Suites');
         $this->assertDatabaseCount('sales_leads', 0);
+    }
+
+    public function test_whatsapp_stay_lines_include_code_and_ignore_invalid_dates(): void
+    {
+        $this->assertSame(['Code: A19', 'Dates: Sat 12 Dec 2026 – Tue 15 Dec 2026 (3 nights)', 'Guests: 2'],
+            PublicWebsiteLinks::stayLines('A19', ['check_in' => '2026-12-12', 'check_out' => '2026-12-15', 'guests' => 2]));
+        $this->assertSame(['Check-in: Sat 12 Dec 2026'], PublicWebsiteLinks::stayLines(null, ['check_in' => '2026-12-12', 'check_out' => '2026-12-10']));
+        $this->assertSame([], PublicWebsiteLinks::stayLines('', ['check_in' => '2026-02-31', 'check_out' => 'tomorrow', 'guests' => 'many']));
     }
 }
