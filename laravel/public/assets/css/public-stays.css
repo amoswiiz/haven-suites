@@ -140,3 +140,20 @@
 .stay-staff-owner{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-left:auto}
 .stay-request-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:0 0 20px}.stay-request-photos img{width:100%;height:120px;object-fit:cover;border-radius:10px;background:var(--sand)}
 .stay-request-featured{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:14px;margin:0 0 16px;background:var(--sand)}
+/* About us page */
+.stay-about-hero{background:var(--sand);padding:56px 0 48px}
+.stay-about-hero p{max-width:68ch;font-size:1.05rem;color:var(--ink)}
+.stay-about-section{padding:48px 0 8px;border-bottom:1px solid var(--line)}
+.stay-about-section:last-child{border-bottom:0}
+.stay-about-steps{list-style:none;counter-reset:step;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;padding:0;margin:20px 0 32px}
+.stay-about-steps li{counter-increment:step;position:relative;padding:22px 20px 18px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.stay-about-steps li::before{content:counter(step);display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-weight:700;margin-bottom:10px}
+.stay-about-steps strong{display:block;color:var(--navy);font-size:1.05rem}
+.stay-about-steps p{margin:6px 0 0;color:var(--muted)}
+.stay-about-locations{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin:20px 0 26px}
+.stay-about-location{padding:22px;border-radius:14px;background:var(--navy);color:#fff}
+.stay-about-location h3{margin:0 0 6px;font-size:1.4rem;color:#fff}
+.stay-about-location p{margin:0 0 12px;color:#d6e6f2}
+.stay-about-location a{color:#ffb27a;font-weight:600}
+.stay-about-subheading{margin:10px 0 6px;color:var(--navy)}
+.stay-about-contact ul{list-style:none;padding:0;margin:14px 0 22px;display:grid;gap:8px}

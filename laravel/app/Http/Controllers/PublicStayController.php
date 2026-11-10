@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Services\ListingAvailability;
+use App\Services\PublicAboutPage;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
@@ -148,6 +149,26 @@ class PublicStayController extends Controller
         return response()->file($image['path'], ['Content-Type' => $image['mime_type'], 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=60']);
     }
 
+    public function about(string $company, PublicListingCatalog $catalog, PublicAboutPage $about): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $destinations = PublicListingCatalog::groupDestinations($catalog->published($tenant));
+        $content = $about->content($tenant, $site, $destinations);
+        $canonicalUrl = $this->publicUrl('public-stays.about', ['company' => $tenant->slug]);
+        $areas = array_merge(array_column($content['main_locations'], 'name'), array_column($content['other_destinations'], 'city'));
+
+        return $this->page('public_stays.about', [
+            'tenant' => $tenant, 'site' => $site, 'about' => $content, 'destinations' => $destinations,
+            'pageTitle' => 'About us | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => $this->plainText('Who we are, how we work and where we are: '.$tenant->name.' arranges serviced apartments and short stays in '
+                .implode(' and ', array_column($content['main_locations'], 'name')).', and helps guests find stays in other areas.', 320),
+            'canonicalUrl' => $canonicalUrl,
+            'structuredData' => array_filter(['@context' => 'https://schema.org', '@type' => 'LodgingBusiness', 'name' => $tenant->name, 'url' => $canonicalUrl,
+                'telephone' => $site->contact_phone ?? null, 'email' => $site->contact_email ?? null,
+                'areaServed' => array_map(fn (string $area): array => ['@type' => 'City', 'name' => $area], array_values(array_unique($areas)))]),
+        ]);
+    }
+
     public function logo(string $company, PublicListingCatalog $catalog): BinaryFileResponse
     {
         $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
@@ -161,7 +182,7 @@ class PublicStayController extends Controller
     public function sitemap(string $company, PublicListingCatalog $catalog): Response
     {
         [$tenant] = $this->company($company, $catalog);
-        $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])]];
+        $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])], ['url' => $this->publicUrl('public-stays.about', ['company' => $tenant->slug])]];
         foreach ($catalog->published($tenant) as $listing) {
             $entry = ['url' => $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]), 'photos' => array_column($listing['photos'], 'url')];
             try {

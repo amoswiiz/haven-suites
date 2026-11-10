@@ -230,6 +230,31 @@ class PublicStaysTest extends TestCase
         $this->actingAs($this->admin->fresh())->get($page)->assertOk()->assertDontSee('Staff tools');
     }
 
+    public function test_about_page_explains_who_we_are_how_we_work_and_where_we_are(): void
+    {
+        $this->listing();
+        $this->listing('diani-home', ['title' => 'Diani Home', 'city' => 'Diani', 'neighbourhood' => 'Galu']);
+        $about = route('public-stays.about', $this->company->slug);
+
+        $this->get($about)->assertOk()->assertSee('<title>About us | Haven Guest Stays</title>', false)
+            ->assertSee('Who we are')->assertSee('Haven Guest Stays offers comfortable serviced apartments')
+            ->assertSee('How we work')->assertSee('We confirm the details')->assertSee('Based in Nairobi and Mombasa')
+            ->assertSee('See stays in Mombasa')->assertSee('Ask us about apartments in Nairobi')
+            ->assertSee('We also arrange stays in other parts of Kenya')->assertSee('?city=Diani', false)
+            ->assertSee('"@type":"LodgingBusiness"', false)->assertSee('"name":"Nairobi"', false);
+        $this->get($this->catalogue())->assertOk()->assertSee('>About us</a>', false)->assertSee($about, false);
+        $this->get(route('public-stays.sitemap', $this->company->slug))->assertOk()->assertSee($about, false);
+
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['about_intro' => "We are a Kenyan hospitality team.\n\nWe love hosting.",
+            'about_how' => "Message us: Tell us what you need.\nWe book it", 'about_main_locations' => 'Mombasa', 'about_other_areas' => 'We also help in Lamu.']);
+        $this->get($about)->assertOk()->assertSee('<p>We are a Kenyan hospitality team.</p>', false)->assertSee('<p>We love hosting.</p>', false)
+            ->assertSee('<strong>Message us</strong>', false)->assertSee('<strong>We book it</strong>', false)->assertSee('Based in Mombasa')
+            ->assertSee('We also help in Lamu.')->assertDontSee('Haven Guest Stays offers comfortable');
+
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['enabled' => false]);
+        $this->get($about)->assertNotFound();
+    }
+
     public function test_pagination_and_invalid_search_dates_and_prices_are_handled(): void
     {
         for ($number = 1; $number <= 13; $number++) {

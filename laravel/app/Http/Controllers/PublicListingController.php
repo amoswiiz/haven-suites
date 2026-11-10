@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\PublicAboutPage;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Services\YouTubeListingVideos;
@@ -51,7 +52,7 @@ class PublicListingController extends Controller
         $tenant = app('currentTenant');
         $site = $catalog->settings($tenant);
 
-        return view('public_listings.settings', ['site' => $site, 'members' => $catalog->assignees($tenant),
+        return view('public_listings.settings', ['site' => $site, 'members' => $catalog->assignees($tenant), 'aboutDefaults' => app(PublicAboutPage::class),
             'navigation' => app(PublicWebsiteLinks::class)->navigationForForm($site), 'websiteLinks' => app(PublicWebsiteLinks::class)->forSite($tenant, $site)]);
     }
 
@@ -127,6 +128,8 @@ class PublicListingController extends Controller
             'navigation_links' => 'sometimes|array|max:6', 'navigation_links.*' => 'required|array:label,target',
             'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(array_keys(PublicWebsiteLinks::TARGETS))],
             'logo' => 'nullable|file|mimes:webp,png|max:2048', 'remove_logo' => 'sometimes|boolean',
+            'about_intro' => 'nullable|string|max:5000', 'about_how' => 'nullable|string|max:3000',
+            'about_main_locations' => 'nullable|string|max:255', 'about_other_areas' => 'nullable|string|max:2000',
         ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);

@@ -281,4 +281,17 @@ class PublicWebsiteSettingsTest extends TestCase
         }
         $this->assertNull($this->site());
     }
+
+    public function test_about_page_text_is_saved_from_website_settings(): void
+    {
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('About us page')->assertSee('placeholder="Nairobi, Mombasa"', false);
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'about_intro' => 'We host guests across Kenya.', 'about_how' => 'Enquire: Tell us your dates.', 'about_main_locations' => 'Nairobi, Mombasa', 'about_other_areas' => 'Diani and Watamu too.',
+        ]))->assertSessionHasNoErrors();
+        $site = $this->site();
+        $this->assertSame('We host guests across Kenya.', $site->about_intro);
+        $this->assertSame('Diani and Watamu too.', $site->about_other_areas);
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 1, 'about_main_locations' => str_repeat('a', 300)]))
+            ->assertSessionHasErrors('about_main_locations');
+    }
 }
