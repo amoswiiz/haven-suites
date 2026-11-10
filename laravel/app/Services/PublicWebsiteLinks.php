@@ -25,15 +25,42 @@ class PublicWebsiteLinks
      * @param  array{name: ?string, whatsapp: ?string}|null  $owner
      * @param  array{check_in?: string, check_out?: string, guests?: int|string}  $stay
      */
-    public function ownerWhatsappUrl(?array $owner, Tenant $tenant, string $apartment, array $stay = [], ?string $question = null): ?string
+    public function ownerWhatsappUrl(?array $owner, Tenant $tenant, string $apartment, array $stay = [], ?string $question = null, ?string $link = null): ?string
     {
         if (empty($owner['whatsapp'])) {
             return null;
         }
-        $firstName = trim(explode(' ', trim((string) ($owner['name'] ?? '')))[0] ?? '');
-        $message = implode("\n", ['Hello'.($firstName !== '' ? ' '.$firstName : '').', this is '.$tenant->name.'. '.($question ?? 'Is '.$apartment.' available?'), ...self::stayLines(null, $stay)]);
 
-        return 'https://wa.me/'.$owner['whatsapp'].'?text='.rawurlencode($message);
+        return 'https://wa.me/'.$owner['whatsapp'].'?text='.rawurlencode(implode("\n", [
+            $this->ownerGreeting($owner, $tenant, $apartment, $question), ...self::ownerRequestLines($stay, $link),
+        ]));
+    }
+
+    /** First line of an availability request to an owner or agent. */
+    public function ownerGreeting(?array $owner, Tenant $tenant, string $apartment, ?string $question = null): string
+    {
+        $firstName = trim(explode(' ', trim((string) ($owner['name'] ?? '')))[0] ?? '');
+
+        return 'Hello'.($firstName !== '' ? ' '.$firstName : '').', this is '.$tenant->name.'. '.($question ?? 'Is '.$apartment.' available?');
+    }
+
+    /**
+     * Dates (or "to be confirmed"), guests and listing link for an availability request.
+     *
+     * @param  array{check_in?: string, check_out?: string, guests?: int|string}  $stay
+     * @return list<string>
+     */
+    public static function ownerRequestLines(array $stay, ?string $link = null): array
+    {
+        $lines = self::stayLines(null, $stay);
+        if (! collect($lines)->contains(fn (string $line): bool => str_starts_with($line, 'Dates:') || str_starts_with($line, 'Check-in:'))) {
+            array_unshift($lines, 'Dates: to be confirmed');
+        }
+        if (filled($link)) {
+            $lines[] = 'Listing: '.$link;
+        }
+
+        return $lines;
     }
 
     /** WhatsApp link for a guest following up on an enquiry, with the reference prefilled, or null without a valid number. */

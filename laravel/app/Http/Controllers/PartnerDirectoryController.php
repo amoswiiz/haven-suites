@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Support\CompanyModules;
 use App\Support\PhoneNumber;
@@ -45,22 +46,33 @@ class PartnerDirectoryController extends Controller
             ->where('status', '!=', 'archived')->get(['id', 'partner_apartment_id', 'slug', 'status'])->keyBy('partner_apartment_id');
         $stay = array_filter(['check_in' => $filters['check_in'] ?? null, 'check_out' => $filters['check_out'] ?? null, 'guests' => $filters['guests'] ?? null]);
         $links = app(PublicWebsiteLinks::class);
-        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant): array {
+        $siteEnabled = app(PublicListingCatalog::class)->site($tenant) !== null;
+        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $siteEnabled): array {
             $mobile = PhoneNumber::normalize($partner->owner_phone);
-            $international = PhoneNumber::normalize($partner->owner_phone, mobileOnly: false);
             $label = $this->label($partner);
+            $listing = $listings->get($partner->id);
+            $link = $siteEnabled && $listing?->status === 'published'
+                ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing->slug], false) : null;
+            $owner = ['name' => $partner->owner_name, 'whatsapp' => $mobile ? substr($mobile, 1) : null];
 
             return [
-                'partner' => $partner, 'label' => $label, 'tel' => $international,
-                'whatsapp_url' => $links->ownerWhatsappUrl(['name' => $partner->owner_name, 'whatsapp' => $mobile ? substr($mobile, 1) : null], $tenant, $label, $stay),
-                'booked' => in_array((int) $partner->id, $booked, true), 'listing' => $listings->get($partner->id),
+                'partner' => $partner, 'label' => $label, 'tel' => PhoneNumber::normalize($partner->owner_phone, mobileOnly: false),
+                'whatsapp_url' => $links->ownerWhatsappUrl($owner, $tenant, $label, $stay, null, $link),
+                'whatsapp_number' => $owner['whatsapp'], 'greeting' => $links->ownerGreeting($owner, $tenant, $label), 'link' => $link,
+                'booked' => in_array((int) $partner->id, $booked, true), 'listing' => $listing,
             ];
         });
         $agents = CompanyModules::enabled('agents') && auth()->user()->can('agents.view')
             ? DB::table('sales_agents')->where('tenant_id', $tenant->id)->where('active', true)->orderBy('name')->get()
-                ->map(fn (object $agent): array => ['agent' => $agent, 'tel' => PhoneNumber::normalize($agent->phone, mobileOnly: false),
-                    'whatsapp_url' => $links->ownerWhatsappUrl(['name' => $agent->name, 'whatsapp' => ($mobile = PhoneNumber::normalize($agent->phone)) ? substr($mobile, 1) : null],
-                        $tenant, '', $stay, $this->requestQuestion($filters))])
+                ->map(function (object $agent) use ($links, $tenant, $stay, $filters): array {
+                    $mobile = PhoneNumber::normalize($agent->phone);
+                    $owner = ['name' => $agent->name, 'whatsapp' => $mobile ? substr($mobile, 1) : null];
+                    $question = $this->requestQuestion($filters);
+
+                    return ['agent' => $agent, 'tel' => PhoneNumber::normalize($agent->phone, mobileOnly: false),
+                        'whatsapp_url' => $links->ownerWhatsappUrl($owner, $tenant, '', $stay, $question),
+                        'whatsapp_number' => $owner['whatsapp'], 'greeting' => $links->ownerGreeting($owner, $tenant, '', $question), 'link' => null];
+                })
             : collect();
 
         return view('partners.index', [

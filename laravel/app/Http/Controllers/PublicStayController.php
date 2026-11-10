@@ -347,7 +347,8 @@ class PublicStayController extends Controller
 
         $owner = isset($listing['id']) ? $catalog->ownerContact($tenant, $listing['unit_id'] ?? null, $listing['partner_apartment_id'] ?? null) : null;
         if ($owner) {
-            $owner['whatsapp_url'] = app(PublicWebsiteLinks::class)->ownerWhatsappUrl($owner, $tenant, $listing['title'], $this->enquiryDefaults(request()));
+            $owner['whatsapp_url'] = app(PublicWebsiteLinks::class)->ownerWhatsappUrl($owner, $tenant, $listing['title'], $this->enquiryDefaults(request()), null,
+                $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]));
         }
 
         return [

@@ -1,5 +1,6 @@
 @extends('saas.layout')
 @section('title', 'Partner apartments')
+@push('scripts')<script src="{{ asset('assets/js/partner-directory.js') }}?v=1" defer></script>@endpush
 @section('content')
 @php
     $tenantSlug = app('currentTenant')->slug;
@@ -25,6 +26,7 @@
 </form>
 
 <section class="card" aria-labelledby="partner-results-heading">
+    <p class="muted" data-dates-reminder @if($hasDates) hidden @endif><strong>Add the client's dates above</strong> so they are included in each WhatsApp message. Messages update as you type.</p>
     <h2 id="partner-results-heading">{{ $rows->count() }} {{ $rows->count() === 1 ? 'partner apartment' : 'partner apartments' }}</h2>
     @if($rows->isEmpty())
         <p class="muted">No partner apartments match. Try a nearby area, a different size, or ask your agents below.</p>
@@ -39,7 +41,7 @@
                     <td>{{ (int) $row['partner']->bedrooms === 0 ? 'Studio' : $row['partner']->bedrooms.' bed' }}@if($row['partner']->bathrooms !== null) &middot; {{ $row['partner']->bathrooms }} bath @endif</td>
                     <td>@if($row['booked'])<span class="pill">Booked by us for these dates</span>@elseif($hasDates)<span class="muted">No booking recorded &mdash; ask owner</span>@else{{ ucfirst($row['partner']->status) }}@endif</td>
                     <td><div class="actions" style="margin-top:0">
-                        @if($row['whatsapp_url'] && !$row['booked'])<a class="button" href="{{ $row['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Ask on WhatsApp</a>@elseif(!$row['whatsapp_url'])<span class="muted">No WhatsApp number</span>@endif
+                        @if($row['whatsapp_url'] && !$row['booked'])<a class="button" href="{{ $row['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer" data-owner-request data-wa-number="{{ $row['whatsapp_number'] }}" data-wa-greeting="{{ $row['greeting'] }}" data-wa-link="{{ $row['link'] ?? '' }}">Ask on WhatsApp</a>@elseif(!$row['whatsapp_url'])<span class="muted">No WhatsApp number</span>@endif
                         @if($canEdit)<a href="{{ route('partners.edit', [$tenantSlug, $row['partner']->id]) }}">Edit</a>@endif
                     </div></td>
                 </tr>
@@ -57,7 +59,7 @@
     <div class="table-wrap"><table><thead><tr><th scope="col">Agent</th><th scope="col">Contact</th><th scope="col">Actions</th></tr></thead><tbody>
     @foreach($agents as $row)
         <tr><td>{{ $row['agent']->name }}</td><td>@if($row['tel'])<a href="tel:{{ $row['tel'] }}">{{ $row['agent']->phone }}</a>@else{{ $row['agent']->phone }}@endif @if($row['agent']->email)<br><a href="mailto:{{ $row['agent']->email }}">{{ $row['agent']->email }}</a>@endif</td>
-        <td>@if($row['whatsapp_url'])<a class="button secondary" href="{{ $row['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Ask on WhatsApp</a>@else<span class="muted">No WhatsApp number</span>@endif</td></tr>
+        <td>@if($row['whatsapp_url'])<a class="button secondary" href="{{ $row['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer" data-owner-request data-wa-number="{{ $row['whatsapp_number'] }}" data-wa-greeting="{{ $row['greeting'] }}" data-wa-link="{{ $row['link'] ?? '' }}">Ask on WhatsApp</a>@else<span class="muted">No WhatsApp number</span>@endif</td></tr>
     @endforeach
     </tbody></table></div>
 </section>

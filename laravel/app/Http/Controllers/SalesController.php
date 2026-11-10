@@ -214,7 +214,8 @@ class SalesController extends Controller
                     ! empty($lead->public_partner_apartment_id) && ! $lead->public_unit_id ? (int) $lead->public_partner_apartment_id : null);
                 if ($ownerContact) {
                     $ownerContact['whatsapp_url'] = app(PublicWebsiteLinks::class)->ownerWhatsappUrl($ownerContact, app('currentTenant'),
-                        (string) $lead->unit_preference, array_filter(['check_in' => $lead->check_in, 'check_out' => $lead->check_out, 'guests' => $lead->guests]));
+                        (string) $lead->unit_preference, array_filter(['check_in' => $lead->check_in, 'check_out' => $lead->check_out, 'guests' => $lead->guests]), null,
+                        $publicListing ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => app('currentTenant')->slug, 'slug' => $publicListing['slug']], false) : null);
                 }
             }
             $task = DB::table('task_items')->where('tenant_id', app('currentTenant')->id)->where('id', $lead->public_task_id)->first();

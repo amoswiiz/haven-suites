@@ -146,4 +146,22 @@ class PartnerDirectoryTest extends TestCase
         $this->assertSame(4, (int) $updated->bedrooms);
         $this->actingAs($this->admin)->post(route('partners.update', [$this->company->slug, 999]), $base)->assertNotFound();
     }
+
+    public function test_requests_include_the_listing_link_and_flag_missing_dates(): void
+    {
+        config(['app.url' => 'https://app.havensuitesbnb.com']);
+        DB::table('public_sites')->insert(['tenant_id' => $this->company->id, 'enabled' => true, 'enquiry_assignee_id' => $this->admin->id, 'response_hours' => 24]);
+        DB::table('public_listings')->insert(['tenant_id' => $this->company->id, 'partner_apartment_id' => 1, 'slug' => 'baharini-b09', 'title' => 'Baharini B09',
+            'description' => 'x', 'city' => 'Diani', 'max_guests' => 4, 'min_nights' => 1, 'status' => 'published', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('public_listings')->insert(['tenant_id' => $this->company->id, 'partner_apartment_id' => 2, 'slug' => 'galu-draft', 'title' => 'Galu draft',
+            'description' => 'x', 'city' => 'Diani', 'max_guests' => 4, 'min_nights' => 1, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()]);
+
+        $response = $this->search(['area' => 'Diani', 'bedrooms' => '2'])->assertOk()->assertSee("Add the client's dates above", false)->assertSee('partner-directory.js', false);
+        $rows = $response->viewData('rows');
+        parse_str(parse_url($rows->firstWhere('partner.id', 1)['whatsapp_url'], PHP_URL_QUERY), $published);
+        $this->assertSame("Hello Jane, this is Haven Suites. Is Baharini Cottages, B09 (2BR) available?\nDates: to be confirmed\nListing: https://app.havensuitesbnb.com/stays/haven/baharini-b09", $published['text']);
+        parse_str(parse_url($rows->firstWhere('partner.id', 2)['whatsapp_url'], PHP_URL_QUERY), $draft);
+        $this->assertStringNotContainsString('Listing:', $draft['text'], 'Unpublished listings are not linked.');
+        $response->assertSee('data-wa-link="https://app.havensuitesbnb.com/stays/haven/baharini-b09"', false)->assertSee('data-wa-greeting="Hello Jane', false);
+    }
 }
