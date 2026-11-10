@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Services\ListingAvailability;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
+use App\Services\PublicWebsiteLinks;
 use Carbon\CarbonImmutable;
 use DOMDocument;
 use DOMXPath;
@@ -63,8 +64,9 @@ class PublicStayController extends Controller
                 $states += $availability->availabilityForListings($tenant, $batch->all(), $filters['check_in'], $filters['check_out']);
             }
         }
-        $listings = $listings->map(function (array $listing) use ($states): array {
+        $listings = $listings->map(function (array $listing) use ($states, $tenant, $site, $request): array {
             $listing['availability'] = $states[$listing['id']] ?? null;
+            $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
 
             return $listing;
         })->filter(fn (array $listing): bool => empty($filters['available_only']) || $nights === null
@@ -87,8 +89,8 @@ class PublicStayController extends Controller
 
         return $this->page('public_stays.index', compact('tenant', 'site', 'stays', 'cities', 'filters', 'hero') + [
             'amenities' => PublicListingCatalog::AMENITIES, 'today' => $today,
-            'pageTitle' => $this->plainText($tenant->name, 100).' | Find your next stay'.($page > 1 ? ' | Page '.$page : ''),
-            'pageDescription' => $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
+            'pageTitle' => ($this->plainText($site->seo_title ?? '', 180) ?: $this->plainText($tenant->name, 100).' | Find your next stay').($page > 1 ? ' | Page '.$page : ''),
+            'pageDescription' => $this->plainText($site->seo_description ?? '', 320) ?: $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
             'canonicalUrl' => $canonicalUrl, 'robotsContent' => $filtered ? 'noindex, follow' : 'index, follow, max-image-preview:large',
             'socialImage' => $this->socialImage($hero['photos'][0] ?? null),
         ]);
@@ -190,15 +192,22 @@ class PublicStayController extends Controller
         $canEnquire = ! $preview && ($tenant->modules['sales'] ?? true) !== false;
         $formContext = $canEnquire ? $enquiries->formContext($tenant, $listing) : [];
         $alternatives = $preview ? collect() : app(PublicListingCatalog::class)->published($tenant)
-            ->filter(fn (array $other): bool => $other['id'] !== $listing['id'] && $other['city'] === $listing['city'])->take(3);
+            ->filter(fn (array $other): bool => $other['id'] !== $listing['id'] && $other['city'] === $listing['city'])->take(3)
+            ->map(function (array $other) use ($tenant, $site, $request): array {
+                $other['links'] = $this->listingLinks($tenant, $other, $site, $request);
+
+                return $other;
+            });
         $canonicalUrl = $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]);
         $listingTitle = $this->plainText($listing['title'], 180);
         $destination = $this->plainText(implode(', ', array_filter([$listing['neighbourhood'], $listing['city']])), 150);
-        $pageTitle = implode(' | ', array_unique(array_filter([$listingTitle, $destination, $this->plainText($tenant->name, 100)])));
-        $pageDescription = $this->plainText($listing['description'], 160);
+        $pageTitle = $this->plainText($listing['seo_title'] ?? '', 180) ?: implode(' | ', array_unique(array_filter([$listingTitle, $destination, $this->plainText($tenant->name, 100)])));
+        $pageDescription = $this->plainText($listing['seo_description'] ?? '', 320) ?: $this->plainText($listing['description'], 160);
         $structuredData = $preview ? null : $this->listingSchema($tenant, $listing, $canonicalUrl);
+        $publicLinks = $this->listingLinks($tenant, $listing, $site, $request);
+        $enquiryDefaults = $this->enquiryDefaults($request);
 
-        return $this->page('public_stays.show', compact('tenant', 'site', 'listing', 'calendar', 'month', 'weeks', 'canEnquire', 'formContext', 'alternatives', 'preview', 'canonicalUrl', 'structuredData') + [
+        return $this->page('public_stays.show', compact('tenant', 'site', 'listing', 'calendar', 'month', 'weeks', 'canEnquire', 'formContext', 'alternatives', 'preview', 'canonicalUrl', 'structuredData', 'publicLinks', 'enquiryDefaults') + [
             'today' => $today->toDateString(), 'pageTitle' => $pageTitle, 'pageDescription' => $pageDescription,
             'robotsContent' => $preview ? 'noindex, nofollow' : 'index, follow, max-image-preview:large',
             'socialImage' => $preview ? null : $this->socialImage($listing['photos'][0] ?? null),
@@ -235,6 +244,42 @@ class PublicStayController extends Controller
         return $query === [] ? $url : $url.'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
 
+    /** @return array{public_url: string, enquiry_url: string, whatsapp_url: ?string} */
+    private function listingLinks(Tenant $tenant, array $listing, object $site, Request $request): array
+    {
+        $links = app(PublicWebsiteLinks::class)->forListing($tenant, $listing, $site);
+        $selection = $this->enquiryDefaults($request);
+        $links['enquiry_url'] = $links['public_url'].($selection === [] ? '' : '?'.http_build_query($selection, '', '&', PHP_QUERY_RFC3986)).'#enquire';
+
+        return $links;
+    }
+
+    /** @return array<string, string|int> */
+    private function enquiryDefaults(Request $request): array
+    {
+        $selection = [];
+        foreach (['check_in', 'check_out'] as $field) {
+            $value = $request->query($field);
+            if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value)) {
+                continue;
+            }
+            try {
+                $date = CarbonImmutable::createFromFormat('!Y-m-d', $value, 'UTC');
+                if ($date && $date->format('Y-m-d') === $value) {
+                    $selection[$field] = $value;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+        $guests = $request->query('guests');
+        if ((is_string($guests) || is_int($guests)) && ctype_digit((string) $guests) && (int) $guests >= 1 && (int) $guests <= 100) {
+            $selection['guests'] = (int) $guests;
+        }
+
+        return $selection;
+    }
+
     private function plainText(string $html, int $limit): string
     {
         $document = new DOMDocument;
@@ -258,6 +303,11 @@ class PublicStayController extends Controller
 
     private function page(string $view, array $data, bool $preview = false): Response
     {
+        if (isset($data['tenant'])) {
+            $links = app(PublicWebsiteLinks::class);
+            $data += ['websiteMenu' => $links->menu($data['tenant'], $data['site'] ?? null),
+                'websiteContactLinks' => $links->forSite($data['tenant'], $data['site'] ?? null)];
+        }
         $response = response()->view($view, $data)->header('Cache-Control', 'private, no-store')
             ->header('Referrer-Policy', 'strict-origin-when-cross-origin')->header('X-Content-Type-Options', 'nosniff');
         if ($preview) {

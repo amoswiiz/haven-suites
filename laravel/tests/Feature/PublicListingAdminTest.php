@@ -104,7 +104,8 @@ class PublicListingAdminTest extends TestCase
 
     public function test_management_forms_render_and_only_administrators_can_publish(): void
     {
-        $this->get(route('public-listings.index', $this->company->slug))->assertOk()->assertSee('Public listings')->assertSee('Assign website enquiries to');
+        $this->get(route('public-listings.index', $this->company->slug))->assertOk()->assertSee('Public listings')->assertSee('Website settings');
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Assign website enquiries to');
         $this->get(route('public-listings.create', $this->company->slug))->assertOk()->assertSee('Existing apartment')->assertDontSee('PRIVATE-OWNER-PHONE');
         foreach (['cleaner', 'sales', 'owner', 'manager'] as $role) {
             $user = User::factory()->create(['active' => true]);

@@ -1,6 +1,42 @@
 # Public listings implementation checkpoint
 
-Updated: 7 November 2026. Status: the 11-apartment pilot was pushed as `810ab8f`; its deployment has not been confirmed. Listing media/UX/SEO follow-up is implemented and verified, ready for push/deployment.
+Updated: 10 November 2026. Status: the 11-apartment pilot (`810ab8f`) and the
+listing media/UX/SEO follow-up (`4092dc6`) are on GitHub; their deployment has
+not been confirmed. The website settings follow-up below is implemented, tested
+and committed locally, ready for push/deployment.
+
+## 10 November: website settings, WhatsApp and menu
+
+- New staff page `/t/{tenant}/public-listings/settings` (route
+  `public-listings.settings`) holds public site settings, search appearance,
+  WhatsApp contact and the website menu. The listings index links to it.
+- Site-wide and per-listing `seo_title`, `seo_description`, `whatsapp_number`
+  (`+` and country code) and `whatsapp_message` (`{listing_title}`,
+  `{listing_url}`, `{listing_reference}` placeholders). Listing values override
+  site values; blank values fall back to the existing descriptive defaults.
+- Website menu: up to three links to Home / Find a stay / Contact, each target
+  once, stored as normalised JSON in `public_sites.navigation_links`; invalid
+  stored data falls back to the default menu. `App\Services\PublicWebsiteLinks`
+  builds canonical, enquiry and WhatsApp links. A WhatsApp chat does not create a
+  pipeline enquiry.
+- Listing pages gain "Enquire now" / "WhatsApp us" quick actions; enquiry links
+  keep selected dates/guests and malformed query values cannot crash the page.
+- Listing editor and settings saves support JSON (progress-indicator) responses
+  as well as normal redirects. Forms that omit the new fields keep stored values.
+- Fixed: the listing page crashed (`Undefined variable $bedroomLabel`) because
+  inline `@php(...)` directives preceded a `@php ... @endphp` block in
+  `public_stays/show.blade.php`; Blade compiled them as one block. They are now
+  one block. Other views only use inline directives after their blocks.
+- New central migration: `2026_11_07_015444_add_public_website_settings.php`.
+- Verification: website settings, integration and listing admin tests passed
+  (**23 tests / 188 assertions**). Full suite: **547 of 550 passed**. The three
+  failures (`BusinessWorkflowTest::test_unlinked_staff_account_form_renders`,
+  `BusinessWorkflowTest::test_reservation_invoice_payment_creates_receipt_and_updates_displayed_balance`,
+  `InvestorPortalTest::test_invites_use_owner_role_and_only_verified_matching_recipient_can_accept`)
+  fail identically on `4092dc6` and are unrelated pre-existing failures to fix
+  separately. Pint, Blade compilation and JS syntax checks passed.
+- Next: push, deploy with `haven-prepare` then `deploy-haven.sh EXPECTED_COMMIT`,
+  then fill in website settings (search text, WhatsApp number, menu).
 
 ## Objective
 

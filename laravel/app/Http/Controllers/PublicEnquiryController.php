@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
+use App\Services\PublicWebsiteLinks;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -26,7 +27,10 @@ class PublicEnquiryController extends Controller
         abort_unless($site && preg_match('/^[a-f0-9]{64}$/D', $receipt), 404);
         $row = DB::table('public_enquiry_receipts')->where('tenant_id', $tenant->id)->where('token_hash', hash('sha256', $receipt))->firstOrFail();
 
-        return response()->view('public_stays.received', ['tenant' => $tenant, 'site' => $site, 'reference' => $row->reference])
+        $links = app(PublicWebsiteLinks::class);
+
+        return response()->view('public_stays.received', ['tenant' => $tenant, 'site' => $site, 'reference' => $row->reference,
+            'websiteMenu' => $links->menu($tenant, $site), 'websiteContactLinks' => $links->forSite($tenant, $site)])
             ->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
     }
 }

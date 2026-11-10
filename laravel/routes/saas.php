@@ -60,6 +60,7 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
     Route::prefix('public-listings')->middleware('permission:properties.manage')->name('public-listings.')->group(function (): void {
         Route::get('/', [PublicListingController::class, 'index'])->name('index');
         Route::get('new', [PublicListingController::class, 'create'])->name('create');
+        Route::get('settings', [PublicListingController::class, 'settings'])->name('settings');
         Route::post('/', [PublicListingController::class, 'store'])->middleware('throttle:20,1')->name('store');
         Route::post('site', [PublicListingController::class, 'site'])->name('site.update');
         Route::post('prepare', [PublicListingController::class, 'prepare'])->middleware('throttle:5,1')->name('prepare');

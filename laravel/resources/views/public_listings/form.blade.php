@@ -7,7 +7,7 @@
 @php($selectedReference = old('apartment_ref', old('unit_id') ? 'unit:'.old('unit_id') : (old('partner_apartment_id') ? 'partner:'.old('partner_apartment_id') : $listingReference)))
 <p><a href="{{ route('public-listings.index', $tenantSlug) }}">&larr; Public listings</a></p>
 <div class="split"><div><h1>{{ $listing ? 'Edit public listing' : 'Create public listing' }}</h1><p class="muted">Describe the stay guests will see. Owner details and internal unit notes are never published.</p></div>@if($listing && \Illuminate\Support\Facades\Route::has('public-listings.preview'))<a class="button secondary" href="{{ route('public-listings.preview', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}" target="_blank" rel="noopener">Preview listing</a>@endif</div>
-<form method="post" enctype="multipart/form-data" action="{{ $listing ? route('public-listings.update', ['tenant' => $tenantSlug, 'id' => $listing->id]) : route('public-listings.store', $tenantSlug) }}">
+<form method="post" enctype="multipart/form-data" data-listing-save-form action="{{ $listing ? route('public-listings.update', ['tenant' => $tenantSlug, 'id' => $listing->id]) : route('public-listings.store', $tenantSlug) }}">
     @csrf
     @if($listing)<input type="hidden" name="version" value="{{ old('version', $listing->version) }}">@endif
     <input type="hidden" name="featured" value="0">
@@ -39,6 +39,15 @@
         </div></fieldset>
         @endfor
     </section>
+    <section class="card" aria-labelledby="listing-seo-heading"><h2 id="listing-seo-heading">Search appearance</h2><p class="muted">Optional titles and descriptions for search results and shared links. Leave these blank to use the apartment title, destination and description.</p><div class="grid">
+        <div><label for="seo_title">Search title</label><input id="seo_title" name="seo_title" maxlength="180" value="{{ old('seo_title', $listing->seo_title ?? '') }}"><small class="muted">Aim for about 50–60 characters. Maximum 180.</small></div>
+        <div><label for="seo_description">Search description</label><textarea id="seo_description" name="seo_description" maxlength="320" rows="3">{{ old('seo_description', $listing->seo_description ?? '') }}</textarea><small class="muted">Summarise the stay in about 150–160 characters. Maximum 320.</small></div>
+    </div></section>
+    <section class="card" aria-labelledby="listing-whatsapp-heading"><h2 id="listing-whatsapp-heading">WhatsApp enquiries</h2><p class="muted">Leave these fields blank to use the website WhatsApp settings. A WhatsApp link opens a prefilled chat; the guest decides whether to send it. Website enquiry form submissions enter your sales pipeline.</p><div class="grid">
+        <div><label for="whatsapp_number">WhatsApp number for this apartment</label><input id="whatsapp_number" name="whatsapp_number" type="tel" maxlength="16" placeholder="+254712345678" pattern="\+[1-9][0-9]{7,14}" value="{{ old('whatsapp_number', $listing->whatsapp_number ?? '') }}"><small class="muted">Use the international format with + and country code.</small></div>
+        <div><label for="whatsapp_message">Prefilled message for this apartment</label><textarea id="whatsapp_message" name="whatsapp_message" maxlength="1000" rows="4">{{ old('whatsapp_message', $listing->whatsapp_message ?? '') }}</textarea><small class="muted">You can use {listing_title}, {listing_url} and {listing_reference}. The apartment title and link are always included.</small></div>
+    </div><p><a href="{{ route('public-listings.settings', $tenantSlug) }}">Edit website defaults</a></p></section>
+    @include('public_listings.save_progress')
     <div class="actions"><button type="submit">Save listing</button><a href="{{ route('public-listings.index', $tenantSlug) }}">Cancel</a></div>
 </form>
 @endsection

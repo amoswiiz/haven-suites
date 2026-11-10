@@ -34,8 +34,13 @@ $groups = [
         ['label' => 'Guest KYC', 'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'finance.view'],
         ['label' => 'Send guest KYC link', 'path' => 'staff/kyc/invite', 'icon' => 'mail', 'permission' => 'finance.manage'],
     ]],
+    ['label' => 'Website & listings', 'icon' => 'globe', 'items' => [
+        ['label' => 'Manage listings', 'path' => 'public-listings', 'icon' => 'building-2', 'permission' => 'properties.manage'],
+        ['label' => 'Website settings', 'path' => 'public-listings/settings', 'icon' => 'settings', 'permission' => 'properties.manage'],
+        ['label' => 'Create listing', 'path' => 'public-listings/new', 'icon' => 'plus-circle', 'permission' => 'properties.manage'],
+        ['label' => 'Public website', 'path' => 'public-listings/public-website', 'access_path' => 'public-listings', 'public_site' => true, 'icon' => 'external-link', 'permission' => 'properties.manage'],
+    ]],
     ['label' => 'Properties', 'icon' => 'building-2', 'items' => [
-        ['label' => 'Public listings & website', 'path' => 'public-listings', 'icon' => 'globe', 'permission' => 'properties.manage'],
         ['label' => 'Apartment closures', 'path' => 'availability/closures', 'icon' => 'calendar-off', 'permission' => 'properties.manage'],
         ['label' => 'Apartment Units', 'path' => 'units', 'icon' => 'house', 'permission' => 'units.view'],
         ['label' => 'Host Agreements', 'path' => 'host-agreements', 'icon' => 'handshake', 'permission' => 'finance.view'],
@@ -78,7 +83,7 @@ $groups = [
 
 $byLabel = array_column($groups, null, 'label');
 $groups = [];
-foreach (['Reservations & Guests' => 'Bookings & Guests', 'Operations' => 'Operations', 'Sales & Enquiries' => 'Sales', 'Properties' => 'Properties & Owners', 'Finance' => 'Finance', 'Communications' => 'Messages', 'Reports' => 'Reports', 'Team & Settings' => 'Settings'] as $old => $label) {
+foreach (['Reservations & Guests' => 'Bookings & Guests', 'Operations' => 'Operations', 'Sales & Enquiries' => 'Sales', 'Website & listings' => 'Website & listings', 'Properties' => 'Properties & Owners', 'Finance' => 'Finance', 'Communications' => 'Messages', 'Reports' => 'Reports', 'Team & Settings' => 'Settings'] as $old => $label) {
     $group = $byLabel[$old];
     $group['label'] = $label;
     if ($label === 'Bookings & Guests') {
@@ -156,9 +161,14 @@ $canAccess = static function (array $item) use ($user): bool {
     }
     return $user->can($item['permission']);
 };
+$isVisible = static fn (array $item): bool => $canAccess($item) && haven_can_access(site_url($item['access_path'] ?? $item['path']), 'GET');
+$publicWebsiteEnabled = $user !== null && $user->can('properties.manage')
+    && \Illuminate\Support\Facades\Schema::hasTable('public_sites')
+    && (bool) \Illuminate\Support\Facades\DB::table('public_sites')->where('tenant_id', app('currentTenant')->id)->value('enabled');
 $activePath = null;
 foreach ($groups as $group) {
     foreach ($group['items'] as $item) {
+        if (!empty($item['public_site'])) continue;
         $path = $item['path'];
         if ($canAccess($item) && haven_can_access(site_url($path), 'GET') && ($currentPath === $path || str_starts_with($currentPath, $path.'/')) && strlen($path) > strlen($activePath ?? '')) $activePath = $path;
     }
@@ -236,7 +246,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
         @if(!$investorNavigation && ($user->can('sales.view') || $user->can('reservations.view') || $user->can('finance.view')))<a data-menu-item data-keywords="approvals requests tasks finance reservations" href="{{ site_url('work') }}" class="hs-nav-link {{ $isActive('work')?'active':'' }}" @if($isActive('work')) aria-current="page" @endif>Work inbox &amp; approvals</a>@endif
         <?php foreach ($groups as $group): ?>
             <?php
-                $visible = array_values(array_filter($group['items'], static fn ($item) => $canAccess($item) && haven_can_access(site_url($item['path']), 'GET')));
+                $visible = array_values(array_filter($group['items'], $isVisible));
                 if (!$visible) continue;
                 $groupActive = false;
                 foreach ($visible as $item) {
@@ -252,7 +262,11 @@ $isActive = static fn (string $path): bool => $activePath === $path;
                 </summary>
                 <div class="hs-subnav">
                     <?php foreach ($visible as $item): ?>
-                        <?php if (haven_can_access(site_url($item['path']), 'GET')): ?><a data-menu-item data-secondary="<?= !empty($item['secondary']) ? 'true' : 'false' ?>" <?= !empty($item['secondary']) ? 'hidden' : '' ?> data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" href="<?= site_url($item['path']) ?>" class="hs-nav-link <?= $isActive($item['path']) ? 'active' : '' ?>" <?= $isActive($item['path']) ? 'aria-current="page"' : '' ?>>
+                        <?php if (!empty($item['public_site']) && !$publicWebsiteEnabled): ?>
+                            <span data-menu-item data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" class="hs-nav-link" aria-disabled="true" title="Enable the public website in Website settings"><i data-lucide="<?= esc($item['icon'], 'attr') ?>"></i><span>Public website<small style="display:block;font-size:11px;opacity:.8">Website offline</small></span></span>
+                            <?php continue; ?>
+                        <?php endif; ?>
+                        <?php if ($isVisible($item)): ?><?php $itemActive = empty($item['public_site']) && $isActive($item['path']); ?><a data-menu-item data-secondary="<?= !empty($item['secondary']) ? 'true' : 'false' ?>" <?= !empty($item['secondary']) ? 'hidden' : '' ?> data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" href="<?= !empty($item['public_site']) ? esc(route('public-stays.index', ['company' => app('currentTenant')->slug]), 'attr') : site_url($item['path']) ?>" class="hs-nav-link <?= $itemActive ? 'active' : '' ?>" <?= $itemActive ? 'aria-current="page"' : '' ?><?= !empty($item['public_site']) ? ' target="_blank" rel="noopener noreferrer" aria-label="Public website (opens in a new tab)"' : '' ?>>
                             <i data-lucide="<?= esc($item['icon'], 'attr') ?>"></i>
                             <span><?= esc($item['label']) ?></span>
                         </a><?php endif; ?>

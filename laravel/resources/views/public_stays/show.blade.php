@@ -3,13 +3,28 @@
 @if($preview)
     <div class="stay-preview">Staff preview &middot; This page does not publish the apartment. <a href="{{ route('public-listings.edit', [$tenant->slug, $listing['id']]) }}">Return to listing editor</a></div>
 @endif
-@php($unconfirmedMessage = !empty($listing['partner_apartment_id']) ? 'Our team confirms these dates with the apartment owner before accepting your booking.' : 'The external calendar needs confirmation. Our team will verify your dates.')
-@php($bedroomLabel = $listing['bedrooms'] === null ? 'Bedroom details on request' : ($listing['bedrooms'] === 0 ? 'Studio' : $listing['bedrooms'].' bedroom'.($listing['bedrooms'] === 1 ? '' : 's')))
-@php($bathroomLabel = $listing['bathrooms'] === null ? 'Bathroom details on request' : $listing['bathrooms'].' bathroom'.($listing['bathrooms'] === 1 ? '' : 's'))
+@php
+    $unconfirmedMessage = !empty($listing['partner_apartment_id']) ? 'Our team confirms these dates with the apartment owner before accepting your booking.' : 'The external calendar needs confirmation. Our team will verify your dates.';
+    $bedroomLabel = $listing['bedrooms'] === null ? 'Bedroom details on request' : ($listing['bedrooms'] === 0 ? 'Studio' : $listing['bedrooms'].' bedroom'.($listing['bedrooms'] === 1 ? '' : 's'));
+    $bathroomLabel = $listing['bathrooms'] === null ? 'Bathroom details on request' : $listing['bathrooms'].' bathroom'.($listing['bathrooms'] === 1 ? '' : 's');
+    $listingLinks = $publicLinks ?? ['public_url' => route('public-stays.show', [$tenant->slug, $listing['slug']]), 'enquiry_url' => route('public-stays.show', [$tenant->slug, $listing['slug']]).'#enquire', 'whatsapp_url' => null];
+    $safeEnquiryDefaults = is_array($enquiryDefaults ?? null) ? $enquiryDefaults : [];
+    $enquiryValue = static function (string $field, mixed $fallback = '') use ($safeEnquiryDefaults): string {
+        $value = old($field, $safeEnquiryDefaults[$field] ?? $fallback);
+        return is_scalar($value) ? (string) $value : '';
+    };
+@endphp
 <div class="stay-container">
     <p class="stay-breadcrumb"><a href="{{ $preview ? route('public-listings.index', $tenant->slug) : route('public-stays.index', $tenant->slug) }}">{{ $preview ? 'All listings' : 'All stays' }}</a> &nbsp;/&nbsp; {{ $listing['city'] }}</p>
     <div class="stay-detail-heading"><span class="stay-eyebrow">{{ $listing['neighbourhood'] ?: $listing['city'] }}</span><h1>{{ $listing['title'] }}</h1><p>{{ $listing['public_location'] ?: $listing['city'] }} &middot; {{ $listing['max_guests'] ? 'Up to '.$listing['max_guests'].' guests' : 'Guest capacity to be confirmed' }} &middot; {{ $bedroomLabel }} &middot; {{ $bathroomLabel }}</p></div>
     <div class="stay-summary-price"><div>@if((float)$listing['starting_price'] > 0)<span>From</span> <strong>{{ $listing['currency'] }} {{ number_format((float)$listing['starting_price'], (float)$listing['starting_price'] == floor((float)$listing['starting_price']) ? 0 : 2) }}</strong> <span>per night</span>@else<strong>Price on request</strong>@endif</div><a href="#stay-availability">Explore your dates &darr;</a></div>
+    @if(!$preview && ($canEnquire || !empty($listingLinks['whatsapp_url'])))
+        <div class="stay-listing-actions" data-quick-contact>
+            @if($canEnquire)<a class="stay-button" href="{{ $listingLinks['enquiry_url'] }}" aria-label="Enquire about {{ $listing['title'] }}">Enquire now <span aria-hidden="true">&rarr;</span></a>@endif
+            @if(!empty($listingLinks['whatsapp_url']))<a class="stay-button secondary stay-whatsapp-button" href="{{ $listingLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp us <span aria-hidden="true">&nearr;</span></a>@endif
+            <span class="stay-quick-note">Our team confirms your dates and final price.</span>
+        </div>
+    @endif
     @include('public_stays.media')
     <nav class="stay-section-nav" aria-label="Explore this apartment"><a href="#stay-overview">About the stay</a>@if(!empty($listing['videos']))<a href="#stay-videos">Video tours</a>@endif @if($listing['amenity_labels'])<a href="#stay-amenities">Amenities</a>@endif<a href="#stay-availability">Availability</a><a href="#stay-rules">Before you arrive</a>@if($listing['public_location'])<a href="#stay-location">Location</a>@endif</nav>
     <div class="stay-detail-grid"><div>
@@ -39,12 +54,12 @@
                 @csrf
                 @foreach($formContext as $key=>$value)<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endforeach
                 <div class="stay-honey" aria-hidden="true"><label for="website">Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off"></div>
-                <div class="stay-form-grid"><div class="stay-field"><label for="enquiry-check-in">Check-in *</label><input type="date" id="enquiry-check-in" name="check_in" required min="{{ $today }}" value="{{ old('check_in', request('check_in','')) }}"></div><div class="stay-field"><label for="enquiry-check-out">Check-out *</label><input type="date" id="enquiry-check-out" name="check_out" required min="{{ $today }}" value="{{ old('check_out', request('check_out','')) }}"></div></div>
-                <div class="stay-field"><label for="enquiry-guests">Guests *</label><input type="number" id="enquiry-guests" name="guests" required min="1" max="{{ $listing['max_guests'] }}" value="{{ old('guests', request('guests',1)) }}"></div>
-                <div class="stay-field"><label for="full-name">Your full name *</label><input type="text" id="full-name" name="full_name" required minlength="2" maxlength="150" autocomplete="name" value="{{ old('full_name') }}"></div>
-                <div class="stay-field"><label for="enquiry-phone">Phone number *</label><input type="tel" id="enquiry-phone" name="phone" required maxlength="50" autocomplete="tel" placeholder="e.g. +254 712 345 678" value="{{ old('phone') }}"></div>
-                <div class="stay-field"><label for="enquiry-email">Email address (optional)</label><input type="email" id="enquiry-email" name="email" maxlength="180" autocomplete="email" value="{{ old('email') }}"></div>
-                <div class="stay-field"><label for="enquiry-message">Anything you'd like us to know?</label><textarea id="enquiry-message" name="message" rows="3" maxlength="3000" placeholder="A special occasion, accessibility needs or a question…">{{ old('message') }}</textarea></div>
+                <div class="stay-form-grid"><div class="stay-field"><label for="enquiry-check-in">Check-in *</label><input type="date" id="enquiry-check-in" name="check_in" required min="{{ $today }}" value="{{ $enquiryValue('check_in') }}"></div><div class="stay-field"><label for="enquiry-check-out">Check-out *</label><input type="date" id="enquiry-check-out" name="check_out" required min="{{ $today }}" value="{{ $enquiryValue('check_out') }}"></div></div>
+                <div class="stay-field"><label for="enquiry-guests">Guests *</label><input type="number" id="enquiry-guests" name="guests" required min="1" max="{{ $listing['max_guests'] }}" value="{{ $enquiryValue('guests', 1) }}"></div>
+                <div class="stay-field"><label for="full-name">Your full name *</label><input type="text" id="full-name" name="full_name" required minlength="2" maxlength="150" autocomplete="name" value="{{ $enquiryValue('full_name') }}"></div>
+                <div class="stay-field"><label for="enquiry-phone">Phone number *</label><input type="tel" id="enquiry-phone" name="phone" required maxlength="50" autocomplete="tel" placeholder="e.g. +254 712 345 678" value="{{ $enquiryValue('phone') }}"></div>
+                <div class="stay-field"><label for="enquiry-email">Email address (optional)</label><input type="email" id="enquiry-email" name="email" maxlength="180" autocomplete="email" value="{{ $enquiryValue('email') }}"></div>
+                <div class="stay-field"><label for="enquiry-message">Anything you'd like us to know?</label><textarea id="enquiry-message" name="message" rows="3" maxlength="3000" placeholder="A special occasion, accessibility needs or a question…">{{ $enquiryValue('message') }}</textarea></div>
                 <label class="stay-check stay-field"><input type="checkbox" name="flexible_dates" value="1" @checked(old('flexible_dates'))><span>My dates are flexible. Please suggest alternatives if needed.</span></label>
                 <label class="stay-check stay-field"><input type="checkbox" name="consent" value="1" required @checked(old('consent'))><span>I agree to be contacted by {{ $tenant->name }} about this enquiry, including an acknowledgement SMS.</span></label>
                 <button type="submit" class="stay-button wide">Enquire about these dates &rarr;</button><p class="stay-help" data-enquiry-status aria-live="polite">No payment is taken here. Sending an enquiry does not reserve the apartment.</p>

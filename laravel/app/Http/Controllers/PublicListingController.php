@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Services\PublicListingCatalog;
+use App\Services\PublicWebsiteLinks;
 use App\Services\YouTubeListingVideos;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -26,12 +28,25 @@ class PublicListingController extends Controller
     {
         $this->authorizeAccess();
         $tenant = app('currentTenant');
+        $site = $catalog->settings($tenant);
+        $listings = DB::table('public_listings')->where('tenant_id', $tenant->id)->orderBy('title')->get();
+        $publicLinks = $catalog->published($tenant)->mapWithKeys(fn (array $listing): array => [$listing['id'] => app(PublicWebsiteLinks::class)->forListing($tenant, $listing, $site)]);
 
         return view('public_listings.index', [
-            'listings' => DB::table('public_listings')->where('tenant_id', $tenant->id)->orderBy('title')->get(),
-            'site' => $catalog->settings($tenant), 'members' => $catalog->assignees($tenant),
+            'listings' => $listings, 'site' => $site, 'publicLinks' => $publicLinks,
+            'photoCounts' => DB::table('public_listing_photos')->where('tenant_id', $tenant->id)->selectRaw('listing_id, COUNT(*) as photos')->groupBy('listing_id')->pluck('photos', 'listing_id'),
             'apartments' => $catalog->apartments($tenant)->keyBy('reference'),
         ]);
+    }
+
+    public function settings(Request $request, PublicListingCatalog $catalog): View
+    {
+        $this->authorizeAccess();
+        $tenant = app('currentTenant');
+        $site = $catalog->settings($tenant);
+
+        return view('public_listings.settings', ['site' => $site, 'members' => $catalog->assignees($tenant),
+            'navigation' => app(PublicWebsiteLinks::class)->navigationForForm($site), 'websiteLinks' => app(PublicWebsiteLinks::class)->forSite($tenant, $site)]);
     }
 
     public function create(PublicListingCatalog $catalog): View
@@ -54,12 +69,12 @@ class PublicListingController extends Controller
         ]);
     }
 
-    public function store(Request $request, PublicListingCatalog $catalog): RedirectResponse
+    public function store(Request $request, PublicListingCatalog $catalog): JsonResponse|RedirectResponse
     {
         return $this->save($request, $catalog);
     }
 
-    public function update(string $tenant, int $id, Request $request, PublicListingCatalog $catalog): RedirectResponse
+    public function update(string $tenant, int $id, Request $request, PublicListingCatalog $catalog): JsonResponse|RedirectResponse
     {
         return $this->save($request, $catalog, $id);
     }
@@ -76,17 +91,25 @@ class PublicListingController extends Controller
         return redirect()->route('public-listings.index', $tenant->slug)->with('success', 'Missing apartment listings have been prepared as private drafts. Existing listings remain unchanged. Add the guest details and photos before publishing.');
     }
 
-    public function site(Request $request, PublicListingCatalog $catalog): RedirectResponse
+    public function site(Request $request, PublicListingCatalog $catalog): JsonResponse|RedirectResponse
     {
         $this->authorizeAccess();
         $tenant = app('currentTenant');
         $data = $request->validate([
             'version' => 'required|integer|min:0', 'enabled' => 'sometimes|boolean',
+            'settings_page' => 'sometimes|boolean',
             'headline' => 'nullable|string|max:180', 'tagline' => 'nullable|string|max:500',
             'contact_email' => 'nullable|email|max:180', 'contact_phone' => 'nullable|string|max:40',
             'enquiry_assignee_id' => ['nullable', 'integer', Rule::in($catalog->assignees($tenant)->pluck('id')->all())],
             'response_hours' => 'required|integer|min:1|max:168',
+            ...$this->websiteRules(),
+            'navigation_links' => 'sometimes|array|max:6', 'navigation_links.*' => 'required|array:label,target',
+            'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(['home', 'stays', 'contact'])],
         ]);
+        if (array_key_exists('navigation_links', $data)) {
+            $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
+        }
+        unset($data['settings_page']);
         $data['enabled'] = $request->boolean('enabled');
         if ($data['enabled'] && (empty($data['enquiry_assignee_id']) || ($tenant->modules['sales'] ?? true) === false)) {
             throw ValidationException::withMessages(['enquiry_assignee_id' => 'Choose an active salesperson and enable the Sales module before opening the public site.']);
@@ -107,7 +130,7 @@ class PublicListingController extends Controller
             $this->audit(null, 'site_updated', $before, DB::table('public_sites')->where('tenant_id', $tenant->id)->first());
         });
 
-        return redirect()->route('public-listings.index', $tenant->slug)->with('success', 'Public site settings saved.');
+        return $this->saved($request, route($request->boolean('settings_page') ? 'public-listings.settings' : 'public-listings.index', $tenant->slug), 'Public site settings saved.');
     }
 
     public function photo(string $tenant, int $id, int $photo, PublicListingCatalog $catalog): BinaryFileResponse
@@ -124,7 +147,7 @@ class PublicListingController extends Controller
         return DB::table('public_listings')->where('tenant_id', app('currentTenant')->id)->where('id', $id)->firstOrFail();
     }
 
-    private function save(Request $request, PublicListingCatalog $catalog, ?int $id = null): RedirectResponse
+    private function save(Request $request, PublicListingCatalog $catalog, ?int $id = null): JsonResponse|RedirectResponse
     {
         $this->authorizeAccess();
         $tenant = app('currentTenant');
@@ -160,6 +183,7 @@ class PublicListingController extends Controller
             'photo_captions' => 'nullable|array|max:30', 'photo_captions.*' => 'nullable|string|max:180',
             'youtube_videos' => 'sometimes|array|max:2', 'youtube_videos.*' => 'required|array:url,title',
             'youtube_videos.*.url' => 'nullable|string|max:2048', 'youtube_videos.*.title' => 'nullable|string|max:120',
+            ...$this->websiteRules(),
         ]);
         if (array_key_exists('youtube_videos', $data)) {
             $data['youtube_videos'] = app(YouTubeListingVideos::class)->normalize($data['youtube_videos']);
@@ -203,7 +227,7 @@ class PublicListingController extends Controller
                 if ($photoCount > 30 || ($data['status'] === 'published' && ($photoCount < 1 || $unit->status !== 'active'))) {
                     throw ValidationException::withMessages(['photos' => 'A published listing needs an active apartment and at least one photo. Keep at most 30 photos.']);
                 }
-                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status']));
+                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message']));
                 $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null];
                 $changes['amenities'] = json_encode(array_values(array_unique($data['amenities'] ?? [])), JSON_THROW_ON_ERROR);
                 if (array_key_exists('youtube_videos', $data)) {
@@ -263,7 +287,26 @@ class PublicListingController extends Controller
             }
         }
 
-        return redirect()->route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $id])->with('success', 'Listing saved. Only published listings appear on an enabled public site.');
+        return $this->saved($request, route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $id]), 'Listing saved. Only published listings appear on an enabled public site.');
+    }
+
+    private function websiteRules(): array
+    {
+        return ['seo_title' => 'nullable|string|max:180|not_regex:/[<>]/',
+            'seo_description' => 'nullable|string|max:320|not_regex:/[<>]/',
+            'whatsapp_number' => ['nullable', 'string', 'regex:/^\+[1-9][0-9]{7,14}$/D'],
+            'whatsapp_message' => 'nullable|string|max:1000'];
+    }
+
+    private function saved(Request $request, string $url, string $message): JsonResponse|RedirectResponse
+    {
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', $message);
+
+            return response()->json(['redirect' => $url, 'message' => $message]);
+        }
+
+        return redirect()->to($url)->with('success', $message);
     }
 
     private function encode(UploadedFile $file): array

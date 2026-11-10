@@ -214,6 +214,8 @@ class PublicListingCatalog
             'amenities' => $amenities, 'amenity_labels' => array_map(fn (string $key): string => self::AMENITIES[$key], $amenities),
             'house_rules' => $listing->house_rules, 'featured' => (bool) $listing->featured,
             'videos' => app(YouTubeListingVideos::class)->project($listing->youtube_videos ?? null),
+            'seo_title' => $listing->seo_title ?? null, 'seo_description' => $listing->seo_description ?? null,
+            'whatsapp_number' => $listing->whatsapp_number ?? null, 'whatsapp_message' => $listing->whatsapp_message ?? null,
             'updated_at' => $listing->updated_at,
             'photos' => $photos->map(fn (object $photo): array => [
                 'id' => (int) $photo->id, 'caption' => $photo->caption ?: $listing->title,

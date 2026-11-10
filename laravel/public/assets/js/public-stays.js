@@ -1,5 +1,36 @@
 (() => {
     'use strict';
+    const publicHeader = document.querySelector('[data-public-header]');
+    const menuToggle = publicHeader?.querySelector('[data-menu-toggle]');
+    const publicMenu = publicHeader?.querySelector('[data-public-menu]');
+    if (publicHeader && menuToggle && publicMenu && typeof window.matchMedia === 'function') {
+        const compactHeader = window.matchMedia('(max-width: 900px)');
+        const setMenu = (expanded, returnFocus = false) => {
+            const open = compactHeader.matches && expanded;
+            publicMenu.hidden = compactHeader.matches && !open;
+            menuToggle.setAttribute('aria-expanded', String(open));
+            publicHeader.classList.toggle('is-menu-open', open);
+            if (returnFocus && compactHeader.matches) menuToggle.focus();
+        };
+        publicHeader.classList.add('is-menu-enhanced');
+        menuToggle.hidden = false;
+        setMenu(false);
+        menuToggle.addEventListener('click', () => setMenu(menuToggle.getAttribute('aria-expanded') !== 'true'));
+        compactHeader.addEventListener?.('change', () => setMenu(false, publicMenu.contains(document.activeElement)));
+        publicMenu.addEventListener('click', event => {
+            const link = event.target.closest?.('a');
+            if (link && compactHeader.matches) setMenu(false, link.target === '_blank');
+        });
+        document.addEventListener('click', event => {
+            if (!publicHeader.contains(event.target) && menuToggle.getAttribute('aria-expanded') === 'true') setMenu(false);
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && menuToggle.getAttribute('aria-expanded') === 'true') {
+                event.preventDefault();
+                setMenu(false, true);
+            }
+        });
+    }
     const sort = document.querySelector('[data-sort-stays]');
     sort?.addEventListener('change', () => {
         const form = document.getElementById('stay-search-form');
@@ -36,7 +67,7 @@
         }, { threshold: 0 });
         mobileEnquire.hidden = false;
         observer.observe(enquiry);
-        document.querySelectorAll('.stay-media-actions, [data-video-player]').forEach(element => observer.observe(element));
+        document.querySelectorAll('.stay-listing-actions, .stay-media-actions, [data-video-player]').forEach(element => observer.observe(element));
     }
     enquiry?.addEventListener('submit', () => {
         enquiry.querySelector('button[type="submit"]').disabled = true;
