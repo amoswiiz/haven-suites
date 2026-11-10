@@ -24,8 +24,7 @@ class PartnerRequestController extends Controller
         ['request' => $availability, 'tenant' => $tenant] = $found;
         $site = $catalog->site($tenant);
         $details = $requests->unitDetails($tenant, $availability);
-        $listingUrl = $site && $details['listing']?->status === 'published'
-            ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $details['listing']->slug], false) : null;
+        $listingUrl = $requests->listingLinks($tenant, [(int) $availability->partner_apartment_id])[(int) $availability->partner_apartment_id] ?? null;
 
         return response()->view('partners.request', [
             'tenant' => $tenant, 'site' => $site, 'availability' => $availability, 'code' => $code,

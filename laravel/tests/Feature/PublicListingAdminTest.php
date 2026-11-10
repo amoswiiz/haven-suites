@@ -314,4 +314,10 @@ class PublicListingAdminTest extends TestCase
         $this->get(route('public-listings.edit', [$this->company->slug, $listing->id]))->assertOk()
             ->assertSee('Owner contact')->assertSee('Staff only')->assertSee('PRIVATE-OWNER-PHONE');
     }
+
+    public function test_create_form_can_preselect_an_apartment_from_the_partner_page(): void
+    {
+        $this->get(route('public-listings.create', $this->company->slug).'?apartment=unit:1')->assertOk()->assertSee('value="unit:1" selected', false);
+        $this->get(route('public-listings.create', $this->company->slug).'?apartment=unit:1;drop')->assertOk()->assertDontSee('value="unit:1" selected', false);
+    }
 }

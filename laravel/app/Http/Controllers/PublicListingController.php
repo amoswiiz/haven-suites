@@ -59,7 +59,10 @@ class PublicListingController extends Controller
     {
         $this->authorizeAccess();
 
-        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'videos' => [], 'amenities' => PublicListingCatalog::AMENITIES, ...$this->placeSuggestions()]);
+        $preset = request()->query('apartment');
+
+        return view('public_listings.form', ['listing' => null, 'apartments' => $catalog->apartments(app('currentTenant')), 'photos' => collect(), 'videos' => [], 'amenities' => PublicListingCatalog::AMENITIES,
+            'presetReference' => is_string($preset) && preg_match('/^(unit|partner):\d+$/D', $preset) ? $preset : null, ...$this->placeSuggestions()]);
     }
 
     /** @return array{knownCities: list<string>, knownAreas: list<string>} */

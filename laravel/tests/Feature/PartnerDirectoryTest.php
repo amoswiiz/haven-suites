@@ -255,4 +255,36 @@ class PartnerDirectoryTest extends TestCase
         $this->assertDatabaseMissing('partner_apartment_photos', ['partner_apartment_id' => 2]);
         $this->get($match[0].'/featured')->assertNotFound();
     }
+
+    public function test_partner_apartments_link_to_website_or_outside_listings(): void
+    {
+        config(['app.url' => 'https://app.havensuitesbnb.com']);
+        $partner = (array) DB::connection('tenant')->table('partner_apartments')->find(2);
+        $form = array_intersect_key($partner, array_flip(['owner_name', 'owner_phone', 'owner_email', 'apartment_name', 'building_name', 'unit_number', 'location', 'bedrooms', 'bathrooms', 'notes', 'status']));
+        $update = fn (array $extra) => $this->actingAs($this->admin)->post(route('partners.update', [$this->company->slug, 2]), [...$form, ...$extra]);
+        $askText = function (): string {
+            parse_str(parse_url($this->actingAs($this->admin)->post(route('partners.ask', [$this->company->slug, 2]))->headers->get('Location'), PHP_URL_QUERY), $query);
+
+            return $query['text'];
+        };
+
+        $this->actingAs($this->admin)->get(route('partners.edit', [$this->company->slug, 2]))->assertOk()
+            ->assertSee('has no website listing yet')->assertSee(route('public-listings.create', $this->company->slug).'?apartment=partner:2', false);
+        $update(['listing_url' => 'http://example.test/galu'])->assertSessionHasErrors('listing_url');
+        $update(['listing_url' => 'not a link'])->assertSessionHasErrors('listing_url');
+        $update(['listing_url' => 'https://havensuitesbnb.com/property/galu-beach-villa/'])->assertSessionHasNoErrors();
+        $this->assertStringContainsString("\nListing: https://havensuitesbnb.com/property/galu-beach-villa/", $askText());
+        $this->search(['q' => 'Galu'])->assertSee('href="https://havensuitesbnb.com/property/galu-beach-villa/"', false);
+
+        DB::table('public_sites')->insert(['tenant_id' => $this->company->id, 'enabled' => true, 'enquiry_assignee_id' => $this->admin->id, 'response_hours' => 24]);
+        $listingId = DB::table('public_listings')->insertGetId(['tenant_id' => $this->company->id, 'partner_apartment_id' => 2, 'slug' => 'galu-beach-villa', 'title' => 'Galu Beach Villa',
+            'description' => 'x', 'city' => 'Diani', 'max_guests' => 4, 'min_nights' => 1, 'status' => 'published', 'created_at' => now(), 'updated_at' => now()]);
+        $this->assertStringContainsString("\nListing: https://app.havensuitesbnb.com/stays/haven/galu-beach-villa", $askText(), 'A published website listing takes priority.');
+        $this->actingAs($this->admin)->get(route('partners.edit', [$this->company->slug, 2]))->assertOk()
+            ->assertSee('Website listing: <strong>Galu Beach Villa</strong>', false)->assertSee(route('public-listings.edit', ['tenant' => $this->company->slug, 'id' => $listingId]), false)
+            ->assertSee('value="https://havensuitesbnb.com/property/galu-beach-villa/"', false);
+
+        $update(['listing_url' => ''])->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('partner_apartment_links', ['partner_apartment_id' => 2]);
+    }
 }

@@ -90,6 +90,49 @@ class PartnerAvailabilityRequests
             : collect()];
     }
 
+    /**
+     * Best link to show owners for each partner apartment: the published website listing when the site is on,
+     * otherwise the outside listing link staff recorded (WordPress, Airbnb and so on).
+     *
+     * @param  list<int>  $partnerIds
+     * @return array<int, string>
+     */
+    public function listingLinks(Tenant $tenant, array $partnerIds): array
+    {
+        if ($partnerIds === []) {
+            return [];
+        }
+        $links = DB::table('partner_apartment_links')->where('tenant_id', $tenant->id)->whereIn('partner_apartment_id', $partnerIds)
+            ->pluck('listing_url', 'partner_apartment_id')->mapWithKeys(fn ($url, $id): array => [(int) $id => (string) $url])->all();
+        if (app(PublicListingCatalog::class)->site($tenant) !== null) {
+            $published = DB::table('public_listings')->where('tenant_id', $tenant->id)->whereIn('partner_apartment_id', $partnerIds)
+                ->where('status', 'published')->pluck('slug', 'partner_apartment_id');
+            foreach ($published as $id => $slug) {
+                $links[(int) $id] = rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $slug], false);
+            }
+        }
+
+        return $links;
+    }
+
+    /** The outside listing link recorded for a partner apartment, if any. */
+    public function externalLink(Tenant $tenant, int $partnerId): ?string
+    {
+        return DB::table('partner_apartment_links')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->value('listing_url');
+    }
+
+    public function saveExternalLink(Tenant $tenant, int $partnerId, ?string $url): void
+    {
+        if (blank($url)) {
+            DB::table('partner_apartment_links')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->delete();
+
+            return;
+        }
+        $existing = DB::table('partner_apartment_links')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->first();
+        DB::table('partner_apartment_links')->updateOrInsert(['tenant_id' => $tenant->id, 'partner_apartment_id' => $partnerId],
+            ['listing_url' => $url, 'updated_at' => now(), 'created_at' => $existing->created_at ?? now()]);
+    }
+
     /** Storage path of the partner apartment's featured photo, if it has one. */
     public function featuredPhotoPath(Tenant $tenant, int $partnerId): ?string
     {

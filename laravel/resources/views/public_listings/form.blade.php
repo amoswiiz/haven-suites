@@ -4,7 +4,7 @@
 @php($tenantSlug = app('currentTenant')->slug)
 @php($selectedAmenities = old('amenities', $listing ? json_decode($listing->amenities ?? '[]', true) : []))
 @php($listingReference = $listing ? ($listing->unit_id !== null ? 'unit:'.$listing->unit_id : 'partner:'.$listing->partner_apartment_id) : '')
-@php($selectedReference = old('apartment_ref', old('unit_id') ? 'unit:'.old('unit_id') : (old('partner_apartment_id') ? 'partner:'.old('partner_apartment_id') : $listingReference)))
+@php($selectedReference = old('apartment_ref', old('unit_id') ? 'unit:'.old('unit_id') : (old('partner_apartment_id') ? 'partner:'.old('partner_apartment_id') : ($listingReference ?: ($presetReference ?? '')))))
 <p><a href="{{ route('public-listings.index', $tenantSlug) }}">&larr; Public listings</a></p>
 <div class="split"><div><h1>{{ $listing ? 'Edit public listing' : 'Create public listing' }}</h1><p class="muted">Describe the stay guests will see. Owner details and internal unit notes are never published.</p></div>@if($listing && \Illuminate\Support\Facades\Route::has('public-listings.preview'))<a class="button secondary" href="{{ route('public-listings.preview', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}" target="_blank" rel="noopener">Preview listing</a>@endif</div>
 @if($listing && $listing->status === 'archived')<div class="card" role="status"><strong>This listing is archived and hidden from the website.</strong><p class="muted">Restore it to work on it again. It comes back as a private draft.</p><form method="post" action="{{ route('public-listings.restore', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}">@csrf<button type="submit">Restore listing</button></form></div>@endif

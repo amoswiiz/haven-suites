@@ -37,7 +37,7 @@
             <button type="submit" name="response" value="unavailable" class="stay-button secondary">Not available</button>
         </div>
     </form>
-    @if($listingUrl)<p><a href="{{ $listingUrl }}" target="_blank" rel="noopener noreferrer">See this apartment's public listing &nearr;</a></p>@endif
+    @if($listingUrl)<p><a href="{{ $listingUrl }}" target="_blank" rel="noopener noreferrer">See this apartment's listing &nearr;</a></p>@endif
     <p class="stay-help">Not the right unit? Reply in WhatsApp and let us know. Your reply goes straight to the {{ $tenant->name }} team.</p>
 </section>
 </div>

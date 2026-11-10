@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Services\PartnerAvailabilityRequests;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
@@ -52,15 +51,14 @@ class PartnerDirectoryController extends Controller
             ->where('status', '!=', 'archived')->get(['id', 'partner_apartment_id', 'slug', 'status'])->keyBy('partner_apartment_id');
         $stay = array_filter(['check_in' => $filters['check_in'] ?? null, 'check_out' => $filters['check_out'] ?? null, 'guests' => $filters['guests'] ?? null]);
         $links = app(PublicWebsiteLinks::class);
-        $siteEnabled = app(PublicListingCatalog::class)->site($tenant) !== null;
         $latest = app(PartnerAvailabilityRequests::class)->latestFor($tenant, $partners->pluck('id')->map(fn ($id): int => (int) $id)->all(), $filters['check_in'] ?? null, $filters['check_out'] ?? null);
         $withPhotos = app(PartnerAvailabilityRequests::class)->partnersWithPhotos($tenant, $partners->pluck('id')->map(fn ($id): int => (int) $id)->all());
-        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $siteEnabled, $latest, $withPhotos): array {
+        $bestLinks = app(PartnerAvailabilityRequests::class)->listingLinks($tenant, $partners->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $latest, $withPhotos, $bestLinks): array {
             $mobile = PhoneNumber::normalize($partner->owner_phone);
             $label = $this->label($partner);
             $listing = $listings->get($partner->id);
-            $link = $siteEnabled && $listing?->status === 'published'
-                ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing->slug], false) : null;
+            $link = $bestLinks[(int) $partner->id] ?? null;
             $owner = ['name' => $partner->owner_name, 'whatsapp' => $mobile ? substr($mobile, 1) : null];
 
             return [
@@ -111,21 +109,10 @@ class PartnerDirectoryController extends Controller
         $message = implode("\n", [
             $links->ownerGreeting(['name' => $partner->owner_name], $company, $where),
             'See the unit and reply: '.$availability['url'],
-            ...PublicWebsiteLinks::ownerRequestLines($stay, $this->listingLink($company, (int) $partner->id)),
+            ...PublicWebsiteLinks::ownerRequestLines($stay, app(PartnerAvailabilityRequests::class)->listingLinks($company, [(int) $partner->id])[(int) $partner->id] ?? null),
         ]);
 
         return redirect()->away('https://wa.me/'.substr($mobile, 1).'?text='.rawurlencode($message));
-    }
-
-    /** Public link of the partner apartment's published listing, if the website is on. */
-    private function listingLink(Tenant $tenant, int $partnerId): ?string
-    {
-        if (app(PublicListingCatalog::class)->site($tenant) === null) {
-            return null;
-        }
-        $slug = DB::table('public_listings')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->where('status', 'published')->value('slug');
-
-        return $slug ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $slug], false) : null;
     }
 
     public function create(): View
@@ -139,6 +126,7 @@ class PartnerDirectoryController extends Controller
         $photo = $request->hasFile('photo') ? ImageResizer::toJpeg($request->file('photo'), 'photo') : null;
         $id = DB::connection('tenant')->table('partner_apartments')->insertGetId($data + ['created_at' => now(), 'updated_at' => now()]);
         $this->savePhoto($id, $request, $photo);
+        app(PartnerAvailabilityRequests::class)->saveExternalLink(app('currentTenant'), (int) $id, $request->input('listing_url'));
 
         return redirect()->route('partners.index', app('currentTenant')->slug)->with('success', 'Partner apartment added: '.$this->label((object) ($data + ['id' => $id])).'.');
     }
@@ -148,7 +136,13 @@ class PartnerDirectoryController extends Controller
         $partner = DB::connection('tenant')->table('partner_apartments')->where('id', $id)->firstOrFail();
         $photo = DB::table('partner_apartment_photos')->where('tenant_id', app('currentTenant')->id)->where('partner_apartment_id', $id)->first();
 
-        return view('partners.form', ['partner' => $partner, 'hasPhoto' => $photo !== null, 'photoVersion' => $photo ? strtotime((string) $photo->updated_at) : null]);
+        $tenantModel = app('currentTenant');
+        $listing = DB::table('public_listings')->where('tenant_id', $tenantModel->id)->where('partner_apartment_id', $id)->where('status', '!=', 'archived')
+            ->orderByRaw("CASE WHEN status = 'published' THEN 0 ELSE 1 END")->first(['id', 'slug', 'title', 'status']);
+
+        return view('partners.form', ['partner' => $partner, 'hasPhoto' => $photo !== null, 'photoVersion' => $photo ? strtotime((string) $photo->updated_at) : null,
+            'appListing' => $listing, 'siteEnabled' => app(PublicListingCatalog::class)->site($tenantModel) !== null,
+            'listingUrl' => app(PartnerAvailabilityRequests::class)->externalLink($tenantModel, $id), 'canManageListings' => auth()->user()->can('properties.manage')]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse
@@ -158,6 +152,7 @@ class PartnerDirectoryController extends Controller
         $updated = DB::connection('tenant')->table('partner_apartments')->where('id', $id)->update($data + ['updated_at' => now()]);
         abort_if($updated === 0 && ! DB::connection('tenant')->table('partner_apartments')->where('id', $id)->exists(), 404);
         $this->savePhoto($id, $request, $photo);
+        app(PartnerAvailabilityRequests::class)->saveExternalLink(app('currentTenant'), (int) $id, $request->input('listing_url'));
 
         return redirect()->route('partners.index', $tenant)->with('success', 'Partner apartment updated.');
     }
@@ -199,9 +194,10 @@ class PartnerDirectoryController extends Controller
             'apartment_name' => 'required|string|max:150', 'building_name' => 'nullable|string|max:150', 'unit_number' => 'nullable|string|max:50',
             'location' => 'required|string|max:150', 'bedrooms' => 'required|integer|min:0|max:20', 'bathrooms' => 'nullable|integer|min:0|max:20',
             'notes' => 'nullable|string|max:5000', 'status' => 'required|in:active,inactive',
+            'listing_url' => ['nullable', 'string', 'max:500', 'url:https'],
             'photo' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:8192', 'remove_photo' => 'sometimes|boolean',
         ], ['photo.mimes' => 'Upload the photo as a JPG, PNG or WebP image.', 'photo.max' => 'Keep the photo under 8 MB.']);
-        unset($data['photo'], $data['remove_photo']);
+        unset($data['photo'], $data['remove_photo'], $data['listing_url']);
         if (PhoneNumber::isBlank($data['owner_phone'] ?? null)) {
             $data['owner_phone'] = null;
         } elseif (! ($data['owner_phone'] = PhoneNumber::normalize($data['owner_phone'], mobileOnly: false))) {
