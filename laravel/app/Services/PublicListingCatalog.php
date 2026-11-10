@@ -52,13 +52,19 @@ class PublicListingCatalog
      */
     public function canManage(?User $user, Tenant $tenant): bool
     {
-        if (! $user || ! $user->active || ! $tenant->active || ($tenant->modules['properties'] ?? true) === false) {
+        return $this->allows($user, $tenant, 'properties.manage', 'properties');
+    }
+
+    /** Whether the user's role in this company grants the ability, with its module enabled. */
+    public function allows(?User $user, Tenant $tenant, string $ability, string $module): bool
+    {
+        if (! $user || ! $user->active || ! $tenant->active || ($tenant->modules[$module] ?? true) === false) {
             return false;
         }
         $membership = $user->tenants()->whereKey($tenant->id)->first();
         foreach (json_decode($membership->pivot->roles ?? '[]', true) ?: [] as $role) {
             foreach (config('haven.roles.'.$role, []) as $permission) {
-                if (Str::is($permission, 'properties.manage')) {
+                if (Str::is($permission, $ability)) {
                     return true;
                 }
             }

@@ -376,7 +376,7 @@ class EnquiryAcknowledgementsTest extends TestCase
         $this->assertSame('254712345678', $corrected->phone_normalized);
         $this->assertSame('amina@example.test', $corrected->email);
         $this->assertDatabaseHas('sales_activities', ['lead_id' => $lead->id, 'type' => 'requirements']);
-        $this->assertStringContainsString('phone changed from "0712000999" to "+254712345678"', DB::table('sales_activities')->where('lead_id', $lead->id)->where('type', 'requirements')->value('body'));
+        $this->assertStringContainsString('phone changed from "+254712000999" to "+254712345678"', DB::table('sales_activities')->where('lead_id', $lead->id)->where('type', 'requirements')->value('body'));
 
         $this->get($this->url('/'.$lead->id.'?edit=1'))->assertOk()->assertSee('id="edit-details" open', false)->assertSee('acknowledgement/resend', false);
         $this->post($this->url('/'.$lead->id.'/acknowledgement/resend'))->assertSessionHasNoErrors()->assertSessionHas('success');

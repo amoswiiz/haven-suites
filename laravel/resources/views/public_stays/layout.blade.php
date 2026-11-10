@@ -44,6 +44,7 @@
         <nav class="stay-staff-bar" aria-label="Staff tools">
             <span class="stay-staff-bar-label">Staff view<span class="stay-visually-hidden">: only you can see this bar</span></span>
             @if($staffTools['edit_url'])<a class="is-primary" href="{{ $staffTools['edit_url'] }}">Edit this listing</a>@endif
+            @if(!empty($staffTools['caller_enquiry_url']))<a href="{{ $staffTools['caller_enquiry_url'] }}" data-caller-enquiry>Create enquiry for a caller</a>@endif
             <a href="{{ $staffTools['listings_url'] }}">All listings</a>
             <a href="{{ $staffTools['settings_url'] }}">Website settings</a>
             <a href="{{ $staffTools['dashboard_url'] }}">Dashboard</a>

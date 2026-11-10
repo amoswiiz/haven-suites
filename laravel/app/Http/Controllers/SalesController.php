@@ -7,6 +7,7 @@ use App\Services\EnquiryTracking;
 use App\Services\PublicListingCatalog;
 use App\Services\SalesPipelineSummary;
 use App\Services\TaskAccess;
+use App\Services\WhatsAppEnquiryReader;
 use App\Support\CompanyModules;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Query\Builder;
@@ -88,20 +89,60 @@ class SalesController extends Controller
         return view('sales.index', ['leads' => $query->orderByRaw('CASE WHEN follow_up_at IS NULL THEN 1 ELSE 0 END')->orderBy('follow_up_at')->paginate(60)->withQueryString(), 'members' => $this->members(), 'summary' => $summary, 'filters' => $filters, 'pipelineSummary' => $pipelineSummary, 'overdue' => $pipelineSummary['overdueCount']]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('sales.form', ['members' => $this->members(), 'agents' => CompanyModules::enabled('agents') ? $this->table('sales_agents')->where('active', true)->get() : collect()]);
+        $input = $request->validate(['listing' => 'nullable|integer|min:1', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|date_format:Y-m-d',
+            'guests' => 'nullable|integer|min:1|max:1000', 'message' => 'nullable|string|max:3000', 'phone' => 'nullable|string|max:50', 'name' => 'nullable|string|max:150']);
+        $tenant = app('currentTenant');
+        $published = $request->hasAny(['listing', 'message']) ? app(PublicListingCatalog::class)->published($tenant) : collect();
+        $read = filled($input['message'] ?? null) ? app(WhatsAppEnquiryReader::class)->read($tenant, $input['message']) : [];
+        $listing = $published->firstWhere('id', (int) ($input['listing'] ?? 0))
+            ?? ($read['listing_slug'] ?? null ? $published->firstWhere('slug', $read['listing_slug']) : null)
+            ?? ($read['listing_code'] ?? null ? $published->firstWhere('listing_code', $read['listing_code']) : null);
+        $checkIn = $read['check_in'] ?? $input['check_in'] ?? null;
+        $checkOut = $read['check_out'] ?? $input['check_out'] ?? null;
+        if ($checkIn && $checkOut && $checkOut <= $checkIn) {
+            $checkOut = null;
+        }
+        $fromWhatsApp = filled($input['message'] ?? null);
+        $prefill = array_filter([
+            'name' => $input['name'] ?? null, 'phone' => $input['phone'] ?? null,
+            'unit_preference' => $listing ? $listing['title'].($listing['listing_code'] ? ' (Code '.$listing['listing_code'].')' : '') : null,
+            'location' => $listing ? implode(', ', array_filter([$listing['neighbourhood'], $listing['city']])) : null,
+            'check_in' => $checkIn, 'check_out' => $checkOut, 'guests' => $read['guests'] ?? $input['guests'] ?? null,
+            'source' => $fromWhatsApp ? 'whatsapp' : ($listing ? 'phone' : null), 'channel' => $fromWhatsApp ? 'whatsapp' : ($listing ? 'phone' : null),
+            'notes' => $fromWhatsApp ? "Guest's WhatsApp message:\n".trim($input['message']) : null,
+            'public_listing_id' => $listing['id'] ?? null,
+        ], fn ($value): bool => $value !== null && $value !== '');
+
+        return view('sales.form', ['members' => $this->members(), 'agents' => CompanyModules::enabled('agents') ? $this->table('sales_agents')->where('active', true)->get() : collect(),
+            'prefill' => $prefill, 'prefillListing' => $listing, 'pastedMessage' => $input['message'] ?? null,
+            'messageUnmatched' => $fromWhatsApp && ! $listing]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'source' => ['required', Rule::in(array_keys(config('sales.sources')))], 'channel' => ['required', Rule::in(array_keys(config('sales.channels')))], 'campaign' => 'nullable|string|max:255', 'assigned_to' => ['required', Rule::in($this->members()->pluck('id')->all())], 'agent_id' => 'nullable|integer', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'next_action' => 'required|string|max:255', 'follow_up_at' => 'required|date|after:now', 'notes' => 'nullable|string|max:5000', 'duplicate_acknowledged' => 'sometimes|accepted', 'capture_token' => 'nullable|uuid']);
+        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'source' => ['required', Rule::in(array_keys(config('sales.sources')))], 'channel' => ['required', Rule::in(array_keys(config('sales.channels')))], 'campaign' => 'nullable|string|max:255', 'assigned_to' => ['required', Rule::in($this->members()->pluck('id')->all())], 'agent_id' => 'nullable|integer', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'next_action' => 'required|string|max:255', 'follow_up_at' => 'required|date|after:now', 'notes' => 'nullable|string|max:5000', 'duplicate_acknowledged' => 'sometimes|accepted', 'capture_token' => 'nullable|uuid', 'public_listing_id' => 'nullable|integer|min:1']);
+        $listingLink = [];
+        if (! empty($data['public_listing_id'])) {
+            $listing = DB::table('public_listings')->where('tenant_id', app('currentTenant')->id)->where('id', $data['public_listing_id'])->first();
+            if (! $listing) {
+                throw ValidationException::withMessages(['public_listing_id' => 'The selected apartment listing is no longer available. Remove it and choose the apartment again.']);
+            }
+            $listingLink = ['public_listing_id' => $listing->id, 'public_unit_id' => $listing->unit_id, 'public_partner_apartment_id' => $listing->partner_apartment_id ?? null, 'public_origin' => 'staff'];
+        }
+        unset($data['public_listing_id']);
         $data['capture_token'] = ! empty($data['capture_token']) ? strtolower($data['capture_token']) : null;
         if ($data['capture_token'] !== null && ($existing = $this->table('sales_leads')->where('capture_token', $data['capture_token'])->first())) {
             $this->acknowledgeAfterCommit((int) $existing->id);
 
             return redirect()->route('sales.show', [app('currentTenant')->slug, $existing->id])
                 ->with('success', 'This enquiry was already saved. No duplicate enquiry or acknowledgement was created.');
+        }
+        if (PhoneNumber::isBlank($data['phone'] ?? null)) {
+            $data['phone'] = null;
+        } elseif ($international = PhoneNumber::normalize($data['phone'], mobileOnly: false)) {
+            $data['phone'] = $international;
         }
         if (empty($data['phone']) && empty($data['email'])) {
             throw ValidationException::withMessages(['phone' => 'Enter a phone number or email address.']);
@@ -126,8 +167,8 @@ class SalesController extends Controller
         $tenant = app('currentTenant');
         $actor = auth()->user();
         try {
-            $id = DB::transaction(function () use ($data, $phone, $tenant, $actor): int {
-                $id = DB::table('sales_leads')->insertGetId([...$data, 'tenant_id' => $tenant->id, 'phone_normalized' => $phone ?: null, 'stage' => 'new', 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::transaction(function () use ($data, $phone, $tenant, $actor, $listingLink): int {
+                $id = DB::table('sales_leads')->insertGetId([...$data, ...$listingLink, 'tenant_id' => $tenant->id, 'phone_normalized' => $phone ?: null, 'stage' => 'new', 'created_at' => now(), 'updated_at' => now()]);
                 $this->activity($id, 'created', 'Enquiry captured from '.$data['source'].'.');
                 app(EnquiryAcknowledgements::class)->prepare($tenant, $id, $actor);
                 $this->acknowledgeAfterCommit($id);
@@ -155,7 +196,7 @@ class SalesController extends Controller
         $publicRequestedUnit = null;
         $publicRequestedPartner = null;
         $publicFollowupTask = null;
-        if (($lead->public_origin ?? null) === 'website') {
+        if (in_array($lead->public_origin ?? null, ['website', 'staff'], true)) {
             $publicListing = app(PublicListingCatalog::class)->published(app('currentTenant'))->firstWhere('id', (int) $lead->public_listing_id);
             if ($lead->public_unit_id && empty($lead->public_partner_apartment_id)) {
                 $publicRequestedUnit = DB::connection('tenant')->table('units as u')->leftJoin('properties as p', 'p.id', '=', 'u.property_id')

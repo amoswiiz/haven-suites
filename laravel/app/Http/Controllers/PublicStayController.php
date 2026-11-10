@@ -336,11 +336,17 @@ class PublicStayController extends Controller
      */
     private function staffTools(Tenant $tenant, ?array $listing): ?array
     {
-        if (! app(PublicListingCatalog::class)->canManage(auth()->user(), $tenant)) {
+        $catalog = app(PublicListingCatalog::class);
+        if (! $catalog->canManage(auth()->user(), $tenant)) {
             return null;
+        }
+        $callerEnquiry = null;
+        if (isset($listing['id']) && $catalog->allows(auth()->user(), $tenant, 'sales.manage', 'sales')) {
+            $callerEnquiry = route('sales.create', $tenant->slug).'?'.http_build_query(['listing' => $listing['id']] + $this->enquiryDefaults(request()), '', '&', PHP_QUERY_RFC3986);
         }
 
         return [
+            'caller_enquiry_url' => $callerEnquiry,
             'edit_url' => isset($listing['id']) ? route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $listing['id']]) : null,
             'listings_url' => route('public-listings.index', $tenant->slug),
             'settings_url' => route('public-listings.settings', $tenant->slug),

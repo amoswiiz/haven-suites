@@ -3,9 +3,9 @@
 @section('content')
 <p><a href="{{ route('sales.index',app('currentTenant')->slug) }}">&larr; Sales pipeline</a></p>
 <div class="split"><div><h1>{{ $lead->name }}</h1><p>{{ $lead->phone }} {{ $lead->email }}@if(auth()->user()->can('sales.manage')) &middot; <a href="{{ route('sales.show', [app('currentTenant')->slug, $lead->id]) }}?edit=1#edit-details">Edit contact details</a>@endif</p></div><span class="pill">{{ config('sales.stages.'.$lead->stage) }}</span></div>
-@if(($lead->public_origin ?? null) === 'website')
+@if(in_array($lead->public_origin ?? null, ['website', 'staff'], true))
 <section class="card" aria-labelledby="website-enquiry-heading">
-<h2 id="website-enquiry-heading">Website enquiry</h2>
+<h2 id="website-enquiry-heading">{{ $lead->public_origin === 'staff' ? 'Enquiry for a listed apartment' : 'Website enquiry' }}</h2>
 <p>The guest enquired about <strong>{{ $lead->unit_preference }}</strong>. Availability and the final price need staff confirmation.</p>
 @if($publicRequestedUnit)<p>Requested apartment: {{ $publicRequestedUnit->property_name }} / {{ $publicRequestedUnit->unit_number }} @if($publicRequestedUnit->status !== 'active')<span class="pill">Currently inactive — choose an alternative</span>@endif</p>@endif
 @if($publicRequestedPartner)<p>Requested partner apartment: {{ $publicRequestedPartner->apartment_name }} / {{ $publicRequestedPartner->unit_number }} · {{ $publicRequestedPartner->location }} @if($publicRequestedPartner->status !== 'active')<span class="pill">Currently inactive — choose an alternative</span>@endif</p><p class="muted">Confirm availability with the host before confirming this booking.</p>@endif

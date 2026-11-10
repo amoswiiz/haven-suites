@@ -10,6 +10,25 @@ The prepare preview showed only `0d4f2e2` files, so the earlier pilot
 `/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
 `chmod 755`.
 
+## 10 November: WhatsApp dates, staff bar, caller and WhatsApp enquiries
+
+- WhatsApp enquiry messages include the listing code, dates (with nights) and
+  guests; listing-page buttons update live as dates/guests change; "Enquire on
+  WhatsApp instead" sits under the enquiry form (`5980323`).
+- Staff editing bar on public pages for signed-in listing managers of that
+  company (`c4643fe`): Edit this listing, All listings, Website settings,
+  Dashboard. Access is checked against the membership directly
+  (`PublicListingCatalog::allows()`), never by setting the company context.
+- "Create enquiry for a caller" in the staff bar (users with sales.manage) opens
+  New enquiry prefilled with the listing, locality, dates and guests, source and
+  channel Phone. "Paste a WhatsApp message" on New enquiry reads our WhatsApp
+  format (`App\Services\WhatsAppEnquiryReader`: listing link or code, dates,
+  guests; weekday names ignored, invalid dates dropped) and keeps the message in
+  the notes. Saved enquiries link to the listing with `public_origin = 'staff'`,
+  so the enquiry page shows the listing and the booking form preselects the unit.
+  New enquiries store valid phones as +254…; an untouched "+254" counts as blank.
+- Full suite 595/598 (same three pre-existing failures).
+
 ## 10 November: daily references, enquiry corrections, keyword search
 
 - References changed at the user's request to `HS-DDMMYY-NNN` (e.g.
