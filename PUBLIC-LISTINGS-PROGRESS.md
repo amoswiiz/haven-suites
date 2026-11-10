@@ -10,6 +10,25 @@ The prepare preview showed only `0d4f2e2` files, so the earlier pilot
 `/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
 `chmod 755`.
 
+## 10 November: daily references, enquiry corrections, keyword search
+
+- References changed at the user's request to `HS-DDMMYY-NNN` (e.g.
+  `HS-101126-001`): day, month, 2-digit year and the day's running number
+  (tenant timezone). The year keeps references unique across years. Counter
+  period widened (migration `2026_11_10_140445_widen_enquiry_reference_counter_period`).
+  References already issued keep their format.
+- Enquiry page: "Edit contact details" link opens the (previously collapsed)
+  edit form. Corrected phones are validated and stored as `+254…`; name, phone
+  and email changes are written to the activity history.
+- "Send acknowledgement to …" resends the same reference and tracking link to a
+  corrected number (or after a skipped/failed send). Never repeats to the same
+  number; at most 3 acknowledgement SMS per enquiry; stages
+  `enquiry_acknowledgement_resend_N`. Route `sales.acknowledgement.resend`.
+- Landing page: full-width keyword search at the top of the search card. All
+  words must match across name, city, locality, code, description, type,
+  amenities and collections (e.g. "nyali pool").
+- Full suite 589/592 (same three pre-existing failures).
+
 ## 10 November: Phases B and C, brand, navigation and filters
 
 - Brand: colour tokens in `public-stays.css` (orange `#FF6E00` buttons with dark

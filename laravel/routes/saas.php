@@ -137,6 +137,7 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
     Route::post('{id}', [SalesController::class, 'update'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.update');
     Route::post('{id}/notes', [SalesController::class, 'note'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.note');
     Route::post('{id}/details', [SalesController::class, 'details'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.details');
+    Route::post('{id}/acknowledgement/resend', [SalesController::class, 'resendAcknowledgement'])->whereNumber('id')->middleware(['permission:sales.manage', 'throttle:10,1'])->name('sales.acknowledgement.resend');
     Route::post('{id}/messages', [SalesController::class, 'message'])->whereNumber('id')->middleware(['permission:sales.manage', 'permission:messaging.manage'])->name('sales.message');
     Route::post('{id}/quotes', [SalesController::class, 'quote'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.quote');
     Route::post('{id}/booking', [SalesController::class, 'linkBooking'])->whereNumber('id')->middleware(['permission:sales.manage', 'permission:reservations.manage'])->name('sales.booking');

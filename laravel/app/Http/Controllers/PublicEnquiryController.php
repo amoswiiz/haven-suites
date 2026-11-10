@@ -50,7 +50,7 @@ class PublicEnquiryController extends Controller
 
         return response()->view('public_stays.track_lookup', ['tenant' => $tenant, 'site' => $site,
             'pageTitle' => 'Track your enquiry | '.$tenant->name, 'pageDescription' => 'Check the progress of your enquiry with '.$tenant->name.'.',
-            'robotsContent' => 'noindex, follow', 'example' => app(EnquiryTracking::class)->prefix($tenant).'-'.now($tenant->timezone)->format('ym').'-042',
+            'robotsContent' => 'noindex, follow', 'example' => app(EnquiryTracking::class)->exampleReference($tenant),
             'websiteMenu' => $links->menu($tenant, $site), 'websiteContactLinks' => $links->forSite($tenant, $site)])
             ->header('Cache-Control', 'private, no-store');
     }

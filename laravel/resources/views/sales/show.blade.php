@@ -2,7 +2,7 @@
 @section('title','Enquiry details')
 @section('content')
 <p><a href="{{ route('sales.index',app('currentTenant')->slug) }}">&larr; Sales pipeline</a></p>
-<div class="split"><div><h1>{{ $lead->name }}</h1><p>{{ $lead->phone }} {{ $lead->email }}</p></div><span class="pill">{{ config('sales.stages.'.$lead->stage) }}</span></div>
+<div class="split"><div><h1>{{ $lead->name }}</h1><p>{{ $lead->phone }} {{ $lead->email }}@if(auth()->user()->can('sales.manage')) &middot; <a href="{{ route('sales.show', [app('currentTenant')->slug, $lead->id]) }}?edit=1#edit-details">Edit contact details</a>@endif</p></div><span class="pill">{{ config('sales.stages.'.$lead->stage) }}</span></div>
 @if(($lead->public_origin ?? null) === 'website')
 <section class="card" aria-labelledby="website-enquiry-heading">
 <h2 id="website-enquiry-heading">Website enquiry</h2>
@@ -22,6 +22,11 @@
 @if($acknowledgement->last_error)<p class="muted">{{ $acknowledgement->last_error }}</p>@endif
 @if(in_array($acknowledgement->status, ['submitted','delivered']))<p>{{ $acknowledgement->body }}</p>@endif
 @else<p class="muted">No acknowledgement SMS is recorded for this enquiry. Check existing correspondence before contacting the guest.</p>@endif
+@if(auth()->user()->can('sales.manage'))
+@if($resendBlockedReason === null)<form method="post" action="{{ route('sales.acknowledgement.resend', [app('currentTenant')->slug, $lead->id]) }}">@csrf<button class="secondary" type="submit">{{ $acknowledgement ? 'Send acknowledgement to '.$lead->phone : 'Send acknowledgement SMS to '.$lead->phone }}</button></form><p class="muted">Sends the same reference and tracking link. Use this after correcting a wrong number or when the earlier SMS failed.</p>
+@elseif($acknowledgement)<p class="muted">{{ $resendBlockedReason }}</p>@endif
+@error('acknowledgement')<p class="error" role="alert">{{ $message }}</p>@enderror
+@endif
 @if($tracking)<p>Guest reference: <strong>{{ $tracking['reference'] }}</strong><br>Guest tracking link: <a href="{{ $tracking['url'] }}" target="_blank" rel="noopener noreferrer">{{ $tracking['url'] }}</a><br><span class="muted">The guest sees this enquiry's stage in plain language, the requested stay and your contact details. Staff notes are never shown.</span></p>@endif
 </section>
 <section class="card"><h2>Next step</h2><p><strong>{{ $lead->next_action }}</strong></p><p class="muted">{{ $members->firstWhere('id',$lead->assigned_to)?->name ?? 'Unassigned' }} @if($lead->follow_up_at) &middot; Follow up {{ date('d M Y H:i',strtotime($lead->follow_up_at)) }}@endif</p><a href="#booking-invoice">{{ $lead->reservation_id?'Review the booking and invoice':'Create a booking or request help from reservations' }}</a></section>
@@ -32,7 +37,8 @@
 @if($lead->reservation_id && haven_can_access(site_url('reservations/'.$lead->reservation_id),'GET'))<a class="button secondary" href="{{ site_url('reservations/'.$lead->reservation_id) }}">Open linked booking #{{ $lead->reservation_id }}</a>@endif
 </div></section>
 @if(auth()->user()->can('sales.manage'))
-<details class="card"><summary>Edit guest and stay requirements</summary>
+<details class="card" id="edit-details"@if(request()->boolean('edit') || $errors->hasAny(['name', 'phone', 'email', 'check_in', 'check_out', 'guests', 'budget', 'version'])) open @endif><summary>Edit guest contact and stay details</summary>
+<p class="muted">Correct a wrongly entered name, phone number or email here. Changes are recorded in the activity history. After correcting the phone number, you can resend the acknowledgement SMS from the section above.</p>
 <form method="post" action="{{ route('sales.details',[app('currentTenant')->slug,$lead->id]) }}">
 @csrf
 <input type="hidden" name="version" value="{{ $lead->version }}">

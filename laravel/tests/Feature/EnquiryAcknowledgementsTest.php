@@ -12,6 +12,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class EnquiryAcknowledgementsTest extends TestCase
@@ -67,7 +68,7 @@ class EnquiryAcknowledgementsTest extends TestCase
             'sent_by' => $this->salesperson->id, 'phone' => '+254712345678', 'status' => 'submitted', 'provider_status' => 'pending',
         ]);
         $tracking = app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id);
-        $this->assertMatchesRegularExpression('/^HS-[0-9]{4}-[0-9]{3}$/', $tracking['reference']);
+        $this->assertMatchesRegularExpression('/^HS-[0-9]{6}-[0-9]{3}$/', $tracking['reference']);
         Http::assertSent(fn ($request) => $request['phone_number'] === '+254712345678'
             && $request['text_message'] === 'Hi Amina, thanks for contacting Haven Suites! Your enquiry ref is '.$tracking['reference'].'. Track its progress here: '.$tracking['url']
             && str_starts_with($request['client_ref'], 'enquiry-'));
@@ -349,5 +350,59 @@ class EnquiryAcknowledgementsTest extends TestCase
         $this->assertDatabaseHas('sales_leads', ['id' => $lead->id, 'name' => 'Amina Updated']);
         $this->assertDatabaseCount('manual_sms_messages', 1);
         Http::assertSentCount(1);
+    }
+
+    private function correctDetails(object $lead, array $overrides): TestResponse
+    {
+        $lead = DB::table('sales_leads')->find($lead->id);
+
+        return $this->post($this->url('/'.$lead->id.'/details'), array_replace(['name' => $lead->name, 'phone' => $lead->phone, 'email' => $lead->email,
+            'guests' => $lead->guests, 'version' => $lead->version], $overrides));
+    }
+
+    public function test_staff_can_correct_a_wrong_phone_and_resend_the_acknowledgement_to_it(): void
+    {
+        $this->accepted();
+        $this->post($this->url(), $this->payload(['phone' => '0712000999']))->assertSessionHasNoErrors();
+        $lead = DB::table('sales_leads')->first();
+        $tracking = app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id);
+        $this->get($this->url('/'.$lead->id))->assertOk()->assertSee('Edit contact details')
+            ->assertSee('The acknowledgement was already sent to this number.')->assertDontSee('acknowledgement/resend', false);
+
+        $this->correctDetails($lead, ['phone' => '0712 34'])->assertSessionHasErrors('phone');
+        $this->correctDetails($lead, ['phone' => '0712 345 678', 'email' => 'Amina@Example.TEST'])->assertSessionHasNoErrors();
+        $corrected = DB::table('sales_leads')->find($lead->id);
+        $this->assertSame('+254712345678', $corrected->phone);
+        $this->assertSame('254712345678', $corrected->phone_normalized);
+        $this->assertSame('amina@example.test', $corrected->email);
+        $this->assertDatabaseHas('sales_activities', ['lead_id' => $lead->id, 'type' => 'requirements']);
+        $this->assertStringContainsString('phone changed from "0712000999" to "+254712345678"', DB::table('sales_activities')->where('lead_id', $lead->id)->where('type', 'requirements')->value('body'));
+
+        $this->get($this->url('/'.$lead->id.'?edit=1'))->assertOk()->assertSee('id="edit-details" open', false)->assertSee('acknowledgement/resend', false);
+        $this->post($this->url('/'.$lead->id.'/acknowledgement/resend'))->assertSessionHasNoErrors()->assertSessionHas('success');
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => $request['phone_number'] === '+254712345678' && str_contains($request['text_message'], $tracking['reference'])
+            && str_contains($request['text_message'], $tracking['url']));
+        $latest = app(EnquiryAcknowledgements::class)->status($this->company->id, (int) $lead->id);
+        $this->assertSame('+254712345678', $latest->phone);
+        $this->assertSame('enquiry_acknowledgement_resend_2', $latest->communication_stage);
+
+        $this->post($this->url('/'.$lead->id.'/acknowledgement/resend'))->assertSessionHasErrors('acknowledgement');
+        Http::assertSentCount(2);
+    }
+
+    public function test_resends_stop_after_three_messages(): void
+    {
+        $this->accepted();
+        $this->post($this->url(), $this->payload(['phone' => '0712000001']))->assertSessionHasNoErrors();
+        $lead = DB::table('sales_leads')->first();
+        foreach (['0712000002', '0712000003'] as $phone) {
+            $this->correctDetails($lead, ['phone' => $phone])->assertSessionHasNoErrors();
+            $this->post($this->url('/'.$lead->id.'/acknowledgement/resend'))->assertSessionHasNoErrors();
+        }
+        $this->correctDetails($lead, ['phone' => '0712000004'])->assertSessionHasNoErrors();
+        $this->post($this->url('/'.$lead->id.'/acknowledgement/resend'))->assertSessionHasErrors('acknowledgement');
+        Http::assertSentCount(3);
+        $this->assertSame(3, DB::table('manual_sms_messages')->where('enquiry_id', $lead->id)->count());
     }
 }

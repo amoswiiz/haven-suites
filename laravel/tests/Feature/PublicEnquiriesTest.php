@@ -175,7 +175,7 @@ class PublicEnquiriesTest extends TestCase
         Http::assertSentCount(1);
         $receiptReference = DB::table('public_enquiry_receipts')->where('lead_id', $lead->id)->value('reference');
         $tracking = app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id);
-        $this->assertMatchesRegularExpression('/^HS-[0-9]{4}-[0-9]{3}$/', $receiptReference);
+        $this->assertMatchesRegularExpression('/^HS-[0-9]{6}-[0-9]{3}$/', $receiptReference);
         $this->assertSame($receiptReference, $tracking['reference']);
         Http::assertSent(fn ($request): bool => $request['phone_number'] === '+254712345678'
             && str_contains($request['text_message'], 'Your enquiry ref is '.$receiptReference.'. Track its progress here: '.$tracking['url']));
@@ -203,7 +203,7 @@ class PublicEnquiriesTest extends TestCase
         $response = $this->post($this->url(), $this->payload())->assertSessionHasNoErrors();
         $location = $response->headers->get('Location');
         $reference = DB::table('public_enquiry_receipts')->value('reference');
-        $this->assertMatchesRegularExpression('/^[A-Z]{2,5}-[0-9]{4}-[0-9]{3}$/', $reference);
+        $this->assertMatchesRegularExpression('/^[A-Z]{2,5}-[0-9]{6}-[0-9]{3}$/', $reference);
         $receipt = $this->get($location)->assertOk()->assertSee('Enquiry received')->assertSee($reference)->assertSee('data-copy-button', false)
             ->assertSee('What happens next')->assertDontSee('5678')
             ->assertDontSee('Amina Website Guest')->assertDontSee('amina-website@example.test')->assertDontSee('+254712345678')

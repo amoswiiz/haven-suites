@@ -188,6 +188,12 @@ class PublicStaysTest extends TestCase
         $this->get($this->catalogue(['collection' => 'beachfront']))->assertOk()->assertViewHas('stays', $matches([$nyali['id']]))
             ->assertSee('aria-current="true"', false)->assertSee('stay-active-filters', false);
         $this->get($this->catalogue(['q' => 'v2']))->assertOk()->assertViewHas('stays', $matches([$bamburi['id']]));
+        $this->get($this->catalogue(['q' => 'beachfront']))->assertOk()->assertViewHas('stays', $matches([$nyali['id']]));
+        $this->get($this->catalogue(['q' => 'VILLA']))->assertOk()->assertViewHas('stays', $matches([$bamburi['id']]));
+        $this->get($this->catalogue(['q' => '  nyali   beach ']))->assertOk()->assertViewHas('stays', $matches([$nyali['id']]));
+        $this->get($this->catalogue(['q' => 'westlands balcony']))->assertOk()->assertViewHas('stays', fn ($rows): bool => $rows->total() === 1 && $rows->first()['slug'] === 'westlands');
+        $this->get($this->catalogue(['q' => 'nyali westlands']))->assertOk()->assertViewHas('stays', $matches([]));
+        $this->get($this->catalogue())->assertOk()->assertSee('class="stay-keyword"', false)->assertSee('id="stay-q"', false);
         $this->get($this->catalogue(['city' => 'Nairobi']))->assertOk()->assertDontSee('Beachfront <span>', false);
         $this->get($this->catalogue(['city' => 'Mombasa', 'area' => 'Bamburi']))->assertOk()->assertSee('Long stays <span>1</span>', false)->assertDontSee('Beachfront <span>', false);
         $this->get($this->catalogue(['collection' => 'not-a-collection']))->assertSessionHasErrors('collection');

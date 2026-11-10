@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\EnquiryTracking;
 use App\Services\PublicListingCatalog;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -108,18 +109,22 @@ class EnquiryTrackingTest extends TestCase
         $this->assertTrue(now()->parse($expiresAt)->greaterThan(now()->addMonths(9)->addDays(30)));
     }
 
-    public function test_references_use_prefix_month_and_a_running_number_that_restarts_monthly(): void
+    public function test_references_use_prefix_date_and_a_running_number_that_restarts_daily(): void
     {
-        $this->travelTo(now('Africa/Nairobi')->setDate(2026, 11, 30)->setTime(10, 0));
+        $this->travelTo(CarbonImmutable::parse('2026-11-10 23:30', 'Africa/Nairobi'));
         $tracking = app(EnquiryTracking::class);
-        $this->assertSame('HS-2611-001', $tracking->issue($this->company, $this->lead())['reference']);
-        $this->assertSame('HS-2611-002', $tracking->issue($this->company, $this->lead())['reference']);
+        $this->assertSame('HS-101126-001', $tracking->issue($this->company, $this->lead())['reference']);
+        $this->assertSame('HS-101126-002', $tracking->issue($this->company, $this->lead())['reference']);
+        $this->assertSame('HS-101126-001', $tracking->exampleReference($this->company));
 
-        $this->travelTo(now('Africa/Nairobi')->setDate(2026, 12, 1)->setTime(9, 0));
-        $this->assertSame('HS-2612-001', $tracking->issue($this->company, $this->lead())['reference']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-11 00:10', 'Africa/Nairobi'));
+        $this->assertSame('HS-111126-001', $tracking->issue($this->company, $this->lead())['reference']);
 
         $this->company->update(['reference_prefix' => 'HAVEN']);
-        $this->assertSame('HAVEN-2612-002', $tracking->issue($this->company->fresh(), $this->lead())['reference']);
+        $this->assertSame('HAVEN-111126-002', $tracking->issue($this->company->fresh(), $this->lead())['reference']);
+
+        $this->travelTo(CarbonImmutable::parse('2027-11-10 09:00', 'Africa/Nairobi'));
+        $this->assertSame('HAVEN-101127-001', $tracking->issue($this->company->fresh(), $this->lead())['reference'], 'The year keeps next year\'s references distinct.');
     }
 
     public function test_numbers_are_per_company_and_prefixes_may_coincide(): void
@@ -171,7 +176,7 @@ class EnquiryTrackingTest extends TestCase
         $reference = app(EnquiryTracking::class)->issue($this->company, $lead)['reference'];
         $message = 'We could not find an enquiry with those details.';
 
-        $this->from('/stays/tracking/track')->post('/stays/tracking/track', ['reference' => 'HS-2611-999', 'phone_last_digits' => '5678'])
+        $this->from('/stays/tracking/track')->post('/stays/tracking/track', ['reference' => 'HS-101126-999', 'phone_last_digits' => '5678'])
             ->assertRedirect('/stays/tracking/track')->assertSessionHasErrors('reference');
         $this->assertStringContainsString($message, session('errors')->first('reference'));
         for ($attempt = 0; $attempt < EnquiryTracking::LOOKUP_ATTEMPTS; $attempt++) {

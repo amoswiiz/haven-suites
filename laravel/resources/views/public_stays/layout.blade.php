@@ -35,7 +35,7 @@
     @endif
     <meta name="theme-color" content="#004274">
     @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=6">
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=7">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">

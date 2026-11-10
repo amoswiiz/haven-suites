@@ -218,7 +218,8 @@ class SalesController extends Controller
             $eligibleInvoices = $query->select('i.id', 'i.invoice_number', 'i.customer_name', 'i.issue_date', 'i.total_amount', 'i.currency', 'i.status', 'r.id as reservation_id', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('i.id')->limit(50)->get();
         }
 
-        return view('sales.show', ['publicListing' => $publicListing, 'publicRequestedUnit' => $publicRequestedUnit, 'publicRequestedPartner' => $publicRequestedPartner, 'publicFollowupTask' => $publicFollowupTask, 'acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'tracking' => app(EnquiryTracking::class)->forLead(app('currentTenant'), $id), 'eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
+        return view('sales.show', ['publicListing' => $publicListing, 'publicRequestedUnit' => $publicRequestedUnit, 'publicRequestedPartner' => $publicRequestedPartner, 'publicFollowupTask' => $publicFollowupTask, 'acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'tracking' => app(EnquiryTracking::class)->forLead(app('currentTenant'), $id),
+            'resendBlockedReason' => auth()->user()->can('sales.manage') ? app(EnquiryAcknowledgements::class)->resendBlockedReason(app('currentTenant'), $lead) : 'Only sales managers can resend the acknowledgement.', 'eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse
@@ -260,22 +261,38 @@ class SalesController extends Controller
     {
         $lead = $this->lead($id);
         $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'check_in' => 'nullable|required_with:check_out|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'version' => 'required|integer']);
-        if (empty($data['phone']) && empty($data['email'])) {
+        if (PhoneNumber::isBlank($data['phone'] ?? null) && empty($data['email'])) {
             throw ValidationException::withMessages(['phone' => 'Enter a phone number or email address.']);
         }
-        $phone = ltrim(PhoneNumber::normalize($data['phone'] ?? null, mobileOnly: false) ?? '', '+');
+        $international = PhoneNumber::normalize($data['phone'] ?? null, mobileOnly: false);
+        if (! PhoneNumber::isBlank($data['phone'] ?? null) && $international === null) {
+            throw ValidationException::withMessages(['phone' => 'Enter a valid phone number, such as 0712 345 678 or +254 712 345 678. Kenyan numbers need 9 digits after +254.']);
+        }
         $version = $data['version'];
         unset($data['version']);
-        $data['phone_normalized'] = $phone ?: null;
+        $data['phone'] = $international;
+        $data['phone_normalized'] = $international ? ltrim($international, '+') : null;
         $data['email'] = empty($data['email']) ? null : strtolower($data['email']);
-        DB::transaction(function () use ($id, $version, $data, $lead): void {
+        $corrections = collect(['name' => 'name', 'phone' => 'phone', 'email' => 'email'])
+            ->filter(fn (string $label, string $field): bool => (string) ($lead->$field ?? '') !== (string) ($data[$field] ?? ''))
+            ->map(fn (string $label, string $field): string => $label.' changed from "'.($lead->$field ?: 'blank').'" to "'.($data[$field] ?: 'blank').'"')->values();
+        DB::transaction(function () use ($id, $version, $data, $lead, $corrections): void {
             if (! $this->table('sales_leads')->where('id', $id)->where('version', $version)->update([...$data, 'version' => $version + 1, 'updated_at' => now()])) {
                 throw ValidationException::withMessages(['version' => 'This enquiry changed. Refresh before saving.']);
             }
-            $this->activity($id, 'requirements', 'Guest and stay requirements updated. Original source remains '.$lead->source.'.');
+            $this->activity($id, 'requirements', 'Guest and stay requirements updated. Original source remains '.$lead->source.'.'
+                .($corrections->isNotEmpty() ? ' Contact details corrected: '.$corrections->implode('; ').'.' : ''));
         });
 
         return back()->with('success', 'Guest and stay requirements updated.');
+    }
+
+    public function resendAcknowledgement(string $tenant, int $id): RedirectResponse
+    {
+        $this->lead($id);
+        app(EnquiryAcknowledgements::class)->resend(app('currentTenant'), $id, auth()->user());
+
+        return back()->with('success', 'Acknowledgement SMS sent to the corrected number. Check the SMS status below.');
     }
 
     public function message(string $tenant, int $id, Request $request): RedirectResponse

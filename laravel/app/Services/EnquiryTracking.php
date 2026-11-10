@@ -43,15 +43,18 @@ class EnquiryTracking
     public const LOOKUP_ATTEMPTS = 5;
 
     /**
-     * Allocate the company's next reference for this month, such as HS-2611-042 (prefix, year and month, number).
+     * Allocate the company's next reference for today, such as HS-101126-042 (prefix, day-month-year, number).
      *
-     * Numbers come from a locked per-company monthly counter, so concurrent enquiries never share a reference.
+     * Numbers come from a locked per-company daily counter, so concurrent enquiries never share a reference, and the
+     * year in the date keeps references unique from one year to the next.
      */
     public function newReference(Tenant $tenant): string
     {
-        $period = now($tenant->timezone ?: config('app.timezone'))->format('ym');
+        $today = now($tenant->timezone ?: config('app.timezone'));
+        $period = $today->format('ymd');
+        $date = $today->format('dmy');
 
-        return DB::transaction(function () use ($tenant, $period): string {
+        return DB::transaction(function () use ($tenant, $period, $date): string {
             DB::table('enquiry_reference_counters')->insertOrIgnore([
                 'tenant_id' => $tenant->id, 'period' => $period, 'last_number' => 0, 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -59,8 +62,14 @@ class EnquiryTracking
             $number = (int) $counter->last_number + 1;
             DB::table('enquiry_reference_counters')->where('id', $counter->id)->update(['last_number' => $number, 'updated_at' => now()]);
 
-            return sprintf('%s-%s-%03d', $this->prefix($tenant), $period, $number);
+            return sprintf('%s-%s-%03d', $this->prefix($tenant), $date, $number);
         });
+    }
+
+    /** An example reference for today, for form hints. */
+    public function exampleReference(Tenant $tenant): string
+    {
+        return $this->prefix($tenant).'-'.now($tenant->timezone ?: config('app.timezone'))->format('dmy').'-001';
     }
 
     /** The company's reference prefix, defaulting to the initials of its name (Haven Suites becomes HS). */
@@ -79,7 +88,7 @@ class EnquiryTracking
         return preg_match('/^'.self::PREFIX_PATTERN.'$/D', substr($initials, 0, 5)) ? substr($initials, 0, 5) : 'ENQ';
     }
 
-    /** Normalise a typed reference: trim, upper-case and turn spaces into dashes ("hs 2611 042" becomes HS-2611-042). */
+    /** Normalise a typed reference: trim, upper-case and turn spaces into dashes ("hs 101126 042" becomes HS-101126-042). */
     public function normalizeReference(string $reference): string
     {
         return (string) preg_replace('/[\s-]+/', '-', strtoupper(trim($reference)));

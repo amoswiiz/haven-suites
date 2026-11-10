@@ -51,9 +51,12 @@ class PublicStayController extends Controller
             throw ValidationException::withMessages(['check_out' => 'Search up to 90 nights at a time. Contact our team for a longer stay.']);
         }
         $matchesFilters = function (array $listing, array $filters) use ($nights): bool {
-            $query = mb_strtolower(trim($filters['q'] ?? ''));
+            $words = preg_split('/\s+/u', mb_strtolower(trim($filters['q'] ?? '')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $searchable = $words === [] ? '' : mb_strtolower(implode(' ', [$listing['title'], $listing['city'], $listing['neighbourhood'] ?? '',
+                $listing['listing_code'] ?? '', $listing['description'] ?? '', $listing['property_type_label'] ?? '',
+                implode(' ', $listing['amenity_labels'] ?? []), implode(' ', $listing['collection_labels'] ?? [])]));
 
-            return ($query === '' || str_contains(mb_strtolower($listing['title'].' '.$listing['city'].' '.$listing['neighbourhood'].' '.($listing['listing_code'] ?? '')), $query))
+            return collect($words)->every(fn (string $word): bool => str_contains($searchable, $word))
                 && (empty($filters['city']) || $listing['city'] === $filters['city'])
                 && (empty($filters['area']) || $listing['neighbourhood'] === $filters['area'])
                 && (empty($filters['type']) || ($listing['property_type'] ?? null) === $filters['type'])

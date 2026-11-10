@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class EnquiryAcknowledgements
 {
@@ -17,10 +18,72 @@ class EnquiryAcknowledgements
         return PhoneNumber::normalize($value);
     }
 
+    /** Most acknowledgement SMS (the original plus resends) per enquiry. */
+    public const MAX_SENDS = 3;
+
+    /** The latest acknowledgement SMS for the enquiry, including any resend to a corrected number. */
     public function status(int $tenantId, int $enquiryId): ?object
     {
-        return DB::table('manual_sms_messages')->where('tenant_id', $tenantId)
-            ->where('enquiry_id', $enquiryId)->where('communication_stage', self::STAGE)->first();
+        return DB::table('manual_sms_messages')->where('tenant_id', $tenantId)->where('enquiry_id', $enquiryId)
+            ->where(fn ($query) => $query->where('communication_stage', self::STAGE)->orWhere('communication_stage', 'like', self::STAGE.'_resend_%'))
+            ->orderByDesc('id')->first();
+    }
+
+    /**
+     * Why the acknowledgement cannot be resent now, or null when staff may resend it to the enquiry's current number.
+     *
+     * Resending is for a corrected number or a failed send; it never repeats a message to the same number.
+     */
+    public function resendBlockedReason(Tenant $tenant, object $lead): ?string
+    {
+        $phone = $this->phone($lead->phone);
+        $latest = $this->status($tenant->id, (int) $lead->id);
+        $sends = DB::table('manual_sms_messages')->where('tenant_id', $tenant->id)->where('enquiry_id', $lead->id)
+            ->where(fn ($query) => $query->where('communication_stage', self::STAGE)->orWhere('communication_stage', 'like', self::STAGE.'_resend_%'))->count();
+
+        return match (true) {
+            $phone === null => 'Add a valid mobile number to send the acknowledgement by SMS.',
+            $sends >= self::MAX_SENDS => 'The acknowledgement has already been sent '.self::MAX_SENDS.' times. Contact the guest directly.',
+            ($tenant->modules['messaging'] ?? true) === false => 'Messaging is disabled for this company.',
+            ! config('services.roycetalk.manual_live') || ! app(RoyceTalkSms::class)->configured() => 'SMS delivery is disabled or the provider is not configured.',
+            $latest !== null && $latest->phone === $phone && ! in_array($latest->status, ['skipped', 'rejected', 'undelivered'], true) => 'The acknowledgement was already sent to this number. Correct the number first if it was wrong.',
+            default => null,
+        };
+    }
+
+    /** Send the acknowledgement again (same reference and tracking link) to the enquiry's corrected mobile number. */
+    public function resend(Tenant $tenant, int $enquiryId, User $actor): void
+    {
+        abort_unless($tenant->active && $actor->active && app('currentTenant')->id === $tenant->id && $actor->can('sales.manage'), 403);
+        $record = DB::transaction(function () use ($tenant, $enquiryId, $actor): object {
+            $lead = DB::table('sales_leads')->where('tenant_id', $tenant->id)->where('id', $enquiryId)->lockForUpdate()->firstOrFail();
+            if ($reason = $this->resendBlockedReason($tenant, $lead)) {
+                throw ValidationException::withMessages(['acknowledgement' => $reason]);
+            }
+            $attempt = DB::table('manual_sms_messages')->where('tenant_id', $tenant->id)->where('enquiry_id', $enquiryId)
+                ->where(fn ($query) => $query->where('communication_stage', self::STAGE)->orWhere('communication_stage', 'like', self::STAGE.'_resend_%'))->count() + 1;
+            $id = DB::table('manual_sms_messages')->insertGetId([
+                'tenant_id' => $tenant->id, 'sent_by' => $actor->id, 'enquiry_id' => $enquiryId,
+                'send_token' => (string) Str::uuid(), 'communication_stage' => self::STAGE.'_resend_'.$attempt,
+                'phone' => $this->phone($lead->phone), 'body' => $this->body($tenant, $lead), 'sender_id' => config('services.roycetalk.sender_id') ?: '',
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->activity($tenant->id, $enquiryId, (int) $actor->id, 'Acknowledgement SMS resent to the corrected number '.$this->phone($lead->phone).'.');
+
+            return DB::table('manual_sms_messages')->find($id);
+        });
+
+        $this->dispatch($tenant, $record, (int) $actor->id);
+    }
+
+    /** The acknowledgement text: greeting, enquiry reference and private tracking link. */
+    private function body(Tenant $tenant, object $lead): string
+    {
+        $tracking = app(EnquiryTracking::class)->issue($tenant, $lead);
+        $firstName = mb_substr((string) preg_replace('/[^\p{L}\'-]/u', '', explode(' ', trim((string) $lead->name))[0] ?? ''), 0, 20);
+
+        return ($firstName !== '' ? 'Hi '.$firstName.', thanks' : 'Thank you').' for contacting '.$tenant->name.'! Your enquiry ref is '
+            .$tracking['reference'].'. Track its progress here: '.$tracking['url'];
     }
 
     public function prepare(Tenant $tenant, int $enquiryId, User $actor): object
@@ -66,10 +129,7 @@ class EnquiryAcknowledgements
             ! config('services.roycetalk.manual_live') || ! $transport->configured() => 'SMS delivery is disabled or the provider is not configured. Follow up with the guest separately.',
             default => null,
         };
-        $tracking = app(EnquiryTracking::class)->issue($tenant, $lead);
-        $firstName = mb_substr((string) preg_replace('/[^\p{L}\'-]/u', '', explode(' ', trim((string) $lead->name))[0] ?? ''), 0, 20);
-        $body = ($firstName !== '' ? 'Hi '.$firstName.', thanks' : 'Thank you').' for contacting '.$tenant->name.'! Your enquiry ref is '
-            .$tracking['reference'].'. Track its progress here: '.$tracking['url'];
+        $body = $this->body($tenant, $lead);
         $inserted = DB::table('manual_sms_messages')->insertOrIgnore([
             'tenant_id' => $tenant->id, 'sent_by' => $actorId, 'enquiry_id' => $enquiryId,
             'send_token' => (string) Str::uuid(), 'communication_stage' => self::STAGE,

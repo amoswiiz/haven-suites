@@ -123,3 +123,10 @@
 .stay-tag{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--sky-soft);color:var(--navy);font-size:.72rem;font-weight:600}
 .stay-code{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:.72rem;font-variant-numeric:tabular-nums}
 @media(max-width:767px){.stay-hero-image{height:180px}.stay-hero-note{display:none}}
+/* Keyword search (landing page) */
+.stay-keyword{margin-bottom:18px}
+.stay-keyword>label{display:block;font-weight:700;margin-bottom:6px}
+.stay-keyword-field{display:flex;gap:10px}
+.stay-keyword-field input{flex:1 1 auto;min-width:0;min-height:52px;font-size:1rem}
+.stay-keyword-field .stay-button{flex:0 0 auto;min-height:52px}
+@media(max-width:450px){.stay-keyword-field{flex-direction:column}.stay-keyword-field .stay-button{width:100%}}
