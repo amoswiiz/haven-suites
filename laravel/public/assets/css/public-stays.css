@@ -130,3 +130,10 @@
 .stay-keyword-field input{flex:1 1 auto;min-width:0;min-height:52px;font-size:1rem}
 .stay-keyword-field .stay-button{flex:0 0 auto;min-height:52px}
 @media(max-width:450px){.stay-keyword-field{flex-direction:column}.stay-keyword-field .stay-button{width:100%}}
+/* Staff editing bar (signed-in listing managers only) */
+.stay-staff-bar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;padding:8px max(16px,calc((100% - 1200px)/2));background:#1d2327;color:#f0f0f1;font-size:.8rem;line-height:1.4}
+.stay-staff-bar a{color:#f0f0f1;text-decoration:none;padding:4px 0}
+.stay-staff-bar a:hover{color:#ffb27a;text-decoration:underline}
+.stay-staff-bar a.is-primary{color:#13202c;background:var(--accent);padding:4px 12px;border-radius:6px;font-weight:700}
+.stay-staff-bar a.is-primary:hover{background:var(--accent-hover);color:#13202c;text-decoration:none}
+.stay-staff-bar-label{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.7rem;color:#a7aaad;margin-right:6px}

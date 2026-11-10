@@ -35,11 +35,20 @@
     @endif
     <meta name="theme-color" content="#004274">
     @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=7">
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=8">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">
     <a class="stay-skip" href="#stay-content">Skip to content</a>
+    @if(!empty($staffTools))
+        <nav class="stay-staff-bar" aria-label="Staff tools">
+            <span class="stay-staff-bar-label">Staff view<span class="stay-visually-hidden">: only you can see this bar</span></span>
+            @if($staffTools['edit_url'])<a class="is-primary" href="{{ $staffTools['edit_url'] }}">Edit this listing</a>@endif
+            <a href="{{ $staffTools['listings_url'] }}">All listings</a>
+            <a href="{{ $staffTools['settings_url'] }}">Website settings</a>
+            <a href="{{ $staffTools['dashboard_url'] }}">Dashboard</a>
+        </nav>
+    @endif
     <div class="stay-header-wrap">
         <header class="stay-header" data-public-header>
             <a class="stay-brand{{ $logoUrl ? ' has-logo' : '' }}" href="{{ $browseUrl }}">@if($logoUrl)<img src="{{ $logoUrl }}" alt="{{ $tenant->name }}" height="52">@else{{ $tenant->name }}<span>Make yourself at home</span>@endif</a>

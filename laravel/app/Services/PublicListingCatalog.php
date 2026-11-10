@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -42,6 +43,28 @@ class PublicListingCatalog
         $site = $this->settings($tenant);
 
         return $site?->enabled ? $site : null;
+    }
+
+    /**
+     * Whether a signed-in user may manage this company's public listings, checked directly against their membership.
+     *
+     * Public pages run outside the company workspace, so this does not rely on (or set) the current company context.
+     */
+    public function canManage(?User $user, Tenant $tenant): bool
+    {
+        if (! $user || ! $user->active || ! $tenant->active || ($tenant->modules['properties'] ?? true) === false) {
+            return false;
+        }
+        $membership = $user->tenants()->whereKey($tenant->id)->first();
+        foreach (json_decode($membership->pivot->roles ?? '[]', true) ?: [] as $role) {
+            foreach (config('haven.roles.'.$role, []) as $permission) {
+                if (Str::is($permission, 'properties.manage')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public function assignees(Tenant $tenant): Collection

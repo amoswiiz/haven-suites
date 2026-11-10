@@ -200,6 +200,30 @@ class PublicStaysTest extends TestCase
         $this->get(route('public-stays.show', [$this->company->slug, 'nyali-a19']))->assertOk()->assertSee('Code A19')->assertSee('Beachfront');
     }
 
+    public function test_only_signed_in_listing_managers_of_this_company_see_the_staff_editing_bar(): void
+    {
+        $listing = $this->listing();
+        $page = route('public-stays.show', [$this->company->slug, $listing['slug']]);
+        $editUrl = route('public-listings.edit', ['tenant' => $this->company->slug, 'id' => $listing['id']]);
+
+        $this->get($page)->assertOk()->assertDontSee('Staff tools')->assertDontSee('Edit this listing');
+
+        $this->actingAs($this->admin)->get($page)->assertOk()->assertSee('aria-label="Staff tools"', false)
+            ->assertSee('Edit this listing')->assertSee($editUrl, false)->assertSee(route('public-listings.settings', $this->company->slug), false);
+        $this->actingAs($this->admin)->get($this->catalogue())->assertOk()->assertSee('aria-label="Staff tools"', false)->assertDontSee('Edit this listing');
+
+        $cleaner = User::factory()->create(['active' => true]);
+        $cleaner->tenants()->attach($this->company, ['roles' => json_encode(['cleaner']), 'legacy_user_id' => 2]);
+        $this->actingAs($cleaner)->get($page)->assertOk()->assertDontSee('Staff tools');
+
+        $otherAdmin = User::factory()->create(['active' => true]);
+        $otherAdmin->tenants()->attach(Tenant::factory()->create(['slug' => 'other-company', 'active' => true]), ['roles' => json_encode(['admin']), 'legacy_user_id' => 3]);
+        $this->actingAs($otherAdmin)->get($page)->assertOk()->assertDontSee('Staff tools');
+
+        $this->admin->update(['active' => false]);
+        $this->actingAs($this->admin->fresh())->get($page)->assertOk()->assertDontSee('Staff tools');
+    }
+
     public function test_pagination_and_invalid_search_dates_and_prices_are_handled(): void
     {
         for ($number = 1; $number <= 13; $number++) {

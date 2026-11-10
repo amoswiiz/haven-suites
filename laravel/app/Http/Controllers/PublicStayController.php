@@ -328,12 +328,34 @@ class PublicStayController extends Controller
         return $photo ? ['url' => $photo['url'], 'caption' => $this->plainText($photo['caption'] ?? '', 180)] : null;
     }
 
+    /**
+     * Shortcuts shown to signed-in staff who manage this company's listings, like an editing bar on a website.
+     *
+     * @param  array<string, mixed>|null  $listing
+     * @return array{edit_url: ?string, listings_url: string, settings_url: string, dashboard_url: string, status: ?string}|null
+     */
+    private function staffTools(Tenant $tenant, ?array $listing): ?array
+    {
+        if (! app(PublicListingCatalog::class)->canManage(auth()->user(), $tenant)) {
+            return null;
+        }
+
+        return [
+            'edit_url' => isset($listing['id']) ? route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $listing['id']]) : null,
+            'listings_url' => route('public-listings.index', $tenant->slug),
+            'settings_url' => route('public-listings.settings', $tenant->slug),
+            'dashboard_url' => url('/t/'.rawurlencode($tenant->slug).'/dashboard'),
+            'status' => isset($listing['id']) ? 'Published listing' : null,
+        ];
+    }
+
     private function page(string $view, array $data, bool $preview = false): Response
     {
         if (isset($data['tenant'])) {
             $links = app(PublicWebsiteLinks::class);
             $data += ['websiteMenu' => $links->menu($data['tenant'], $data['site'] ?? null),
                 'websiteContactLinks' => $links->forSite($data['tenant'], $data['site'] ?? null)];
+            $data['staffTools'] = ! $preview && auth()->check() ? $this->staffTools($data['tenant'], $data['listing'] ?? null) : null;
         }
         $response = response()->view($view, $data)->header('Cache-Control', 'private, no-store')
             ->header('Referrer-Policy', 'strict-origin-when-cross-origin')->header('X-Content-Type-Options', 'nosniff');
