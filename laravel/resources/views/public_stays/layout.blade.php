@@ -35,7 +35,7 @@
     @endif
     <meta name="theme-color" content="#1f4ba8">
     @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=13">
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=14">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">
@@ -93,10 +93,10 @@
         <div class="stay-container stay-footer-grid">
             <div class="stay-footer-intro"><span class="stay-eyebrow">Make yourself at home</span><strong>{{ $tenant->name }}</strong><p>Comfortable spaces for your next chapter, whether you're here for a short break or a longer stay.</p><a href="{{ $contactLinks['enquiry_url'] ?? $publicBrowseUrl.'#find-stay' }}">Find a stay and enquire &rarr;</a></div>
             <div><strong>Explore</strong><nav class="stay-footer-nav" aria-label="Footer navigation">@foreach($navigationItems as $menuItem)<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach</nav></div>
-            <div><strong>Let's plan your stay</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif<p><a href="{{ route('public-stays.about', $tenant->slug) }}">About us &rarr;</a></p><p><a href="{{ route('public-stays.track', $tenant->slug) }}">Track an enquiry &rarr;</a></p><p class="stay-contact-note">We use your contact details to respond to your enquiry and help arrange your stay.</p></div>
+            <div><strong>Let's plan your stay</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif<p><a href="{{ route('public-stays.about', $tenant->slug) }}">About us &rarr;</a></p><p><a href="{{ route('public-stays.faq', $tenant->slug) }}">Questions &amp; policies &rarr;</a></p><p><a href="{{ route('public-stays.track', $tenant->slug) }}">Track an enquiry &rarr;</a></p><p class="stay-contact-note">We use your contact details to respond to your enquiry and help arrange your stay.</p></div>
         </div>
         <div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><span>Serviced apartments &amp; short stays in Kenya</span><a class="stay-staff-link" href="{{ route('login') }}">Staff sign in</a></div>
     </footer>
-    <script src="{{ asset('assets/js/public-stays.js') }}?v=7" defer></script>
+    <script src="{{ asset('assets/js/public-stays.js') }}?v=8" defer></script>
 </body>
 </html>

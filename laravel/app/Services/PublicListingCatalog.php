@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 class PublicListingCatalog
 {
     /** Listing addresses that clash with other public pages under /stays/{company}/. */
-    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about'];
+    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas'];
 
     /** @var array<string, string> */
     public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'cottage' => 'Cottage'];
@@ -29,6 +29,7 @@ class PublicListingCatalog
         'beachfront' => 'Beachfront', 'sea_view' => 'Sea view', 'parking' => 'Parking',
         'kitchen' => 'Kitchen', 'balcony' => 'Balcony', 'gym' => 'Gym', 'washer' => 'Washing machine',
         'security' => 'Security', 'elevator' => 'Lift', 'workspace' => 'Workspace', 'pets_allowed' => 'Pets allowed',
+        'backup_power' => 'Backup power', 'water_backup' => 'Backup water', 'hot_water' => 'Hot water', 'smart_tv' => 'Smart TV', 'cctv' => 'CCTV',
     ];
 
     public function settings(Tenant $tenant): ?object
@@ -328,6 +329,8 @@ class PublicListingCatalog
             'starting_price' => $listing->starting_price ?? $unit->nightly_rate, 'currency' => $tenant->currency,
             'amenities' => $amenities, 'amenity_labels' => array_map(fn (string $key): string => self::AMENITIES[$key], $amenities),
             'house_rules' => $listing->house_rules, 'featured' => (bool) $listing->featured,
+            'cleaning_fee' => (float) ($listing->cleaning_fee ?? 0) > 0 ? (float) $listing->cleaning_fee : null,
+            'weekly_discount' => (int) ($listing->weekly_discount_percent ?? 0) ?: null, 'monthly_discount' => (int) ($listing->monthly_discount_percent ?? 0) ?: null,
             'videos' => app(YouTubeListingVideos::class)->project($listing->youtube_videos ?? null),
             'seo_title' => $listing->seo_title ?? null, 'seo_description' => $listing->seo_description ?? null,
             'whatsapp_number' => $listing->whatsapp_number ?? null, 'whatsapp_message' => $listing->whatsapp_message ?? null,

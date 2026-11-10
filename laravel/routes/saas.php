@@ -13,6 +13,7 @@ use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\PublicListingController;
+use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicStayController;
 use App\Http\Controllers\SaasAccountController;
 use App\Http\Controllers\SalesController;
@@ -73,6 +74,10 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
         Route::get('settings', [PublicListingController::class, 'settings'])->name('settings');
         Route::post('/', [PublicListingController::class, 'store'])->middleware('throttle:20,1')->name('store');
         Route::post('site', [PublicListingController::class, 'site'])->name('site.update');
+        Route::get('reviews', [PublicReviewController::class, 'index'])->name('reviews');
+        Route::post('reviews/request', [PublicReviewController::class, 'request'])->middleware('throttle:30,1')->name('reviews.request');
+        Route::post('reviews', [PublicReviewController::class, 'store'])->middleware('throttle:30,1')->name('reviews.store');
+        Route::post('reviews/{id}', [PublicReviewController::class, 'moderate'])->whereNumber('id')->name('reviews.moderate');
         Route::post('prepare', [PublicListingController::class, 'prepare'])->middleware('throttle:5,1')->name('prepare');
         Route::get('{id}/edit', [PublicListingController::class, 'edit'])->whereNumber('id')->name('edit');
         Route::post('{id}', [PublicListingController::class, 'update'])->whereNumber('id')->middleware('throttle:20,1')->name('update');

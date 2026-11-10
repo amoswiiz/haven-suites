@@ -13,12 +13,13 @@ class PublicWebsiteLinks
         ['label' => 'Home', 'target' => 'home'],
         ['label' => 'Find a stay', 'target' => 'stays'],
         ['label' => 'About us', 'target' => 'about'],
+        ['label' => 'FAQ', 'target' => 'faq'],
         ['label' => 'Contact', 'target' => 'contact'],
         ['label' => 'Track my enquiry', 'target' => 'track'],
     ];
 
     /** Menu destinations and their labels in the Website settings menu editor. */
-    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
+    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'faq' => 'FAQ', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
 
     /**
      * WhatsApp link for staff to ask an apartment owner about availability, with the apartment and any stay details.
@@ -152,11 +153,12 @@ class PublicWebsiteLinks
         $base = $this->canonicalUrl('public-stays.index', ['company' => $tenant->slug]);
         $track = $this->canonicalUrl('public-stays.track', ['company' => $tenant->slug]);
         $aboutUrl = $this->canonicalUrl('public-stays.about', ['company' => $tenant->slug]);
+        $faqUrl = $this->canonicalUrl('public-stays.faq', ['company' => $tenant->slug]);
 
         return array_map(static fn (array $link): array => [
             'label' => $link['label'],
             'url' => match ($link['target']) {
-                'home' => $base, 'stays' => $base.'#find-stay', 'contact' => $base.'#stay-contact', 'track' => $track, 'about' => $aboutUrl,
+                'home' => $base, 'stays' => $base.'#find-stay', 'contact' => $base.'#stay-contact', 'track' => $track, 'about' => $aboutUrl, 'faq' => $faqUrl,
             },
         ], $this->navigationForForm($site));
     }
@@ -164,8 +166,8 @@ class PublicWebsiteLinks
     /** @return list<array{label: string, target: string}> */
     public function normalizeNavigation(array $input): array
     {
-        if (count($input) > 6) {
-            throw ValidationException::withMessages(['navigation_links' => 'Keep at most six menu links.']);
+        if (count($input) > 8) {
+            throw ValidationException::withMessages(['navigation_links' => 'Keep at most eight menu links.']);
         }
         $links = [];
         $seen = [];
@@ -184,7 +186,7 @@ class PublicWebsiteLinks
                 throw ValidationException::withMessages(['navigation_links.'.$index.'.label' => 'Use a plain text menu label of up to 60 characters.']);
             }
             if (! array_key_exists($target, self::TARGETS) || isset($seen[$target])) {
-                throw ValidationException::withMessages(['navigation_links.'.$index.'.target' => 'Choose each menu destination once: Home, Find a stay, About us, Contact or Track my enquiry.']);
+                throw ValidationException::withMessages(['navigation_links.'.$index.'.target' => 'Choose each menu destination once: Home, Find a stay, About us, FAQ, Contact or Track my enquiry.']);
             }
             $seen[$target] = true;
             $links[] = ['label' => $label, 'target' => $target];

@@ -9,7 +9,8 @@
     <div class="stay-card-body">
         <p class="stay-location">{{ $stay['neighbourhood'] ? $stay['neighbourhood'].' · ' : '' }}{{ $stay['city'] }}</p>
         <h3><a href="{{ $stayUrl }}">{{ $stay['title'] }}</a></h3>
-        @if(!empty($stay['collection_labels']) || !empty($stay['listing_code']))<p class="stay-card-tags">@foreach(array_slice($stay['collection_labels'] ?? [], 0, 2) as $collectionLabel)<span class="stay-tag">{{ $collectionLabel }}</span>@endforeach @if(!empty($stay['listing_code']))<span class="stay-code">Code {{ $stay['listing_code'] }}</span>@endif</p>@endif
+        @if(!empty($stay['rating']['count']))<p class="stay-card-rating">@include('public_stays.stars', ['rating' => $stay['rating']['average']]) <strong>{{ number_format($stay['rating']['average'], 1) }}</strong> <span class="stay-card-count">({{ $stay['rating']['count'] }})</span></p>@endif
+        @if(!empty($stay['collection_labels']) || !empty($stay['listing_code']) || !empty($stay['weekly_discount']) || !empty($stay['monthly_discount']))<p class="stay-card-tags">@foreach(array_slice($stay['collection_labels'] ?? [], 0, 2) as $collectionLabel)<span class="stay-tag">{{ $collectionLabel }}</span>@endforeach @if(!empty($stay['monthly_discount']) || !empty($stay['weekly_discount']))<span class="stay-tag is-offer">{{ max((int) ($stay['weekly_discount'] ?? 0), (int) ($stay['monthly_discount'] ?? 0)) }}% off long stays</span>@endif @if(!empty($stay['listing_code']))<span class="stay-code">Code {{ $stay['listing_code'] }}</span>@endif</p>@endif
         @if(!empty($stay['availability']))
             <span class="stay-pill {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
         @endif

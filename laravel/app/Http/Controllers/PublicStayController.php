@@ -6,7 +6,9 @@ use App\Models\Tenant;
 use App\Services\ListingAvailability;
 use App\Services\PublicAboutPage;
 use App\Services\PublicEnquiries;
+use App\Services\PublicGuestInfo;
 use App\Services\PublicListingCatalog;
+use App\Services\PublicReviews;
 use App\Services\PublicWebsiteLinks;
 use Carbon\CarbonImmutable;
 use DOMDocument;
@@ -33,7 +35,7 @@ class PublicStayController extends Controller
             'collection' => ['nullable', Rule::in(array_keys(PublicListingCatalog::COLLECTIONS))],
             'guests' => 'nullable|integer|min:1|max:100', 'bedrooms' => 'nullable|integer|min:0|max:20',
             'min_price' => 'nullable|numeric|min:0|max:999999999', 'max_price' => 'nullable|numeric|min:0|max:999999999',
-            'amenities' => 'nullable|array|max:14', 'amenities.*' => [Rule::in(array_keys(PublicListingCatalog::AMENITIES))],
+            'amenities' => 'nullable|array|max:30', 'amenities.*' => [Rule::in(array_keys(PublicListingCatalog::AMENITIES))],
             'check_in' => ['nullable', 'required_with:check_out', 'date_format:Y-m-d', 'after_or_equal:'.$today, 'before_or_equal:'.CarbonImmutable::parse($today)->addYears(2)->toDateString()],
             'check_out' => ['nullable', 'required_with:check_in', 'date_format:Y-m-d', 'after:check_in', 'before_or_equal:'.CarbonImmutable::parse($today)->addYears(2)->toDateString()],
             'available_only' => 'nullable|boolean', 'sort' => ['nullable', Rule::in(['recommended', 'price_asc', 'price_desc'])],
@@ -82,8 +84,10 @@ class PublicStayController extends Controller
                 $states += $availability->availabilityForListings($tenant, $batch->all(), $filters['check_in'], $filters['check_out']);
             }
         }
-        $listings = $listings->map(function (array $listing) use ($states, $tenant, $site, $request): array {
+        $ratings = app(PublicReviews::class)->summaries($tenant);
+        $listings = $listings->map(function (array $listing) use ($states, $tenant, $site, $request, $ratings): array {
             $listing['availability'] = $states[$listing['id']] ?? null;
+            $listing['rating'] = $ratings[$listing['id']] ?? null;
             $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
 
             return $listing;
@@ -104,9 +108,13 @@ class PublicStayController extends Controller
             default => ! in_array($value, [null, '', []], true),
         });
         $canonicalUrl = $this->publicUrl('public-stays.index', ['company' => $tenant->slug], ! $filtered && $page > 1 ? ['page' => $page] : []);
+        $published = $catalog->published($tenant);
+        $highlights = $filtered || $page > 1 ? collect() : app(PublicReviews::class)->highlights($tenant, $published->pluck('id')->all());
 
         return $this->page('public_stays.index', compact('tenant', 'site', 'stays', 'cities', 'filters', 'hero', 'destinations', 'propertyTypes', 'collectionCounts') + [
             'amenities' => PublicListingCatalog::AMENITIES, 'today' => $today,
+            'guestInfo' => app(PublicGuestInfo::class)->content($tenant, $site), 'reviewHighlights' => $highlights,
+            'listingTitles' => $published->mapWithKeys(fn (array $listing): array => [$listing['id'] => ['title' => $listing['title'], 'slug' => $listing['slug']]]),
             'pageTitle' => ($this->plainText($site->seo_title ?? '', 180) ?: $this->plainText($tenant->name, 100).' | Find your next stay').($page > 1 ? ' | Page '.$page : ''),
             'pageDescription' => $this->plainText($site->seo_description ?? '', 320) ?: $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
             'canonicalUrl' => $canonicalUrl, 'robotsContent' => $filtered ? 'noindex, follow' : 'index, follow, max-image-preview:large',
@@ -169,6 +177,23 @@ class PublicStayController extends Controller
         ]);
     }
 
+    public function faq(string $company, PublicListingCatalog $catalog): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $info = app(PublicGuestInfo::class)->content($tenant, $site);
+
+        return $this->page('public_stays.faq', [
+            'tenant' => $tenant, 'site' => $site, 'info' => $info,
+            'pageTitle' => 'Questions and policies | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => $this->plainText('Answers to common questions about booking, paying, check-in and cancellations with '.$tenant->name.'.', 320),
+            'canonicalUrl' => $this->publicUrl('public-stays.faq', ['company' => $tenant->slug]),
+            'structuredData' => ['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => array_map(fn (array $item): array => [
+                '@type' => 'Question', 'name' => $this->plainText($item['question'], 300),
+                'acceptedAnswer' => ['@type' => 'Answer', 'text' => $this->plainText($item['answer'], 1500)],
+            ], $info['faq'])],
+        ]);
+    }
+
     public function logo(string $company, PublicListingCatalog $catalog): BinaryFileResponse
     {
         $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
@@ -182,7 +207,8 @@ class PublicStayController extends Controller
     public function sitemap(string $company, PublicListingCatalog $catalog): Response
     {
         [$tenant] = $this->company($company, $catalog);
-        $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])], ['url' => $this->publicUrl('public-stays.about', ['company' => $tenant->slug])]];
+        $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])], ['url' => $this->publicUrl('public-stays.about', ['company' => $tenant->slug])],
+            ['url' => $this->publicUrl('public-stays.faq', ['company' => $tenant->slug])]];
         foreach ($catalog->published($tenant) as $listing) {
             $entry = ['url' => $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]), 'photos' => array_column($listing['photos'], 'url')];
             try {
@@ -239,10 +265,12 @@ class PublicStayController extends Controller
         $weeks = array_chunk($cells, 7);
         $canEnquire = ! $preview && ($tenant->modules['sales'] ?? true) !== false;
         $formContext = $canEnquire ? $enquiries->formContext($tenant, $listing) : [];
+        $ratings = app(PublicReviews::class)->summaries($tenant);
         $alternatives = $preview ? collect() : app(PublicListingCatalog::class)->published($tenant)
             ->filter(fn (array $other): bool => $other['id'] !== $listing['id'] && $other['city'] === $listing['city'])->take(3)
-            ->map(function (array $other) use ($tenant, $site, $request): array {
+            ->map(function (array $other) use ($tenant, $site, $request, $ratings): array {
                 $other['links'] = $this->listingLinks($tenant, $other, $site, $request);
+                $other['rating'] = $ratings[$other['id']] ?? null;
 
                 return $other;
             });
@@ -254,8 +282,10 @@ class PublicStayController extends Controller
         $structuredData = $preview ? null : $this->listingSchema($tenant, $listing, $canonicalUrl);
         $publicLinks = $this->listingLinks($tenant, $listing, $site, $request);
         $enquiryDefaults = $this->enquiryDefaults($request);
+        $reviews = app(PublicReviews::class)->forListing($tenant, $listing['id']);
+        $guestInfo = app(PublicGuestInfo::class)->content($tenant, $site);
 
-        return $this->page('public_stays.show', compact('tenant', 'site', 'listing', 'calendar', 'month', 'weeks', 'canEnquire', 'formContext', 'alternatives', 'preview', 'canonicalUrl', 'structuredData', 'publicLinks', 'enquiryDefaults') + [
+        return $this->page('public_stays.show', compact('tenant', 'site', 'listing', 'calendar', 'month', 'weeks', 'canEnquire', 'formContext', 'alternatives', 'preview', 'canonicalUrl', 'structuredData', 'publicLinks', 'enquiryDefaults', 'reviews', 'guestInfo') + [
             'today' => $today->toDateString(), 'pageTitle' => $pageTitle, 'pageDescription' => $pageDescription,
             'robotsContent' => $preview ? 'noindex, nofollow' : 'index, follow, max-image-preview:large',
             'socialImage' => $preview ? null : $this->socialImage($listing['photos'][0] ?? null),

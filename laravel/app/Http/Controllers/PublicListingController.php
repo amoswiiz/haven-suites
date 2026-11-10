@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\PublicAboutPage;
+use App\Services\PublicGuestInfo;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Services\YouTubeListingVideos;
@@ -52,7 +53,7 @@ class PublicListingController extends Controller
         $tenant = app('currentTenant');
         $site = $catalog->settings($tenant);
 
-        return view('public_listings.settings', ['site' => $site, 'members' => $catalog->assignees($tenant), 'aboutDefaults' => app(PublicAboutPage::class),
+        return view('public_listings.settings', ['site' => $site, 'members' => $catalog->assignees($tenant), 'aboutDefaults' => app(PublicAboutPage::class), 'guestInfo' => app(PublicGuestInfo::class),
             'navigation' => app(PublicWebsiteLinks::class)->navigationForForm($site), 'websiteLinks' => app(PublicWebsiteLinks::class)->forSite($tenant, $site)]);
     }
 
@@ -125,11 +126,13 @@ class PublicListingController extends Controller
             'enquiry_assignee_id' => ['nullable', 'integer', Rule::in($catalog->assignees($tenant)->pluck('id')->all())],
             'response_hours' => 'required|integer|min:1|max:168',
             ...$this->websiteRules(),
-            'navigation_links' => 'sometimes|array|max:6', 'navigation_links.*' => 'required|array:label,target',
+            'navigation_links' => 'sometimes|array|max:8', 'navigation_links.*' => 'required|array:label,target',
             'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(array_keys(PublicWebsiteLinks::TARGETS))],
             'logo' => 'nullable|file|mimes:webp,png|max:2048', 'remove_logo' => 'sometimes|boolean',
             'about_intro' => 'nullable|string|max:5000', 'about_how' => 'nullable|string|max:3000',
             'about_main_locations' => 'nullable|string|max:255', 'about_other_areas' => 'nullable|string|max:2000',
+            'cancellation_policy' => 'nullable|string|max:3000', 'payment_policy' => 'nullable|string|max:3000', 'faq' => 'nullable|string|max:15000',
+            'host_intro' => 'nullable|string|max:1500', 'host_reply_time' => 'nullable|string|max:80|not_regex:/[<>]/', 'host_languages' => 'nullable|string|max:120|not_regex:/[<>]/',
         ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
@@ -284,6 +287,8 @@ class PublicListingController extends Controller
             'collections' => 'nullable|array|max:6', 'collections.*' => ['string', Rule::in(array_keys(PublicListingCatalog::COLLECTIONS))],
             'listing_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Z0-9][A-Z0-9-]*$/D', Rule::unique('public_listings')->where('tenant_id', $tenant->id)->ignore($id)],
             'house_rules' => 'nullable|string|max:5000', 'status' => 'required|in:draft,published,paused', 'featured' => 'sometimes|boolean',
+            'cleaning_fee' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
+            'weekly_discount_percent' => 'nullable|integer|min:0|max:90', 'monthly_discount_percent' => 'nullable|integer|min:0|max:90',
             'photos' => 'nullable|array|max:10', 'photos.*' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120',
             'remove_photos' => 'nullable|array|max:30', 'remove_photos.*' => 'required|integer',
             'photo_order' => 'nullable|array|max:30', 'photo_order.*' => 'required|integer|min:0|max:1000',
@@ -335,8 +340,8 @@ class PublicListingController extends Controller
                 if ($photoCount > 30 || ($data['status'] === 'published' && ($photoCount < 1 || $unit->status !== 'active'))) {
                     throw ValidationException::withMessages(['photos' => 'A published listing needs an active apartment and at least one photo. Keep at most 30 photos.']);
                 }
-                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message']));
-                $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null];
+                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message', 'cleaning_fee', 'weekly_discount_percent', 'monthly_discount_percent']));
+                $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null, 'cleaning_fee' => null, 'weekly_discount_percent' => null, 'monthly_discount_percent' => null];
                 $changes['property_type'] = $data['property_type'] ?? null;
                 $changes['listing_code'] = ($data['listing_code'] ?? null) ?: null;
                 $changes['collections'] = json_encode(array_values(array_unique($data['collections'] ?? [])), JSON_THROW_ON_ERROR);

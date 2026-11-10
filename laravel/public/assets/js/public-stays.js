@@ -379,3 +379,79 @@
     });
     update();
 })();
+// Live price estimate from the chosen dates, using the listing's nightly price, cleaning fee and long-stay discounts.
+(() => {
+    'use strict';
+    const form = document.querySelector('[data-enquiry-form][data-nightly]');
+    const box = document.querySelector('[data-price-estimate]');
+    if (!form || !box || !form.dataset.nightly) {
+        return;
+    }
+    const nightly = Number(form.dataset.nightly);
+    const cleaning = Number(form.dataset.cleaning || 0);
+    const weekly = Number(form.dataset.weekly || 0);
+    const monthly = Number(form.dataset.monthly || 0);
+    const currency = form.dataset.currency || '';
+    const minNights = Number(form.dataset.minNights || 1);
+    const checkIn = form.querySelector('[name="check_in"]');
+    const checkOut = form.querySelector('[name="check_out"]');
+    const money = (value) => `${currency} ${Math.round(value).toLocaleString('en-KE')}`;
+    const add = (list, label, value, className = '') => {
+        const term = document.createElement('dt');
+        const detail = document.createElement('dd');
+        term.textContent = label;
+        detail.textContent = value;
+        if (className) {
+            term.className = className;
+            detail.className = className;
+        }
+        list.append(term, detail);
+    };
+    const update = () => {
+        const start = checkIn?.value ? new Date(`${checkIn.value}T00:00:00`) : null;
+        const end = checkOut?.value ? new Date(`${checkOut.value}T00:00:00`) : null;
+        const nights = start && end ? Math.round((end - start) / 86400000) : 0;
+        if (!Number.isFinite(nightly) || nightly <= 0 || nights < 1) {
+            box.hidden = true;
+            box.replaceChildren();
+            return;
+        }
+        const base = nightly * nights;
+        const percent = nights >= 28 && monthly > 0 ? monthly : (nights >= 7 && weekly > 0 ? weekly : 0);
+        const saving = base * percent / 100;
+        const list = document.createElement('dl');
+        add(list, `${money(nightly)} × ${nights} night${nights === 1 ? '' : 's'}`, money(base));
+        if (saving > 0) {
+            add(list, `${nights >= 28 && monthly > 0 ? 'Monthly' : 'Weekly'} discount (${percent}%)`, `− ${money(saving)}`, 'is-saving');
+        }
+        if (cleaning > 0) {
+            add(list, 'Cleaning fee', money(cleaning));
+        }
+        add(list, 'Estimated total', money(base - saving + cleaning), 'is-total');
+        const note = document.createElement('small');
+        note.textContent = nights < minNights
+            ? `This apartment has a ${minNights}-night minimum stay.`
+            : 'Estimate only. Our team confirms availability and the final price on your quote.';
+        box.replaceChildren(list, note);
+        box.hidden = false;
+    };
+    [checkIn, checkOut].forEach((field) => {
+        field?.addEventListener('input', update);
+        field?.addEventListener('change', update);
+    });
+    update();
+})();
+
+// Share a listing with the phone's share sheet when available, falling back to WhatsApp.
+(() => {
+    'use strict';
+    document.querySelectorAll('[data-share-url]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (typeof navigator.share !== 'function') {
+                return;
+            }
+            event.preventDefault();
+            navigator.share({ title: link.dataset.shareTitle, url: link.dataset.shareUrl }).catch(() => {});
+        });
+    });
+})();

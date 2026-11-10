@@ -64,6 +64,16 @@
             <div class="stay-empty"><h2>Let's find the right stay for you.</h2><p>No stays match these preferences right now. Try removing a filter, choosing flexible dates or another destination, or ask our team: we often know of options that are not listed yet.</p><div class="stay-track-actions" style="justify-content:center"><a class="stay-button secondary" href="{{ route('public-stays.index', $tenant->slug) }}#find-stay">Show all stays</a>@if(!empty($websiteContactLinks['whatsapp_url']))<a class="stay-button" href="{{ $websiteContactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Ask us on WhatsApp <span aria-hidden="true">&nearr;</span></a>@endif</div></div>
         @endif
     </section>
+    @if(($reviewHighlights ?? collect())->isNotEmpty())
+        <section class="stay-section" aria-labelledby="home-reviews-heading"><span class="stay-eyebrow">Guest stories</span><h2 id="home-reviews-heading">What our guests say</h2>
+            <div class="stay-review-grid">@foreach($reviewHighlights as $review)@include('public_stays.review_card', ['review' => $review, 'stayLink' => $listingTitles[$review->listing_id] ?? null])@endforeach</div>
+        </section>
+    @endif
 </div>
-<section class="stay-why"><div class="stay-container stay-why-grid"><div><strong>A stay that suits you</strong><p>Explore the details, amenities and house rules before deciding.</p></div><div><strong>A real team to help</strong><p>Enquire directly with our team about your apartment and dates.</p></div><div><strong>A thoughtful welcome</strong><p>We'll confirm availability and your agreed price before your booking is final.</p></div></div></section>
+<section class="stay-why" aria-label="Why book with us"><div class="stay-container stay-why-grid">
+    <div><strong>Managed by {{ $tenant->name }}</strong><p>A real team handles your enquiry and stays reachable during your stay.@if(!empty($guestInfo['reply_time'])) {{ $guestInfo['reply_time'] }}.@endif</p></div>
+    <div><strong>Real photos, clear details</strong><p>See the photos, amenities, house rules and policies before you decide.</p></div>
+    <div><strong>Pay the company, safely</strong><p>Payment details come on your official quote. Only pay to the account named on it.</p></div>
+    <div><strong>Questions answered</strong><p>Check-in, deposits, cancellations and more. <a href="{{ route('public-stays.faq', $tenant->slug) }}">Read the FAQ &rarr;</a></p></div>
+</div></section>
 @endsection
