@@ -100,7 +100,7 @@ class PartnerDirectoryTest extends TestCase
 
         parse_str(parse_url($rows->firstWhere('partner.id', 1)['whatsapp_url'], PHP_URL_QUERY), $query);
         $this->assertStringStartsWith('https://wa.me/254712000001', $rows->firstWhere('partner.id', 1)['whatsapp_url']);
-        $this->assertSame("Hello Jane, this is Haven Suites. Is Baharini Cottages, B09 (2BR) available?\nDates: Sat 12 Dec 2026 – Tue 15 Dec 2026 (3 nights)\nGuests: 3", $query['text']);
+        $this->assertSame("Hello Jane, this is Haven Suites. Is Baharini Cottages, B09 (2BR) available?\nCheck-in: Sat 12 Dec 2026\nCheck-out: Tue 15 Dec 2026\nNights: 3\nGuests: 3", $query['text']);
         $response->assertSee('Booked by us for these dates')->assertSee('jane@example.test')->assertDontSee('Retired Flat')->assertDontSee('Muthaiga PH56');
 
         $agent = $response->viewData('agents')->first();
@@ -157,16 +157,16 @@ class PartnerDirectoryTest extends TestCase
         DB::table('public_listings')->insert(['tenant_id' => $this->company->id, 'partner_apartment_id' => 2, 'slug' => 'galu-draft', 'title' => 'Galu draft',
             'description' => 'x', 'city' => 'Diani', 'max_guests' => 4, 'min_nights' => 1, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()]);
 
-        $response = $this->search(['area' => 'Diani', 'bedrooms' => '2'])->assertOk()->assertSee("Add the client's dates above", false)->assertSee('partner-directory.js', false);
+        $response = $this->search(['area' => 'Diani', 'bedrooms' => '2'])->assertOk()->assertSee("Add the client's check-in and check-out dates above", false)->assertSee('partner-directory.js', false);
         $rows = $response->viewData('rows');
         parse_str(parse_url($rows->firstWhere('partner.id', 1)['whatsapp_url'], PHP_URL_QUERY), $published);
-        $this->assertSame("Hello Jane, this is Haven Suites. Is Baharini Cottages, B09 (2BR) available?\nDates: to be confirmed\nListing: https://app.havensuitesbnb.com/stays/haven/baharini-b09", $published['text']);
+        $this->assertSame("Hello Jane, this is Haven Suites. Is Baharini Cottages, B09 (2BR) available?\nCheck-in: to be confirmed\nCheck-out: to be confirmed\nNights: to be confirmed\nListing: https://app.havensuitesbnb.com/stays/haven/baharini-b09", $published['text']);
         parse_str(parse_url($rows->firstWhere('partner.id', 2)['whatsapp_url'], PHP_URL_QUERY), $draft);
         $this->assertStringNotContainsString('Listing:', $draft['text'], 'Unpublished listings are not linked.');
         $response->assertSee('data-owner-request-form', false);
         $location = $this->actingAs($this->admin)->post(route('partners.ask', [$this->company->slug, 1]))->headers->get('Location');
         parse_str(parse_url($location, PHP_URL_QUERY), $asked);
-        $this->assertMatchesRegularExpression('#available\?\nSee the unit and reply: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}\nDates: to be confirmed\nListing: https://app\.havensuitesbnb\.com/stays/haven/baharini-b09$#u', $asked['text']);
+        $this->assertMatchesRegularExpression('#available\?\nSee the unit and reply: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}\nCheck-in: to be confirmed\nCheck-out: to be confirmed\nNights: to be confirmed\nListing: https://app\.havensuitesbnb\.com/stays/haven/baharini-b09$#u', $asked['text']);
     }
 
     public function test_asking_creates_a_private_request_the_owner_answers_with_one_tap(): void
@@ -177,7 +177,7 @@ class PartnerDirectoryTest extends TestCase
         $location = $ask()->assertRedirect()->headers->get('Location');
         $this->assertStringStartsWith('https://wa.me/254712000001?text=', $location);
         parse_str(parse_url($location, PHP_URL_QUERY), $query);
-        $this->assertMatchesRegularExpression('#^Hello Jane, this is Haven Suites\. Is Baharini Cottages, B09 \(2BR\) in Diani available\?\nSee the unit and reply: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}\nDates: Sat 12 Dec 2026 – Tue 15 Dec 2026 \(3 nights\)\nGuests: 2$#u', $query['text']);
+        $this->assertMatchesRegularExpression('#^Hello Jane, this is Haven Suites\. Is Baharini Cottages, B09 \(2BR\) in Diani available\?\nSee the unit and reply: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}\nCheck-in: Sat 12 Dec 2026\nCheck-out: Tue 15 Dec 2026\nNights: 3\nGuests: 2$#u', $query['text']);
         $this->assertSame($location, $ask()->headers->get('Location'), 'Asking again for the same request reuses the link.');
         $this->assertDatabaseCount('partner_availability_requests', 1);
 
@@ -189,7 +189,7 @@ class PartnerDirectoryTest extends TestCase
         $photoKey = 'listing-photos/'.$this->company->id.'/'.$listingId.'/'.str_repeat('a', 48).'.jpg';
         Storage::disk('local')->put($photoKey, 'jpeg-bytes');
         $photoId = DB::table('public_listing_photos')->insertGetId(['tenant_id' => $this->company->id, 'listing_id' => $listingId, 'storage_key' => $photoKey, 'mime_type' => 'image/jpeg', 'caption' => 'Sea-facing balcony', 'sort_order' => 0]);
-        $this->get($path)->assertOk()->assertSee('Unit number')->assertSee('B09')->assertSee('Diani')->assertSee('2 bedrooms &middot; 2 bathrooms', false)
+        $this->get($path)->assertOk()->assertSee('Unit number')->assertSee('B09')->assertSee('Diani')->assertSee('2 bedrooms &middot; 2 bathrooms', false)->assertSee('<dt>Nights</dt><dd>3</dd>', false)->assertSee('content="Availability request for Baharini Cottages, B09 (2BR): Sat 12 Dec – Tue 15 Dec 2026, 3 nights. Tap to see the unit and reply."', false)
             ->assertSee($path.'/photos/'.$photoId, false)->assertSee('Sea-facing balcony')->assertDontSee('See this apartment&#039;s public listing', false);
         $this->get($path.'/photos/'.$photoId)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
         $otherListing = DB::table('public_listings')->insertGetId(['tenant_id' => $this->company->id, 'partner_apartment_id' => 2, 'slug' => 'galu', 'title' => 'Galu',

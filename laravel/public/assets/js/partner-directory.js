@@ -33,20 +33,18 @@
         const start = parse(checkIn.value);
         const end = parse(checkOut.value);
         const people = Number.parseInt(guests?.value || '', 10);
-        const lines = [];
-        if (start && end && end > start) {
-            const nights = Math.round((end - start) / 86400000);
-            lines.push(`Dates: ${label(start)} – ${label(end)} (${nights} night${nights === 1 ? '' : 's'})`);
-        } else if (start) {
-            lines.push(`Check-in: ${label(start)}`);
-        } else {
-            lines.push('Dates: to be confirmed');
-        }
+        const validEnd = start && end && end > start ? end : (!start && end ? end : null);
+        const nights = start && validEnd ? Math.round((validEnd - start) / 86400000) : null;
+        const lines = [
+            `Check-in: ${start ? label(start) : 'to be confirmed'}`,
+            `Check-out: ${validEnd ? label(validEnd) : 'to be confirmed'}`,
+            `Nights: ${nights ?? 'to be confirmed'}`,
+        ];
         if (people > 0) {
             lines.push(`Guests: ${people}`);
         }
         if (reminder) {
-            reminder.hidden = Boolean(start);
+            reminder.hidden = Boolean(start && nights);
         }
         syncForms();
         buttons.forEach((button) => {

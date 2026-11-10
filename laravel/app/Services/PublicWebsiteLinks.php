@@ -52,15 +52,40 @@ class PublicWebsiteLinks
      */
     public static function ownerRequestLines(array $stay, ?string $link = null): array
     {
-        $lines = self::stayLines(null, $stay);
-        if (! collect($lines)->contains(fn (string $line): bool => str_starts_with($line, 'Dates:') || str_starts_with($line, 'Check-in:'))) {
-            array_unshift($lines, 'Dates: to be confirmed');
+        $checkIn = self::parseDate($stay['check_in'] ?? null);
+        $checkOut = self::parseDate($stay['check_out'] ?? null);
+        if ($checkIn && $checkOut && ! $checkOut->greaterThan($checkIn)) {
+            $checkOut = null;
+        }
+        $nights = $checkIn && $checkOut ? (int) $checkIn->diffInDays($checkOut) : null;
+        $lines = [
+            'Check-in: '.($checkIn?->format('D j M Y') ?? 'to be confirmed'),
+            'Check-out: '.($checkOut?->format('D j M Y') ?? 'to be confirmed'),
+            'Nights: '.($nights ?? 'to be confirmed'),
+        ];
+        if ((int) ($stay['guests'] ?? 0) > 0) {
+            $lines[] = 'Guests: '.(int) $stay['guests'];
         }
         if (filled($link)) {
             $lines[] = 'Listing: '.$link;
         }
 
         return $lines;
+    }
+
+    /** A strict Y-m-d date, or null for anything else (including impossible dates such as 2026-02-31). */
+    private static function parseDate(mixed $value): ?CarbonImmutable
+    {
+        if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value)) {
+            return null;
+        }
+        try {
+            $parsed = CarbonImmutable::createFromFormat('!Y-m-d', $value);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $parsed && $parsed->format('Y-m-d') === $value ? $parsed : null;
     }
 
     /** WhatsApp link for a guest following up on an enquiry, with the reference prefilled, or null without a valid number. */
@@ -230,20 +255,8 @@ class PublicWebsiteLinks
         if (filled($listingCode)) {
             $lines[] = 'Code: '.$listingCode;
         }
-        $date = static function (mixed $value): ?CarbonImmutable {
-            if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value)) {
-                return null;
-            }
-            try {
-                $parsed = CarbonImmutable::createFromFormat('!Y-m-d', $value);
-            } catch (\Throwable) {
-                return null;
-            }
-
-            return $parsed && $parsed->format('Y-m-d') === $value ? $parsed : null;
-        };
-        $checkIn = $date($stay['check_in'] ?? null);
-        $checkOut = $date($stay['check_out'] ?? null);
+        $checkIn = self::parseDate($stay['check_in'] ?? null);
+        $checkOut = self::parseDate($stay['check_out'] ?? null);
         if ($checkIn && $checkOut && $checkOut->greaterThan($checkIn)) {
             $nights = (int) $checkIn->diffInDays($checkOut);
             $lines[] = 'Dates: '.$checkIn->format('D j M Y').' – '.$checkOut->format('D j M Y').' ('.$nights.' night'.($nights === 1 ? '' : 's').')';

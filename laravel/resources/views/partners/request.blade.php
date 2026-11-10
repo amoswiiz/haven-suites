@@ -19,7 +19,9 @@
         @if(!empty($unit->unit_number))<div><dt>Unit number</dt><dd>{{ $unit->unit_number }}</dd></div>@endif
         @if(!empty($unit->location))<div><dt>Area</dt><dd>{{ $unit->location }}</dd></div>@endif
         @if($unit)<div><dt>Size</dt><dd>{{ (int) $unit->bedrooms === 0 ? 'Studio' : $unit->bedrooms.' bedroom'.((int) $unit->bedrooms === 1 ? '' : 's') }}@if($unit->bathrooms !== null) &middot; {{ $unit->bathrooms }} bathroom{{ (int) $unit->bathrooms === 1 ? '' : 's' }}@endif</dd></div>@endif
-        <div><dt>Dates</dt><dd>@if($availability->check_in && $availability->check_out){{ $date($availability->check_in) }} &rarr; {{ $date($availability->check_out) }}@elseif($availability->check_in)From {{ $date($availability->check_in) }}@else To be confirmed @endif</dd></div>
+        <div><dt>Check-in</dt><dd>{{ $date($availability->check_in) ?? 'To be confirmed' }}</dd></div>
+        <div><dt>Check-out</dt><dd>{{ $date($availability->check_out) ?? 'To be confirmed' }}</dd></div>
+        <div><dt>Nights</dt><dd>{{ $availability->check_in && $availability->check_out ? \Illuminate\Support\Carbon::parse($availability->check_in)->diffInDays(\Illuminate\Support\Carbon::parse($availability->check_out)) : 'To be confirmed' }}</dd></div>
         <div><dt>Guests</dt><dd>{{ $availability->guests ?: 'To be confirmed' }}</dd></div>
     </dl>
     @if($answered)

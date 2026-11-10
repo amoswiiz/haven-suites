@@ -1,6 +1,6 @@
 @extends('saas.layout')
 @section('title', 'Partner apartments')
-@push('scripts')<script src="{{ asset('assets/js/partner-directory.js') }}?v=2" defer></script>@endpush
+@push('scripts')<script src="{{ asset('assets/js/partner-directory.js') }}?v=3" defer></script>@endpush
 @section('content')
 @php
     $tenantSlug = app('currentTenant')->slug;
@@ -27,7 +27,7 @@
 </form>
 
 <section class="card" aria-labelledby="partner-results-heading">
-    <p class="muted" data-dates-reminder @if($hasDates) hidden @endif><strong>Add the client's dates above</strong> so they are included in each WhatsApp message. Messages update as you type.</p>
+    <p class="muted" data-dates-reminder @if($hasDates) hidden @endif><strong>Add the client's check-in and check-out dates above</strong> so each WhatsApp message gives the owner the dates and number of nights. Messages update as you type.</p>
     <h2 id="partner-results-heading">{{ $rows->count() }} {{ $rows->count() === 1 ? 'partner apartment' : 'partner apartments' }}</h2>
     @if($rows->isEmpty())
         <p class="muted">No partner apartments match. Try a nearby area, a different size, or ask your agents below.</p>

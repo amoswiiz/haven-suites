@@ -7,6 +7,7 @@ use App\Services\PublicListingCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -28,7 +29,8 @@ class PartnerRequestController extends Controller
         return response()->view('partners.request', [
             'tenant' => $tenant, 'site' => $site, 'availability' => $availability, 'code' => $code,
             'unit' => $details['unit'], 'photos' => $details['photos'], 'listingUrl' => $listingUrl,
-            'pageTitle' => 'Availability request | '.$tenant->name, 'robotsContent' => 'noindex, nofollow', 'websiteMenu' => [],
+            'pageTitle' => 'Availability request | '.$tenant->name, 'pageDescription' => $this->preview($availability),
+            'robotsContent' => 'noindex, nofollow', 'websiteMenu' => [],
         ])->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
     }
 
@@ -59,6 +61,20 @@ class PartnerRequestController extends Controller
 
         return response()->file($image['path'], ['Content-Type' => $image['mime_type'], 'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=3600', 'X-Robots-Tag' => 'noindex, nofollow']);
+    }
+
+    /** Link preview text, e.g. "Availability request for Third Avenue beach apt (1BR): Thu 26 Nov – Sun 29 Nov 2026, 3 nights". */
+    private function preview(object $availability): string
+    {
+        $in = $availability->check_in ? Carbon::parse($availability->check_in) : null;
+        $out = $availability->check_out ? Carbon::parse($availability->check_out) : null;
+        $dates = match (true) {
+            $in && $out => $in->format('D j M').' – '.$out->format('D j M Y').', '.(int) $in->diffInDays($out).' night'.((int) $in->diffInDays($out) === 1 ? '' : 's'),
+            $in !== null => 'check-in '.$in->format('D j M Y'),
+            default => 'dates to be confirmed',
+        };
+
+        return 'Availability request for '.$availability->apartment_label.': '.$dates.'. Tap to see the unit and reply.';
     }
 
     private function notFound(): Response
