@@ -31,11 +31,15 @@ class PublicListingController extends Controller
         $this->authorizeAccess();
         $tenant = app('currentTenant');
         $site = $catalog->settings($tenant);
-        $listings = DB::table('public_listings')->where('tenant_id', $tenant->id)->orderBy('title')->get();
+        $showArchived = request()->boolean('archived');
+        $archivedCount = DB::table('public_listings')->where('tenant_id', $tenant->id)->where('status', 'archived')->count();
+        $listings = DB::table('public_listings')->where('tenant_id', $tenant->id)
+            ->when($showArchived, fn ($query) => $query->where('status', 'archived'), fn ($query) => $query->where('status', '!=', 'archived'))
+            ->orderBy('title')->get();
         $publicLinks = $catalog->published($tenant)->mapWithKeys(fn (array $listing): array => [$listing['id'] => app(PublicWebsiteLinks::class)->forListing($tenant, $listing, $site)]);
 
         return view('public_listings.index', [
-            'listings' => $listings, 'site' => $site, 'publicLinks' => $publicLinks,
+            'listings' => $listings, 'site' => $site, 'publicLinks' => $publicLinks, 'showArchived' => $showArchived, 'archivedCount' => $archivedCount,
             'photoCounts' => DB::table('public_listing_photos')->where('tenant_id', $tenant->id)->selectRaw('listing_id, COUNT(*) as photos')->groupBy('listing_id')->pluck('photos', 'listing_id'),
             'apartments' => $catalog->apartments($tenant)->keyBy('reference'),
         ]);
@@ -77,6 +81,8 @@ class PublicListingController extends Controller
             'photos' => DB::table('public_listing_photos')->where('tenant_id', app('currentTenant')->id)->where('listing_id', $id)->orderBy('sort_order')->orderBy('id')->get(),
             'amenities' => PublicListingCatalog::AMENITIES,
             'videos' => app(YouTubeListingVideos::class)->forForm($listing->youtube_videos ?? null),
+            'owner' => $catalog->ownerContact(app('currentTenant'), $listing->unit_id !== null ? (int) $listing->unit_id : null,
+                ($listing->partner_apartment_id ?? null) !== null ? (int) $listing->partner_apartment_id : null),
             ...$this->placeSuggestions(),
         ]);
     }
@@ -168,6 +174,60 @@ class PublicListingController extends Controller
         }
 
         return $this->saved($request, route($request->boolean('settings_page') ? 'public-listings.settings' : 'public-listings.index', $tenant->slug), 'Public site settings saved.');
+    }
+
+    /** Hide a listing from the website and the main listings view, keeping it and its history for later. */
+    public function archive(string $tenant, int $id): RedirectResponse
+    {
+        $this->authorizeAccess();
+        $this->changeStatus($id, 'archived', 'archived');
+
+        return redirect()->route('public-listings.index', $tenant)->with('success', 'Listing archived. It is hidden from the website and can be restored from the archived listings.');
+    }
+
+    /** Bring an archived listing back as a private draft for review before publishing again. */
+    public function restore(string $tenant, int $id): RedirectResponse
+    {
+        $this->authorizeAccess();
+        $this->changeStatus($id, 'draft', 'restored');
+
+        return redirect()->route('public-listings.edit', ['tenant' => $tenant, 'id' => $id])->with('success', 'Listing restored as a private draft. Review it and publish when ready.');
+    }
+
+    /** Permanently delete a listing that no enquiry refers to, with its photos. */
+    public function destroy(string $tenant, int $id, Request $request): RedirectResponse
+    {
+        $this->authorizeAccess();
+        $request->validate(['confirm_delete' => 'accepted'], ['confirm_delete.accepted' => 'Tick the box to confirm you want to delete this listing permanently.']);
+        $company = app('currentTenant');
+        $photos = DB::transaction(function () use ($company, $id): array {
+            $listing = DB::table('public_listings')->where('tenant_id', $company->id)->where('id', $id)->lockForUpdate()->firstOrFail();
+            if (DB::table('sales_leads')->where('tenant_id', $company->id)->where('public_listing_id', $id)->exists()) {
+                throw ValidationException::withMessages(['confirm_delete' => 'Enquiries refer to this listing, so it cannot be deleted. Archive it instead to hide it and keep the enquiry history.']);
+            }
+            $photos = DB::table('public_listing_photos')->where('tenant_id', $company->id)->where('listing_id', $id)->pluck('storage_key')->all();
+            DB::table('public_listing_photos')->where('tenant_id', $company->id)->where('listing_id', $id)->delete();
+            DB::table('public_listings')->where('tenant_id', $company->id)->where('id', $id)->delete();
+            $this->audit($id, 'deleted', $listing, (object) ['deleted' => true]);
+
+            return $photos;
+        });
+        foreach ($photos as $path) {
+            if (is_string($path) && str_starts_with($path, 'listing-photos/'.$company->id.'/')) {
+                Storage::disk('local')->delete($path);
+            }
+        }
+
+        return redirect()->route('public-listings.index', $tenant)->with('success', 'Listing deleted permanently.');
+    }
+
+    private function changeStatus(int $id, string $status, string $action): void
+    {
+        DB::transaction(function () use ($id, $status, $action): void {
+            $before = DB::table('public_listings')->where('tenant_id', app('currentTenant')->id)->where('id', $id)->lockForUpdate()->firstOrFail();
+            DB::table('public_listings')->where('id', $before->id)->update(['status' => $status, 'version' => (int) $before->version + 1, 'updated_at' => now()]);
+            $this->audit($id, $action, $before, DB::table('public_listings')->find($before->id));
+        });
     }
 
     public function photo(string $tenant, int $id, int $photo, PublicListingCatalog $catalog): BinaryFileResponse

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\EnquiryAcknowledgements;
 use App\Services\EnquiryTracking;
 use App\Services\PublicListingCatalog;
+use App\Services\PublicWebsiteLinks;
 use App\Services\SalesPipelineSummary;
 use App\Services\TaskAccess;
 use App\Services\WhatsAppEnquiryReader;
@@ -196,6 +197,7 @@ class SalesController extends Controller
         $publicRequestedUnit = null;
         $publicRequestedPartner = null;
         $publicFollowupTask = null;
+        $ownerContact = null;
         if (in_array($lead->public_origin ?? null, ['website', 'staff'], true)) {
             $publicListing = app(PublicListingCatalog::class)->published(app('currentTenant'))->firstWhere('id', (int) $lead->public_listing_id);
             if ($lead->public_unit_id && empty($lead->public_partner_apartment_id)) {
@@ -205,6 +207,15 @@ class SalesController extends Controller
                 $publicRequestedPartner = DB::connection('tenant')->table('partner_apartments')
                     ->where('id', $lead->public_partner_apartment_id)
                     ->first(['id', 'apartment_name', 'building_name', 'unit_number', 'location', 'status']);
+            }
+            if (auth()->user()->can('properties.manage') || auth()->user()->can('reservations.manage')) {
+                $ownerContact = app(PublicListingCatalog::class)->ownerContact(app('currentTenant'),
+                    $lead->public_unit_id && empty($lead->public_partner_apartment_id) ? (int) $lead->public_unit_id : null,
+                    ! empty($lead->public_partner_apartment_id) && ! $lead->public_unit_id ? (int) $lead->public_partner_apartment_id : null);
+                if ($ownerContact) {
+                    $ownerContact['whatsapp_url'] = app(PublicWebsiteLinks::class)->ownerWhatsappUrl($ownerContact, app('currentTenant'),
+                        (string) $lead->unit_preference, array_filter(['check_in' => $lead->check_in, 'check_out' => $lead->check_out, 'guests' => $lead->guests]));
+                }
             }
             $task = DB::table('task_items')->where('tenant_id', app('currentTenant')->id)->where('id', $lead->public_task_id)->first();
             if ($task && app(TaskAccess::class)->visible(auth()->user(), $task)) {
@@ -259,7 +270,7 @@ class SalesController extends Controller
             $eligibleInvoices = $query->select('i.id', 'i.invoice_number', 'i.customer_name', 'i.issue_date', 'i.total_amount', 'i.currency', 'i.status', 'r.id as reservation_id', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('i.id')->limit(50)->get();
         }
 
-        return view('sales.show', ['publicListing' => $publicListing, 'publicRequestedUnit' => $publicRequestedUnit, 'publicRequestedPartner' => $publicRequestedPartner, 'publicFollowupTask' => $publicFollowupTask, 'acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'tracking' => app(EnquiryTracking::class)->forLead(app('currentTenant'), $id),
+        return view('sales.show', ['publicListing' => $publicListing, 'publicRequestedUnit' => $publicRequestedUnit, 'publicRequestedPartner' => $publicRequestedPartner, 'publicFollowupTask' => $publicFollowupTask, 'ownerContact' => $ownerContact, 'acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'tracking' => app(EnquiryTracking::class)->forLead(app('currentTenant'), $id),
             'resendBlockedReason' => auth()->user()->can('sales.manage') ? app(EnquiryAcknowledgements::class)->resendBlockedReason(app('currentTenant'), $lead) : 'Only sales managers can resend the acknowledgement.', 'eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
     }
 

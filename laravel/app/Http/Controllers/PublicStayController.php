@@ -345,7 +345,13 @@ class PublicStayController extends Controller
             $callerEnquiry = route('sales.create', $tenant->slug).'?'.http_build_query(['listing' => $listing['id']] + $this->enquiryDefaults(request()), '', '&', PHP_QUERY_RFC3986);
         }
 
+        $owner = isset($listing['id']) ? $catalog->ownerContact($tenant, $listing['unit_id'] ?? null, $listing['partner_apartment_id'] ?? null) : null;
+        if ($owner) {
+            $owner['whatsapp_url'] = app(PublicWebsiteLinks::class)->ownerWhatsappUrl($owner, $tenant, $listing['title'], $this->enquiryDefaults(request()));
+        }
+
         return [
+            'owner' => $owner,
             'caller_enquiry_url' => $callerEnquiry,
             'edit_url' => isset($listing['id']) ? route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $listing['id']]) : null,
             'listings_url' => route('public-listings.index', $tenant->slug),

@@ -7,6 +7,8 @@
 @php($selectedReference = old('apartment_ref', old('unit_id') ? 'unit:'.old('unit_id') : (old('partner_apartment_id') ? 'partner:'.old('partner_apartment_id') : $listingReference)))
 <p><a href="{{ route('public-listings.index', $tenantSlug) }}">&larr; Public listings</a></p>
 <div class="split"><div><h1>{{ $listing ? 'Edit public listing' : 'Create public listing' }}</h1><p class="muted">Describe the stay guests will see. Owner details and internal unit notes are never published.</p></div>@if($listing && \Illuminate\Support\Facades\Route::has('public-listings.preview'))<a class="button secondary" href="{{ route('public-listings.preview', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}" target="_blank" rel="noopener">Preview listing</a>@endif</div>
+@if($listing && $listing->status === 'archived')<div class="card" role="status"><strong>This listing is archived and hidden from the website.</strong><p class="muted">Restore it to work on it again. It comes back as a private draft.</p><form method="post" action="{{ route('public-listings.restore', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}">@csrf<button type="submit">Restore listing</button></form></div>@endif
+@if($listing && !empty($owner))<section class="card" aria-labelledby="owner-contact-heading"><h2 id="owner-contact-heading">{{ $owner['kind'] === 'partner' ? 'Partner owner contact' : 'Owner contact' }} <span class="pill">Staff only</span></h2><p><strong>{{ $owner['name'] ?? 'Name not recorded' }}</strong>@if($owner['phone'])<br>@if($owner['tel'])<a href="tel:{{ $owner['tel'] }}">{{ $owner['phone'] }}</a>@else{{ $owner['phone'] }}@endif @endif @if($owner['whatsapp']) &middot; <a href="{{ app(\App\Services\PublicWebsiteLinks::class)->ownerWhatsappUrl($owner, app('currentTenant'), $listing->title) }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>@endif @if($owner['email'])<br><a href="mailto:{{ $owner['email'] }}">{{ $owner['email'] }}</a>@endif</p><p class="muted">From the {{ $owner['kind'] === 'partner' ? 'partner apartment' : 'apartment' }} record. Never shown to guests. Update it in the apartment record.</p></section>@endif
 <form method="post" enctype="multipart/form-data" data-listing-save-form action="{{ $listing ? route('public-listings.update', ['tenant' => $tenantSlug, 'id' => $listing->id]) : route('public-listings.store', $tenantSlug) }}">
     @csrf
     @if($listing)<input type="hidden" name="version" value="{{ old('version', $listing->version) }}">@endif
@@ -52,4 +54,17 @@
     @include('public_listings.save_progress')
     <div class="actions"><button type="submit">Save listing</button><a href="{{ route('public-listings.index', $tenantSlug) }}">Cancel</a></div>
 </form>
+@if($listing && $listing->status !== 'archived')
+<details class="card" id="remove-listing"@if($errors->has('confirm_delete')) open @endif><summary>Archive or delete this listing</summary>
+    <p><strong>Archive</strong> hides the listing from the website and from your main listings. Its photos, details and enquiry history are kept, and you can restore it at any time.</p>
+    <form method="post" action="{{ route('public-listings.archive', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}">@csrf<button type="submit" class="secondary">Archive listing</button></form>
+    <hr>
+    <p><strong>Delete</strong> permanently removes the listing and its photos. This cannot be undone. Listings that enquiries refer to can only be archived.</p>
+    <form method="post" action="{{ route('public-listings.destroy', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}">@csrf
+        <label><input type="checkbox" name="confirm_delete" value="1" style="width:auto"> I understand this permanently deletes “{{ $listing->title }}” and its photos.</label>
+        @error('confirm_delete')<p class="error" role="alert">{{ $message }}</p>@enderror
+        <div class="actions"><button type="submit" class="danger">Delete listing permanently</button></div>
+    </form>
+</details>
+@endif
 @endsection

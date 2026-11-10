@@ -66,6 +66,9 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
         Route::post('prepare', [PublicListingController::class, 'prepare'])->middleware('throttle:5,1')->name('prepare');
         Route::get('{id}/edit', [PublicListingController::class, 'edit'])->whereNumber('id')->name('edit');
         Route::post('{id}', [PublicListingController::class, 'update'])->whereNumber('id')->middleware('throttle:20,1')->name('update');
+        Route::post('{id}/archive', [PublicListingController::class, 'archive'])->whereNumber('id')->name('archive');
+        Route::post('{id}/restore', [PublicListingController::class, 'restore'])->whereNumber('id')->name('restore');
+        Route::post('{id}/delete', [PublicListingController::class, 'destroy'])->whereNumber('id')->middleware('throttle:10,1')->name('destroy');
         Route::get('{id}/preview', [PublicStayController::class, 'preview'])->whereNumber('id')->name('preview');
         Route::get('{id}/photos/{photo}', [PublicListingController::class, 'photo'])->whereNumber(['id', 'photo'])->name('photo');
     });

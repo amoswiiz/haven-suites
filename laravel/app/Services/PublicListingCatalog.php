@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -97,6 +98,48 @@ class PublicListingCatalog
     {
         return $this->units($tenant)->map(fn (object $unit): object => $this->managedApartment($unit))
             ->concat($this->loadPartners($tenant))->sortBy(fn (object $apartment): string => $apartment->property_name.' '.$apartment->unit_number)->values();
+    }
+
+    /**
+     * Private owner contact for the apartment behind a listing or enquiry, for signed-in staff only. Never project
+     * this into public listing data.
+     *
+     * @return array{name: ?string, phone: ?string, email: ?string, kind: string, tel: ?string, whatsapp: ?string}|null
+     */
+    public function ownerContact(Tenant $tenant, ?int $unitId, ?int $partnerId): ?array
+    {
+        [$table, $id, $kind] = match (true) {
+            $partnerId !== null && $unitId === null => ['partner_apartments', $partnerId, 'partner'],
+            $unitId !== null && $partnerId === null => ['units', $unitId, 'managed'],
+            default => [null, null, null],
+        };
+        if ($table === null) {
+            return null;
+        }
+        $config = config('database.connections.tenant');
+        $config['database'] = $tenant->database_name;
+        $db = DB::build($config);
+        try {
+            $schema = $db->getSchemaBuilder();
+            if (! $schema->hasTable($table)) {
+                return null;
+            }
+            $columns = array_values(array_filter(['owner_name', 'owner_phone', 'owner_email'], fn (string $column): bool => $schema->hasColumn($table, $column)));
+            $row = $columns ? $db->table($table)->where('id', $id)->first($columns) : null;
+        } finally {
+            $db->disconnect();
+        }
+        $name = trim((string) ($row->owner_name ?? '')) ?: null;
+        $phone = trim((string) ($row->owner_phone ?? '')) ?: null;
+        $email = filter_var(trim((string) ($row->owner_email ?? '')), FILTER_VALIDATE_EMAIL) ?: null;
+        if (! $name && ! $phone && ! $email) {
+            return null;
+        }
+        $international = PhoneNumber::normalize($phone, mobileOnly: false);
+        $mobile = PhoneNumber::normalize($phone);
+
+        return ['name' => $name, 'phone' => $phone, 'email' => $email, 'kind' => $kind,
+            'tel' => $international, 'whatsapp' => $mobile ? substr($mobile, 1) : null];
     }
 
     private function managedApartment(object $unit): object

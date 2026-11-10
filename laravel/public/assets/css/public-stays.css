@@ -137,3 +137,4 @@
 .stay-staff-bar a.is-primary{color:#13202c;background:var(--accent);padding:4px 12px;border-radius:6px;font-weight:700}
 .stay-staff-bar a.is-primary:hover{background:var(--accent-hover);color:#13202c;text-decoration:none}
 .stay-staff-bar-label{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.7rem;color:#a7aaad;margin-right:6px}
+.stay-staff-owner{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-left:auto}

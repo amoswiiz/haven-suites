@@ -35,7 +35,7 @@
     @endif
     <meta name="theme-color" content="#004274">
     @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=8">
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=9">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">
@@ -48,6 +48,14 @@
             <a href="{{ $staffTools['listings_url'] }}">All listings</a>
             <a href="{{ $staffTools['settings_url'] }}">Website settings</a>
             <a href="{{ $staffTools['dashboard_url'] }}">Dashboard</a>
+            @if(!empty($staffTools['owner']))
+                @php($owner = $staffTools['owner'])
+                <span class="stay-staff-owner"><span class="stay-staff-bar-label">{{ $owner['kind'] === 'partner' ? 'Partner owner' : 'Owner' }}</span>{{ $owner['name'] ?? 'Name not recorded' }}
+                    @if($owner['tel'])<a href="tel:{{ $owner['tel'] }}">Call {{ $owner['phone'] }}</a>@elseif($owner['phone'])<span>{{ $owner['phone'] }}</span>@endif
+                    @if(!empty($owner['whatsapp_url']))<a href="{{ $owner['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>@endif
+                    @if($owner['email'])<a href="mailto:{{ $owner['email'] }}">{{ $owner['email'] }}</a>@endif
+                </span>
+            @endif
         </nav>
     @endif
     <div class="stay-header-wrap">

@@ -267,4 +267,51 @@ class PublicListingAdminTest extends TestCase
         $this->assertDatabaseCount('public_listing_photos', 0);
         $this->assertSame([], Storage::disk('local')->allFiles());
     }
+
+    public function test_listings_can_be_archived_restored_and_hidden_from_the_website(): void
+    {
+        $this->enableSite();
+        $listing = $this->createListing();
+        $tenant = $this->company->slug;
+
+        $this->post(route('public-listings.archive', [$tenant, $listing->id]))->assertRedirect(route('public-listings.index', $tenant));
+        $this->assertSame('archived', DB::table('public_listings')->find($listing->id)->status);
+        $this->get(route('public-listings.index', $tenant))->assertOk()->assertDontSee($listing->title)->assertSee('Show archived listings (1)');
+        $this->get(route('public-listings.index', $tenant).'?archived=1')->assertOk()->assertSee($listing->title)->assertSee('Restore listing');
+        $this->get(route('public-stays.show', [$tenant, $listing->slug]))->assertNotFound();
+        $this->get(route('public-listings.edit', [$tenant, $listing->id]))->assertOk()->assertSee('This listing is archived')->assertDontSee('Archive or delete this listing');
+
+        $this->post(route('public-listings.restore', [$tenant, $listing->id]))->assertRedirect(route('public-listings.edit', ['tenant' => $tenant, 'id' => $listing->id]));
+        $this->assertSame('draft', DB::table('public_listings')->find($listing->id)->status);
+        $this->assertSame(['archived', 'restored'], DB::table('public_listing_audit_events')->where('listing_id', $listing->id)->whereIn('action', ['archived', 'restored'])->orderBy('id')->pluck('action')->all());
+    }
+
+    public function test_deleting_needs_confirmation_removes_photos_and_is_refused_when_enquiries_refer_to_the_listing(): void
+    {
+        $listing = $this->createListing();
+        $tenant = $this->company->slug;
+        $path = 'listing-photos/'.$this->company->id.'/'.$listing->id.'/photo.jpg';
+        Storage::disk('local')->put($path, 'jpeg');
+        DB::table('public_listing_photos')->insert(['tenant_id' => $this->company->id, 'listing_id' => $listing->id, 'storage_key' => $path, 'mime_type' => 'image/jpeg', 'sort_order' => 0]);
+
+        $this->post(route('public-listings.destroy', [$tenant, $listing->id]))->assertSessionHasErrors('confirm_delete');
+        DB::table('sales_leads')->insert(['tenant_id' => $this->company->id, 'name' => 'Guest', 'source' => 'website', 'channel' => 'phone', 'assigned_to' => $this->admin->id,
+            'guests' => 1, 'stage' => 'new', 'next_action' => 'Call', 'public_listing_id' => $listing->id, 'created_at' => now(), 'updated_at' => now()]);
+        $this->post(route('public-listings.destroy', [$tenant, $listing->id]), ['confirm_delete' => 1])->assertSessionHasErrors('confirm_delete');
+        $this->assertDatabaseHas('public_listings', ['id' => $listing->id]);
+
+        DB::table('sales_leads')->where('public_listing_id', $listing->id)->delete();
+        $this->post(route('public-listings.destroy', [$tenant, $listing->id]), ['confirm_delete' => 1])->assertRedirect(route('public-listings.index', $tenant));
+        $this->assertDatabaseMissing('public_listings', ['id' => $listing->id]);
+        $this->assertDatabaseMissing('public_listing_photos', ['listing_id' => $listing->id]);
+        Storage::disk('local')->assertMissing($path);
+        $this->assertDatabaseHas('public_listing_audit_events', ['listing_id' => $listing->id, 'action' => 'deleted']);
+    }
+
+    public function test_editor_shows_the_owner_contact_to_staff_only(): void
+    {
+        $listing = $this->createListing();
+        $this->get(route('public-listings.edit', [$this->company->slug, $listing->id]))->assertOk()
+            ->assertSee('Owner contact')->assertSee('Staff only')->assertSee('PRIVATE-OWNER-PHONE');
+    }
 }

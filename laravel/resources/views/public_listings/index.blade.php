@@ -26,7 +26,7 @@
         <div class="lm-notice" role="status"><strong>Your public website is offline.</strong> You can prepare and preview listings here. Choose your guest contact details and enquiry assignee in <a href="{{ $settingsUrl }}">Website settings</a>, then enable the site when ready.</div>
     @endunless
     <section class="lm-listings" aria-labelledby="listings-heading">
-        <div class="lm-section-heading"><h2 id="listings-heading">Your listings</h2><p class="muted">Edit details, review a private preview, or open the guest experience.</p></div>
+        <div class="lm-section-heading"><h2 id="listings-heading">{{ ($showArchived ?? false) ? 'Archived listings' : 'Your listings' }}</h2><p class="muted">{{ ($showArchived ?? false) ? 'Archived listings are hidden from the website. Restore one to edit and publish it again.' : 'Edit details, review a private preview, or open the guest experience.' }} @if($showArchived ?? false)<a href="{{ route('public-listings.index', $tenantSlug) }}">Back to current listings</a>@elseif(($archivedCount ?? 0) > 0)<a href="{{ route('public-listings.index', $tenantSlug) }}?archived=1">Show archived listings ({{ $archivedCount }})</a>@endif</p></div>
         @forelse($listings as $listing)
             @php
                 $reference = $listing->unit_id !== null ? 'unit:'.$listing->unit_id : 'partner:'.$listing->partner_apartment_id;
@@ -38,6 +38,7 @@
                     !$site?->enabled => 'Enable the public website in Website settings to share this listing.',
                     $listing->status === 'draft' => 'This draft is private. Finish the details and publish it to enable guest links.',
                     $listing->status === 'paused' => 'This listing is paused. Publish it again to enable guest links.',
+                    $listing->status === 'archived' => 'This listing is archived and hidden from the website. Restore it to edit and publish it again.',
                     !$apartment || $apartment->status !== 'active' => 'The linked apartment is unavailable or inactive.',
                     $incomplete => 'Complete the description, destination, guest capacity and minimum stay.',
                     $photoCount < 1 => 'Add at least one apartment photo before sharing publicly.',
@@ -52,7 +53,7 @@
                 </div>
                 <div class="lm-listing-controls">
                     <div class="lm-actions">
-                        <a class="button" href="{{ route('public-listings.edit', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}">Edit listing</a>
+                        @if($listing->status === 'archived')<form method="post" action="{{ route('public-listings.restore', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}" class="inline">@csrf<button type="submit">Restore listing</button></form>@else<a class="button" href="{{ route('public-listings.edit', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}">Edit listing</a>@endif
                         <a class="button secondary" href="{{ route('public-listings.preview', ['tenant' => $tenantSlug, 'id' => $listing->id]) }}" target="_blank" rel="noopener noreferrer">Private preview &nearr;</a>
                     </div>
                     <div class="lm-guest-actions">

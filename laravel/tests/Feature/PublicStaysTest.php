@@ -220,6 +220,12 @@ class PublicStaysTest extends TestCase
         $otherAdmin->tenants()->attach(Tenant::factory()->create(['slug' => 'other-company', 'active' => true]), ['roles' => json_encode(['admin']), 'legacy_user_id' => 3]);
         $this->actingAs($otherAdmin)->get($page)->assertOk()->assertDontSee('Staff tools');
 
+        $partner = $this->partnerListing();
+        $partnerPage = route('public-stays.show', [$this->company->slug, $partner['slug']]);
+        $this->actingAs($this->admin)->get($partnerPage)->assertOk()->assertSee('Partner owner')->assertSee('SECRET-PARTNER-OWNER')->assertSee('private-partner@example.test');
+        $this->actingAs($cleaner)->get($partnerPage)->assertOk()->assertDontSee('SECRET-PARTNER-OWNER')->assertDontSee('private-partner@example.test');
+        auth()->logout();
+        $this->get($partnerPage)->assertOk()->assertDontSee('SECRET-PARTNER-OWNER')->assertDontSee('SECRET-PARTNER-PHONE')->assertDontSee('private-partner@example.test');
         $this->admin->update(['active' => false]);
         $this->actingAs($this->admin->fresh())->get($page)->assertOk()->assertDontSee('Staff tools');
     }

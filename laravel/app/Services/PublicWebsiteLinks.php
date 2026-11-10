@@ -19,6 +19,23 @@ class PublicWebsiteLinks
     /** Menu destinations and their labels in the Website settings menu editor. */
     public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
 
+    /**
+     * WhatsApp link for staff to ask an apartment owner about availability, with the apartment and any stay details.
+     *
+     * @param  array{name: ?string, whatsapp: ?string}|null  $owner
+     * @param  array{check_in?: string, check_out?: string, guests?: int|string}  $stay
+     */
+    public function ownerWhatsappUrl(?array $owner, Tenant $tenant, string $apartment, array $stay = []): ?string
+    {
+        if (empty($owner['whatsapp'])) {
+            return null;
+        }
+        $firstName = trim(explode(' ', trim((string) ($owner['name'] ?? '')))[0] ?? '');
+        $message = implode("\n", ['Hello'.($firstName !== '' ? ' '.$firstName : '').', this is '.$tenant->name.'. Is '.$apartment.' available?', ...self::stayLines(null, $stay)]);
+
+        return 'https://wa.me/'.$owner['whatsapp'].'?text='.rawurlencode($message);
+    }
+
     /** WhatsApp link for a guest following up on an enquiry, with the reference prefilled, or null without a valid number. */
     public function forEnquiry(Tenant $tenant, ?object $site, string $reference): ?string
     {
