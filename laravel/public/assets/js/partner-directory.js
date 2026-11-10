@@ -1,13 +1,24 @@
 (() => {
     'use strict';
     const buttons = document.querySelectorAll('[data-owner-request]');
+    const forms = document.querySelectorAll('[data-owner-request-form]');
     const checkIn = document.getElementById('partner-check-in');
     const checkOut = document.getElementById('partner-check-out');
     const guests = document.getElementById('partner-guests');
     const reminder = document.querySelector('[data-dates-reminder]');
-    if (!buttons.length || !checkIn || !checkOut) {
+    if ((!buttons.length && !forms.length) || !checkIn || !checkOut) {
         return;
     }
+    // Partner requests are created on the server, so keep each form's dates and guests in step with the search.
+    const syncForms = () => {
+        const start = parse(checkIn.value);
+        const end = parse(checkOut.value);
+        forms.forEach((form) => {
+            form.elements.check_in.value = start ? checkIn.value : '';
+            form.elements.check_out.value = start && end && end > start ? checkOut.value : '';
+            form.elements.guests.value = Number.parseInt(guests?.value || '', 10) > 0 ? guests.value : '';
+        });
+    };
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const parse = (value) => {
@@ -37,6 +48,7 @@
         if (reminder) {
             reminder.hidden = Boolean(start);
         }
+        syncForms();
         buttons.forEach((button) => {
             const { waNumber, waGreeting, waLink } = button.dataset;
             if (!waNumber || !waGreeting) {

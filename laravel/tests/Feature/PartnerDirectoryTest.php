@@ -162,6 +162,46 @@ class PartnerDirectoryTest extends TestCase
         $this->assertSame("Hello Jane, this is Haven Suites. Is Baharini Cottages, B09 (2BR) available?\nDates: to be confirmed\nListing: https://app.havensuitesbnb.com/stays/haven/baharini-b09", $published['text']);
         parse_str(parse_url($rows->firstWhere('partner.id', 2)['whatsapp_url'], PHP_URL_QUERY), $draft);
         $this->assertStringNotContainsString('Listing:', $draft['text'], 'Unpublished listings are not linked.');
-        $response->assertSee('data-wa-link="https://app.havensuitesbnb.com/stays/haven/baharini-b09"', false)->assertSee('data-wa-greeting="Hello Jane', false);
+        $response->assertSee('data-owner-request-form', false);
+        $location = $this->actingAs($this->admin)->post(route('partners.ask', [$this->company->slug, 1]))->headers->get('Location');
+        parse_str(parse_url($location, PHP_URL_QUERY), $asked);
+        $this->assertStringContainsString("Dates: to be confirmed\nListing: https://app.havensuitesbnb.com/stays/haven/baharini-b09\nReply with one tap: https://app.havensuitesbnb.com/p/", $asked['text']);
+    }
+
+    public function test_asking_creates_a_private_request_the_owner_answers_with_one_tap(): void
+    {
+        config(['app.url' => 'https://app.havensuitesbnb.com']);
+        $ask = fn () => $this->actingAs($this->admin)->post(route('partners.ask', [$this->company->slug, 1]), ['check_in' => '2026-12-12', 'check_out' => '2026-12-15', 'guests' => 2]);
+
+        $location = $ask()->assertRedirect()->headers->get('Location');
+        $this->assertStringStartsWith('https://wa.me/254712000001?text=', $location);
+        parse_str(parse_url($location, PHP_URL_QUERY), $query);
+        $this->assertMatchesRegularExpression('#^Hello Jane, this is Haven Suites\. Is Baharini Cottages, B09 \(2BR\) available\?\nDates: Sat 12 Dec 2026 – Tue 15 Dec 2026 \(3 nights\)\nGuests: 2\nReply with one tap: https://app\.havensuitesbnb\.com/p/[A-Za-z0-9_-]{12}$#u', $query['text']);
+        $this->assertSame($location, $ask()->headers->get('Location'), 'Asking again for the same request reuses the link.');
+        $this->assertDatabaseCount('partner_availability_requests', 1);
+
+        $path = parse_url(substr($query['text'], strrpos($query['text'], 'https://')), PHP_URL_PATH);
+        $this->get($path)->assertOk()->assertSee('Baharini Cottages, B09 (2BR)')->assertSee('Sat 12 Dec 2026')->assertSee("Yes, it's available", false)
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow')->assertDontSee('+254712000001')->assertDontSee('jane@example.test');
+        $this->post($path, ['response' => 'maybe'])->assertSessionHasErrors('response');
+        $this->post($path, ['response' => 'available', 'nightly_price' => 9000, 'note' => 'Check-in from 2 pm'])->assertRedirect($path);
+        $this->get($path)->assertOk()->assertSee('Your reply: Available')->assertSee('9,000');
+
+        $this->search(['area' => 'Diani', 'bedrooms' => '2', 'check_in' => '2026-12-12', 'check_out' => '2026-12-15'])->assertOk()
+            ->assertSee('Owner says available')->assertSee('KES 9,000/night')->assertSee('Check-in from 2 pm')->assertSee('data-owner-request-form', false);
+
+        DB::table('partner_availability_requests')->update(['expires_at' => now()->subMinute()]);
+        $this->get($path)->assertNotFound();
+        $this->get('/p/AAAAAAAAAAAA')->assertNotFound();
+    }
+
+    public function test_owners_without_a_mobile_number_cannot_be_asked_and_labels_skip_repeated_names(): void
+    {
+        $this->actingAs($this->admin)->from(route('partners.index', $this->company->slug))->post(route('partners.ask', [$this->company->slug, 3]))
+            ->assertRedirect(route('partners.index', $this->company->slug))->assertSessionHasErrors('partner');
+        $this->assertDatabaseCount('partner_availability_requests', 0);
+
+        DB::connection('tenant')->table('partner_apartments')->where('id', 4)->update(['apartment_name' => 'Golden Sand Resort', 'building_name' => 'golden sand resort', 'unit_number' => 'C017', 'bedrooms' => 1]);
+        $this->assertSame('Golden Sand Resort, C017 (1BR)', $this->search(['q' => 'C017'])->viewData('rows')->first()['label']);
     }
 }

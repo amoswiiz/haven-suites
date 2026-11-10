@@ -2,6 +2,7 @@
 
 require __DIR__.'/kyc_short.php';
 require __DIR__.'/enquiry_tracking.php';
+require __DIR__.'/partner_requests.php';
 require __DIR__.'/public_stays.php';
 
 use App\Http\Controllers\AuthController;

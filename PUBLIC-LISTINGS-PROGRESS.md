@@ -10,6 +10,28 @@ The prepare preview showed only `0d4f2e2` files, so the earlier pilot
 `/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
 `chmod 755`.
 
+## 10 November: listings archive, owner contacts, partner directory and requests
+
+- Listings: archive (hidden, restorable as draft), delete (confirmed, refused while
+  enquiries refer to it, photos removed after commit); audited (`ac90ee8`).
+- Owner contacts (partner/unit records) for staff only: listing editor, public
+  staff bar, enquiry pages (`ac90ee8`).
+- Partner apartments page (`/t/{tenant}/partners`, sidebar Reservations &
+  Guests; view `availability.view`, edit `reservations.manage`): search by area,
+  bedrooms, dates, guests; booked-by-us flag; agents; add/edit partners (`b007982`).
+- Availability requests: "Ask on WhatsApp" POSTs to `partners.ask`, which creates
+  or reuses (same partner/dates/guests within a day) a private request
+  (`partner_availability_requests`, migration
+  `2026_11_10_171138_create_partner_availability_requests_table`, 12-character
+  hashed code, 14 days) and opens WhatsApp with dates (or "to be confirmed"),
+  guests, the published listing link if any, and "Reply with one tap" link
+  `/p/{code}`. Owners answer Available / Not available with optional nightly
+  price and note; the partner list shows the latest reply. Labels skip repeated
+  names (e.g. "Golden Sand Resort, C017 (1BR)").
+- Live check: no listings were published on the live site yet, so listing links
+  only appear once listings are published.
+- Full suite 605/608 (same three pre-existing failures).
+
 ## 10 November: WhatsApp dates, staff bar, caller and WhatsApp enquiries
 
 - WhatsApp enquiry messages include the listing code, dates (with nights) and

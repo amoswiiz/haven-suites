@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tenant;
+use App\Services\PartnerAvailabilityRequests;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Support\CompanyModules;
@@ -47,7 +49,8 @@ class PartnerDirectoryController extends Controller
         $stay = array_filter(['check_in' => $filters['check_in'] ?? null, 'check_out' => $filters['check_out'] ?? null, 'guests' => $filters['guests'] ?? null]);
         $links = app(PublicWebsiteLinks::class);
         $siteEnabled = app(PublicListingCatalog::class)->site($tenant) !== null;
-        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $siteEnabled): array {
+        $latest = app(PartnerAvailabilityRequests::class)->latestFor($tenant, $partners->pluck('id')->map(fn ($id): int => (int) $id)->all(), $filters['check_in'] ?? null, $filters['check_out'] ?? null);
+        $rows = $partners->map(function (object $partner) use ($booked, $listings, $stay, $links, $tenant, $siteEnabled, $latest): array {
             $mobile = PhoneNumber::normalize($partner->owner_phone);
             $label = $this->label($partner);
             $listing = $listings->get($partner->id);
@@ -59,7 +62,7 @@ class PartnerDirectoryController extends Controller
                 'partner' => $partner, 'label' => $label, 'tel' => PhoneNumber::normalize($partner->owner_phone, mobileOnly: false),
                 'whatsapp_url' => $links->ownerWhatsappUrl($owner, $tenant, $label, $stay, null, $link),
                 'whatsapp_number' => $owner['whatsapp'], 'greeting' => $links->ownerGreeting($owner, $tenant, $label), 'link' => $link,
-                'booked' => in_array((int) $partner->id, $booked, true), 'listing' => $listing,
+                'booked' => in_array((int) $partner->id, $booked, true), 'listing' => $listing, 'latest' => $latest->get($partner->id),
             ];
         });
         $agents = CompanyModules::enabled('agents') && auth()->user()->can('agents.view')
@@ -80,6 +83,43 @@ class PartnerDirectoryController extends Controller
             'areas' => $db->table('partner_apartments')->whereNotNull('location')->distinct()->orderBy('location')->pluck('location'),
             'canEdit' => auth()->user()->can('reservations.manage'),
         ]);
+    }
+
+    /**
+     * Create (or reuse) a private availability request for the owner and open WhatsApp with it, the stay details,
+     * the listing link when published, and the one-tap reply link.
+     */
+    public function ask(string $tenant, int $id, Request $request): RedirectResponse
+    {
+        $stay = array_filter($request->validate(['check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|date_format:Y-m-d|after:check_in',
+            'guests' => 'nullable|integer|min:1|max:100']));
+        $company = app('currentTenant');
+        $partner = DB::connection('tenant')->table('partner_apartments')->where('id', $id)->firstOrFail();
+        $mobile = PhoneNumber::normalize($partner->owner_phone);
+        if (! $mobile) {
+            return back()->withErrors(['partner' => 'This owner has no WhatsApp number. Add a mobile number to the partner apartment first.']);
+        }
+        $label = $this->label($partner);
+        $availability = app(PartnerAvailabilityRequests::class)->issue($company, $partner, $label, $stay, auth()->id());
+        $links = app(PublicWebsiteLinks::class);
+        $message = implode("\n", [
+            $links->ownerGreeting(['name' => $partner->owner_name], $company, $label),
+            ...PublicWebsiteLinks::ownerRequestLines($stay, $this->listingLink($company, (int) $partner->id)),
+            'Reply with one tap: '.$availability['url'],
+        ]);
+
+        return redirect()->away('https://wa.me/'.substr($mobile, 1).'?text='.rawurlencode($message));
+    }
+
+    /** Public link of the partner apartment's published listing, if the website is on. */
+    private function listingLink(Tenant $tenant, int $partnerId): ?string
+    {
+        if (app(PublicListingCatalog::class)->site($tenant) === null) {
+            return null;
+        }
+        $slug = DB::table('public_listings')->where('tenant_id', $tenant->id)->where('partner_apartment_id', $partnerId)->where('status', 'published')->value('slug');
+
+        return $slug ? rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $slug], false) : null;
     }
 
     public function create(): View
@@ -133,7 +173,15 @@ class PartnerDirectoryController extends Controller
     {
         $bedrooms = (int) $partner->bedrooms === 0 ? 'studio' : (int) $partner->bedrooms.'BR';
 
-        return implode(', ', array_filter([$partner->apartment_name, $partner->building_name ?? null, $partner->unit_number ?? null])).' ('.$bedrooms.')';
+        $parts = [];
+        foreach ([$partner->apartment_name, $partner->building_name ?? null, $partner->unit_number ?? null] as $part) {
+            $part = trim((string) $part);
+            if ($part !== '' && ! in_array(mb_strtolower($part), array_map('mb_strtolower', $parts), true)) {
+                $parts[] = $part;
+            }
+        }
+
+        return implode(', ', $parts).' ('.$bedrooms.')';
     }
 
     /** The client's request as a question for agents, e.g. "Do you have a 2BR in Diani available?". */
