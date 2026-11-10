@@ -39,6 +39,17 @@ class PhoneNumberTest extends TestCase
         $this->assertSame($expected, PhoneNumber::normalize($input));
     }
 
+    public function test_landlines_are_allowed_only_when_mobile_numbers_are_not_required(): void
+    {
+        $this->assertNull(PhoneNumber::normalize('+254 20 123 4567'));
+        $this->assertNull(PhoneNumber::normalize('020 123 4567'));
+        $this->assertSame('+254201234567', PhoneNumber::normalize('+254 20 123 4567', mobileOnly: false));
+        $this->assertSame('+254201234567', PhoneNumber::normalize('020 123 4567', mobileOnly: false));
+        $this->assertSame('+254712345678', PhoneNumber::normalize('0712 345 678', mobileOnly: false));
+        $this->assertNull(PhoneNumber::normalize('+25470289894', mobileOnly: false));
+        $this->assertNull(PhoneNumber::normalize('+254012345678', mobileOnly: false));
+    }
+
     public function test_an_untouched_country_prefix_counts_as_blank(): void
     {
         $this->assertTrue(PhoneNumber::isBlank('+254 '));

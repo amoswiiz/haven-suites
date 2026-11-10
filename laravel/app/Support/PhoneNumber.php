@@ -12,9 +12,10 @@ class PhoneNumber
     /**
      * Return the number as +<country><number>, or null when it is empty or not a usable number.
      *
-     * Kenyan numbers must be +254 followed by nine digits starting with 7 or 1.
+     * Kenyan numbers must be +254 followed by nine digits. With $mobileOnly (the default, for SMS and
+     * WhatsApp) those digits must start with 7 or 1; otherwise landlines such as +254 20 ... are allowed.
      */
-    public static function normalize(?string $value): ?string
+    public static function normalize(?string $value, bool $mobileOnly = true): ?string
     {
         $phone = self::compact($value);
         if (self::isBlank($value)) {
@@ -23,8 +24,9 @@ class PhoneNumber
         if (preg_match('/^00([1-9][0-9]*)$/D', $phone, $matches)) {
             $phone = '+'.$matches[1];
         }
-        if (preg_match('/^0([17][0-9]{8})$/D', $phone, $matches)
-            || preg_match('/^\+?2540?([17][0-9]{8})$/D', $phone, $matches)) {
+        $first = $mobileOnly ? '[17]' : '[1-9]';
+        if (preg_match('/^0('.$first.'[0-9]{8})$/D', $phone, $matches)
+            || preg_match('/^\+?2540?('.$first.'[0-9]{8})$/D', $phone, $matches)) {
             return self::DEFAULT_PREFIX.$matches[1];
         }
         if (str_starts_with($phone, '+254') || str_starts_with($phone, '254')) {

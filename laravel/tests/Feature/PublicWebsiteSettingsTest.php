@@ -150,6 +150,14 @@ class PublicWebsiteSettingsTest extends TestCase
         ]))->assertSessionHasNoErrors();
         $this->assertNull($this->site()->whatsapp_number);
         $this->assertNull($this->site()->contact_phone);
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'version' => 2, 'whatsapp_number' => '020 123 4567',
+        ]))->assertSessionHasErrors('whatsapp_number');
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'version' => 2, 'whatsapp_number' => '', 'contact_phone' => '020 123 4567',
+        ]))->assertSessionHasNoErrors();
+        $this->assertSame('+254201234567', $this->site()->contact_phone);
     }
 
     public function test_json_save_returns_the_redirect_and_message(): void

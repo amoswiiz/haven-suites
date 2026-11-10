@@ -100,7 +100,7 @@ class PublicListingController extends Controller
             'version' => 'required|integer|min:0', 'enabled' => 'sometimes|boolean',
             'settings_page' => 'sometimes|boolean',
             'headline' => 'nullable|string|max:180', 'tagline' => 'nullable|string|max:500',
-            'contact_email' => 'nullable|email|max:180', 'contact_phone' => $this->phoneRule(),
+            'contact_email' => 'nullable|email|max:180', 'contact_phone' => $this->phoneRule(mobileOnly: false),
             'enquiry_assignee_id' => ['nullable', 'integer', Rule::in($catalog->assignees($tenant)->pluck('id')->all())],
             'response_hours' => 'required|integer|min:1|max:168',
             ...$this->websiteRules(),
@@ -111,7 +111,8 @@ class PublicListingController extends Controller
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
         }
         unset($data['settings_page']);
-        $data = $this->normalizePhones($data, ['contact_phone', 'whatsapp_number']);
+        $data = $this->normalizePhones($data, ['whatsapp_number']);
+        $data = $this->normalizePhones($data, ['contact_phone'], mobileOnly: false);
         $data['enabled'] = $request->boolean('enabled');
         if ($data['enabled'] && (empty($data['enquiry_assignee_id']) || ($tenant->modules['sales'] ?? true) === false)) {
             throw ValidationException::withMessages(['enquiry_assignee_id' => 'Choose an active salesperson and enable the Sales module before opening the public site.']);
@@ -302,11 +303,13 @@ class PublicListingController extends Controller
     }
 
     /** @return list<mixed> */
-    private function phoneRule(): array
+    private function phoneRule(bool $mobileOnly = true): array
     {
-        return ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
-            if (is_string($value) && ! PhoneNumber::isBlank($value) && PhoneNumber::normalize($value) === null) {
-                $fail('Enter a valid phone number, such as 0712 345 678 or +254 712 345 678. Kenyan numbers need 9 digits after +254.');
+        return ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail) use ($mobileOnly): void {
+            if (is_string($value) && ! PhoneNumber::isBlank($value) && PhoneNumber::normalize($value, $mobileOnly) === null) {
+                $fail($mobileOnly
+                    ? 'Enter a valid mobile number, such as 0712 345 678 or +254 712 345 678. Kenyan numbers need 9 digits after +254.'
+                    : 'Enter a valid phone number, such as 0712 345 678 or +254 20 123 4567. Kenyan numbers need 9 digits after +254.');
             }
         }];
     }
@@ -316,11 +319,11 @@ class PublicListingController extends Controller
      * @param  list<string>  $fields
      * @return array<string, mixed>
      */
-    private function normalizePhones(array $data, array $fields): array
+    private function normalizePhones(array $data, array $fields, bool $mobileOnly = true): array
     {
         foreach ($fields as $field) {
             if (array_key_exists($field, $data)) {
-                $data[$field] = is_string($data[$field]) ? PhoneNumber::normalize($data[$field]) : null;
+                $data[$field] = is_string($data[$field]) ? PhoneNumber::normalize($data[$field], $mobileOnly) : null;
             }
         }
 

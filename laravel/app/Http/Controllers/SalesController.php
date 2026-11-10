@@ -8,6 +8,7 @@ use App\Services\PublicListingCatalog;
 use App\Services\SalesPipelineSummary;
 use App\Services\TaskAccess;
 use App\Support\CompanyModules;
+use App\Support\PhoneNumber;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -109,7 +110,7 @@ class SalesController extends Controller
             abort_unless(CompanyModules::enabled('agents'), 403);
             $this->table('sales_agents')->where('active', true)->where('id', $data['agent_id'])->firstOrFail();
         }
-        $phone = ltrim(app(EnquiryAcknowledgements::class)->phone($data['phone'] ?? null) ?? '', '+');
+        $phone = ltrim(PhoneNumber::normalize($data['phone'] ?? null, mobileOnly: false) ?? '', '+');
         $data['email'] = empty($data['email']) ? null : strtolower($data['email']);
         $duplicates = $phone === '' && empty($data['email']) ? collect() : $this->table('sales_leads')->where(function (Builder $q) use ($phone, $data): void {
             if ($phone !== '') {
@@ -262,7 +263,7 @@ class SalesController extends Controller
         if (empty($data['phone']) && empty($data['email'])) {
             throw ValidationException::withMessages(['phone' => 'Enter a phone number or email address.']);
         }
-        $phone = ltrim(app(EnquiryAcknowledgements::class)->phone($data['phone'] ?? null) ?? '', '+');
+        $phone = ltrim(PhoneNumber::normalize($data['phone'] ?? null, mobileOnly: false) ?? '', '+');
         $version = $data['version'];
         unset($data['version']);
         $data['phone_normalized'] = $phone ?: null;
