@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant;
+use App\Support\PhoneNumber;
 use Illuminate\Validation\ValidationException;
 
 class PublicWebsiteLinks
@@ -124,7 +125,8 @@ class PublicWebsiteLinks
 
     private function whatsappUrl(string $number, string $template, string $title, string $url, string $reference): ?string
     {
-        if (! preg_match('/^\+[1-9][0-9]{7,14}$/D', $number)) {
+        $number = PhoneNumber::normalize($number) ?? '';
+        if ($number === '') {
             return null;
         }
         if ($template === '' || mb_strlen($template) > 1000) {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Services\YouTubeListingVideos;
+use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -99,7 +100,7 @@ class PublicListingController extends Controller
             'version' => 'required|integer|min:0', 'enabled' => 'sometimes|boolean',
             'settings_page' => 'sometimes|boolean',
             'headline' => 'nullable|string|max:180', 'tagline' => 'nullable|string|max:500',
-            'contact_email' => 'nullable|email|max:180', 'contact_phone' => 'nullable|string|max:40',
+            'contact_email' => 'nullable|email|max:180', 'contact_phone' => $this->phoneRule(),
             'enquiry_assignee_id' => ['nullable', 'integer', Rule::in($catalog->assignees($tenant)->pluck('id')->all())],
             'response_hours' => 'required|integer|min:1|max:168',
             ...$this->websiteRules(),
@@ -110,6 +111,7 @@ class PublicListingController extends Controller
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
         }
         unset($data['settings_page']);
+        $data = $this->normalizePhones($data, ['contact_phone', 'whatsapp_number']);
         $data['enabled'] = $request->boolean('enabled');
         if ($data['enabled'] && (empty($data['enquiry_assignee_id']) || ($tenant->modules['sales'] ?? true) === false)) {
             throw ValidationException::withMessages(['enquiry_assignee_id' => 'Choose an active salesperson and enable the Sales module before opening the public site.']);
@@ -185,6 +187,7 @@ class PublicListingController extends Controller
             'youtube_videos.*.url' => 'nullable|string|max:2048', 'youtube_videos.*.title' => 'nullable|string|max:120',
             ...$this->websiteRules(),
         ]);
+        $data = $this->normalizePhones($data, ['whatsapp_number']);
         if (array_key_exists('youtube_videos', $data)) {
             $data['youtube_videos'] = app(YouTubeListingVideos::class)->normalize($data['youtube_videos']);
         }
@@ -294,8 +297,34 @@ class PublicListingController extends Controller
     {
         return ['seo_title' => 'nullable|string|max:180|not_regex:/[<>]/',
             'seo_description' => 'nullable|string|max:320|not_regex:/[<>]/',
-            'whatsapp_number' => ['nullable', 'string', 'regex:/^\+[1-9][0-9]{7,14}$/D'],
+            'whatsapp_number' => $this->phoneRule(),
             'whatsapp_message' => 'nullable|string|max:1000'];
+    }
+
+    /** @return list<mixed> */
+    private function phoneRule(): array
+    {
+        return ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && ! PhoneNumber::isBlank($value) && PhoneNumber::normalize($value) === null) {
+                $fail('Enter a valid phone number, such as 0712 345 678 or +254 712 345 678. Kenyan numbers need 9 digits after +254.');
+            }
+        }];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  list<string>  $fields
+     * @return array<string, mixed>
+     */
+    private function normalizePhones(array $data, array $fields): array
+    {
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $data)) {
+                $data[$field] = is_string($data[$field]) ? PhoneNumber::normalize($data[$field]) : null;
+            }
+        }
+
+        return $data;
     }
 
     private function saved(Request $request, string $url, string $message): JsonResponse|RedirectResponse

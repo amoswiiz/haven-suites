@@ -120,7 +120,8 @@ class PublicWebsiteSettingsTest extends TestCase
     public function test_invalid_website_settings_are_rejected_without_saving(): void
     {
         $invalid = [
-            'whatsapp_number' => ['whatsapp_number' => '0712345678'],
+            'whatsapp_number' => ['whatsapp_number' => '+25470289894'],
+            'contact_phone' => ['contact_phone' => '0712 34'],
             'seo_title' => ['seo_title' => '<script>alert(1)</script>'],
             'navigation_links.1.target' => ['navigation_links' => [['label' => 'Stays', 'target' => 'stays'], ['label' => 'More stays', 'target' => 'stays']]],
             'navigation_links.0.target' => ['navigation_links' => [['label' => 'Blog', 'target' => 'https://example.com']]],
@@ -131,6 +132,24 @@ class PublicWebsiteSettingsTest extends TestCase
                 ->assertSessionHasErrors($field);
         }
         $this->assertNull($this->site());
+    }
+
+    public function test_phone_fields_are_prefilled_and_saved_in_international_form(): void
+    {
+        $this->get(route('public-listings.settings', $this->company->slug))
+            ->assertOk()->assertSee('id="whatsapp_number"', false)->assertSee('value="+254 "', false);
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'whatsapp_number' => '0712 345 678', 'contact_phone' => '+254 0733 000 111',
+        ]))->assertSessionHasNoErrors();
+        $this->assertSame('+254712345678', $this->site()->whatsapp_number);
+        $this->assertSame('+254733000111', $this->site()->contact_phone);
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'version' => 1, 'whatsapp_number' => '+254 ', 'contact_phone' => '+254',
+        ]))->assertSessionHasNoErrors();
+        $this->assertNull($this->site()->whatsapp_number);
+        $this->assertNull($this->site()->contact_phone);
     }
 
     public function test_json_save_returns_the_redirect_and_message(): void

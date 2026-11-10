@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -13,18 +14,7 @@ class EnquiryAcknowledgements
 
     public function phone(?string $value): ?string
     {
-        $phone = preg_replace('/[\s().-]+/', '', trim($value ?? ''));
-        if (preg_match('/^0[17][0-9]{8}$/D', $phone)) {
-            return '+254'.substr($phone, 1);
-        }
-        if (preg_match('/^254[17][0-9]{8}$/D', $phone)) {
-            return '+'.$phone;
-        }
-        if (preg_match('/^00([1-9][0-9]{7,14})$/D', $phone, $matches)) {
-            $phone = '+'.$matches[1];
-        }
-
-        return preg_match('/^\+[1-9][0-9]{7,14}$/D', $phone) ? $phone : null;
+        return PhoneNumber::normalize($value);
     }
 
     public function status(int $tenantId, int $enquiryId): ?object

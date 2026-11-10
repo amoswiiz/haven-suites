@@ -85,6 +85,7 @@ class PublicWebsiteIntegrationTest extends TestCase
         $this->assertStringContainsString($this->listing['title'], $query['text']);
         $this->assertStringContainsString($links['public_url'], $query['text']);
         $this->assertSame(['check_in' => '2026-11-10', 'check_out' => '2026-11-12', 'guests' => 3], $response->viewData('enquiryDefaults'));
+        $response->assertSee('id="enquiry-phone"', false)->assertSee('value="+254 "', false);
         $this->assertDatabaseCount('sales_leads', 0);
         Http::assertNothingSent();
     }

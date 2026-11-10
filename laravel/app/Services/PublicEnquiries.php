@@ -44,7 +44,7 @@ class PublicEnquiries
         }
         $phone = app(EnquiryAcknowledgements::class)->phone($data['phone']);
         if ($phone === null) {
-            throw ValidationException::withMessages(['phone' => 'Enter a valid phone number, such as 0712345678 or +254712345678.']);
+            throw ValidationException::withMessages(['phone' => 'Enter a valid phone number, such as 0712 345 678 or +254 712 345 678. Kenyan numbers need 9 digits after +254.']);
         }
         $token = $this->receiptToken($tenant, (int) $listing['id'], $data['capture_token']);
         $existing = DB::table('sales_leads')->where('tenant_id', $tenant->id)->where('capture_token', $data['capture_token'])->first();
