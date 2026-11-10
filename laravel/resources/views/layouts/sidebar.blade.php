@@ -4,123 +4,94 @@ $user = haven_auth()->user();
 $cleanerNavigation = $user !== null && $user->inGroup('cleaner') && ! array_diff(auth()->user()->roles(), ['cleaner', 'user']);
 $taskUnread = $user && ($user->can('tasks.view') || $user->can('tasks.owner')) ? \Illuminate\Support\Facades\DB::table('task_notices')->where('tenant_id',app('currentTenant')->id)->where('user_id',auth()->id())->whereNull('read_at')->count() : 0;
 
+// Ordered by the working day: win the enquiry, take the booking, run the stay, talk to guests, then manage
+// properties, the website, money and reporting. "keywords" keep older page names findable in the menu search.
 $groups = [
-    ['label' => 'Communications', 'icon' => 'message-circle', 'items' => [
-        ['label' => 'Communications due today', 'path' => 'communications/due', 'permission' => 'messaging.view', 'icon' => 'calendar-clock'],
-        ['label' => 'Guest messages', 'path' => 'communications/guests', 'permission' => 'messaging.manage', 'icon' => 'message-circle'],
-        ['label' => 'Message templates', 'path' => 'communications/templates', 'permission' => 'messaging.view', 'icon' => 'file-text'],
-        ['label' => 'Compose SMS', 'path' => 'communications/sms', 'permission' => 'messaging.view', 'icon' => 'mail'],
-        ['label' => 'Channel connections', 'path' => 'sales/connections', 'permission' => 'messaging.view', 'icon' => 'message-circle'],
-        ['label' => 'System notifications', 'path' => 'investor-notifications', 'permission' => 'notifications.view', 'icon' => 'mail'],
+    ['label' => 'Sales & enquiries', 'icon' => 'contact', 'items' => [
+        ['label' => 'Sales pipeline', 'path' => 'sales', 'permission' => 'sales.view', 'icon' => 'contact', 'keywords' => 'enquiries leads'],
+        ['label' => 'Quotations', 'path' => 'quotations', 'permission' => 'reservations.view', 'icon' => 'file-text', 'keywords' => 'quotes'],
+        ['label' => 'Referral agents', 'path' => 'sales/agents', 'permission' => 'agents.view', 'icon' => 'users', 'keywords' => 'agents commission'],
     ]],
-    ['label' => 'Investors & Owners', 'icon' => 'users', 'items' => [
-        ['label' => 'Investor directory', 'path' => 'investors', 'permission' => 'investors.view', 'icon' => 'users'],
-        ['label' => 'My investor portal', 'path' => 'investor-portal', 'permission' => 'investor.portal', 'icon' => 'house'],
-        ['label' => 'Investor reports', 'path' => 'investor-portal/reports', 'permission' => 'investor.portal', 'icon' => 'file-text'],
-        ['label' => 'Email & SMS notifications', 'path' => 'investor-notifications', 'permission' => 'notifications.view', 'icon' => 'mail'],
-    ]],
-    ['label' => 'Sales & Enquiries', 'icon' => 'contact', 'items' => [
-        ['label' => 'Sales pipeline', 'path' => 'sales', 'permission' => 'sales.view', 'icon' => 'contact'],
-        ['label' => 'New enquiry', 'path' => 'sales/new', 'permission' => 'sales.manage', 'icon' => 'plus'],
-        ['label' => 'Referral agents', 'path' => 'sales/agents', 'permission' => 'agents.view', 'icon' => 'users'],
-        ['label' => 'Messaging connections', 'path' => 'sales/connections', 'permission' => 'messaging.view', 'icon' => 'message-circle'],
-    ]],
-    ['label' => 'Reservations & Guests', 'icon' => 'calendar-days', 'items' => [
-        ['label' => 'Reservations', 'path' => 'reservations', 'icon' => 'calendar', 'permission' => 'reservations.view'],
-        ['label' => 'Quotations', 'path' => 'quotations', 'icon' => 'file-text', 'permission' => 'reservations.view'],
-        ['label' => 'Availability', 'path' => 'availability', 'icon' => 'calendar-days', 'permission' => 'availability.view'],
-        ['label' => 'Partner apartments', 'path' => 'partners', 'icon' => 'handshake', 'permission' => 'availability.view'],
-        ['label' => 'External calendars', 'path' => 'availability/external', 'icon' => 'calendar-sync', 'permission' => 'availability.view'],
-        ['label' => 'Customers', 'path' => 'customers', 'icon' => 'contact', 'permission' => 'finance.view'],
-        ['label' => 'Guest KYC', 'path' => 'staff/kyc', 'icon' => 'id-card', 'permission' => 'finance.view'],
-        ['label' => 'Send guest KYC link', 'path' => 'staff/kyc/invite', 'icon' => 'mail', 'permission' => 'finance.manage'],
-    ]],
-    ['label' => 'Website & listings', 'icon' => 'globe', 'items' => [
-        ['label' => 'Manage listings', 'path' => 'public-listings', 'icon' => 'building-2', 'permission' => 'properties.manage'],
-        ['label' => 'Website settings', 'path' => 'public-listings/settings', 'icon' => 'settings', 'permission' => 'properties.manage'],
-        ['label' => 'Create listing', 'path' => 'public-listings/new', 'icon' => 'plus-circle', 'permission' => 'properties.manage'],
-        ['label' => 'Public website', 'path' => 'public-listings/public-website', 'access_path' => 'public-listings', 'public_site' => true, 'icon' => 'external-link', 'permission' => 'properties.manage'],
-    ]],
-    ['label' => 'Properties', 'icon' => 'building-2', 'items' => [
-        ['label' => 'Apartment closures', 'path' => 'availability/closures', 'icon' => 'calendar-off', 'permission' => 'properties.manage'],
-        ['label' => 'Apartment Units', 'path' => 'units', 'icon' => 'house', 'permission' => 'units.view'],
-        ['label' => 'Host Agreements', 'path' => 'host-agreements', 'icon' => 'handshake', 'permission' => 'finance.view'],
+    ['label' => 'Bookings & guests', 'icon' => 'calendar-days', 'items' => [
+        ['label' => 'Bookings', 'path' => 'reservations', 'permission' => 'reservations.view', 'icon' => 'calendar', 'keywords' => 'reservations stays'],
+        ['section' => 'Availability', 'label' => 'Availability calendar', 'path' => 'availability', 'permission' => 'availability.view', 'icon' => 'calendar-days', 'keywords' => 'availability'],
+        ['section' => 'Availability', 'label' => 'Apartment closures', 'path' => 'availability/closures', 'permission' => 'properties.manage', 'icon' => 'calendar-off', 'keywords' => 'block dates owner use repairs'],
+        ['section' => 'Availability', 'label' => 'Partner apartments', 'path' => 'partners', 'permission' => 'availability.view', 'icon' => 'handshake', 'keywords' => 'partners owners agents units whatsapp'],
+        ['section' => 'Availability', 'label' => 'External calendars', 'path' => 'availability/external', 'permission' => 'availability.view', 'icon' => 'calendar-sync', 'keywords' => 'ical airbnb booking.com sync'],
+        ['section' => 'Guests', 'label' => 'Guest directory', 'path' => 'customers', 'permission' => 'finance.view', 'icon' => 'contact', 'keywords' => 'customers'],
+        ['section' => 'Guests', 'label' => 'Guest verification', 'path' => 'staff/kyc', 'permission' => 'finance.view', 'icon' => 'id-card', 'keywords' => 'guest kyc identification'],
+        ['section' => 'Guests', 'label' => 'Send guest KYC link', 'path' => 'staff/kyc/invite', 'permission' => 'finance.manage', 'icon' => 'mail', 'keywords' => 'kyc invite'],
     ]],
     ['label' => 'Operations', 'icon' => 'clipboard-list', 'items' => [
-        ['label' => 'My Bills & Reimbursements', 'path' => 'staff-bills', 'icon' => 'receipt', 'permission' => 'bills.submit'],
-        ['label' => 'Housekeeping', 'path' => 'housekeeping', 'icon' => 'clipboard-check', 'permission' => 'housekeeping.view'],
-        ['label' => 'Record Cleaning', 'path' => 'housekeeping/my-cleanings/new', 'icon' => 'plus-circle', 'access' => 'cleaner_module'],
-        ['label' => 'Cleaner Earnings', 'path' => 'payments/cleaners/earnings', 'icon' => 'wallet', 'access' => 'cleaner_module'],
-        ['label' => 'Maintenance', 'path' => 'maintenance', 'icon' => 'wrench', 'permission' => 'maintenance.view'],
+        ['label' => 'Housekeeping', 'path' => 'housekeeping', 'permission' => 'housekeeping.view', 'icon' => 'clipboard-check', 'keywords' => 'cleaning'],
+        ['label' => 'Record cleaning', 'path' => 'housekeeping/my-cleanings/new', 'access' => 'cleaner_module', 'icon' => 'plus-circle', 'keywords' => 'cleaning'],
+        ['label' => 'Maintenance', 'path' => 'maintenance', 'permission' => 'maintenance.view', 'icon' => 'wrench', 'keywords' => 'repairs issues'],
+        ['label' => 'My bills & reimbursements', 'path' => 'staff-bills', 'permission' => 'bills.submit', 'icon' => 'receipt', 'keywords' => 'my bills reimbursements'],
+        ['label' => 'Cleaner earnings', 'path' => 'payments/cleaners/earnings', 'access' => 'cleaner_module', 'icon' => 'wallet', 'keywords' => 'cleaner earnings'],
+    ]],
+    ['label' => 'Messages', 'icon' => 'message-circle', 'items' => [
+        ['label' => 'Communications due today', 'path' => 'communications/due', 'permission' => 'messaging.view', 'icon' => 'calendar-clock', 'keywords' => 'communications due'],
+        ['label' => 'Guest messages', 'path' => 'communications/guests', 'permission' => 'messaging.manage', 'icon' => 'message-circle', 'keywords' => 'guest messages'],
+        ['label' => 'SMS messages & history', 'path' => 'communications/sms', 'permission' => 'messaging.view', 'icon' => 'mail', 'keywords' => 'compose sms'],
+        ['label' => 'Message templates', 'path' => 'communications/templates', 'permission' => 'messaging.view', 'icon' => 'file-text', 'keywords' => 'templates'],
+        ['label' => 'Channel connections', 'path' => 'sales/connections', 'permission' => 'messaging.view', 'icon' => 'message-circle', 'keywords' => 'messaging connections whatsapp instagram facebook'],
+        ['label' => 'Email & SMS notifications', 'path' => 'investor-notifications', 'permission' => 'notifications.view', 'icon' => 'mail', 'keywords' => 'system notifications'],
+    ]],
+    ['label' => 'Properties & owners', 'icon' => 'building-2', 'items' => [
+        ['label' => 'Apartments', 'path' => 'units', 'permission' => 'units.view', 'icon' => 'house', 'keywords' => 'apartment units'],
+        ['label' => 'Owners & investors', 'path' => 'investors', 'permission' => 'investors.view', 'icon' => 'users', 'keywords' => 'investor directory'],
+        ['label' => 'Management agreements', 'path' => 'host-agreements', 'permission' => 'finance.view', 'icon' => 'handshake', 'keywords' => 'host agreements'],
+        ['label' => 'My investor portal', 'path' => 'investor-portal', 'permission' => 'investor.portal', 'icon' => 'house', 'keywords' => 'investor portal'],
+        ['label' => 'Investor portal reports', 'path' => 'investor-portal/reports', 'permission' => 'investor.portal', 'icon' => 'file-text', 'keywords' => 'investor reports'],
+    ]],
+    ['label' => 'Website & listings', 'icon' => 'globe', 'items' => [
+        ['label' => 'Manage listings', 'path' => 'public-listings', 'permission' => 'properties.manage', 'icon' => 'building-2', 'keywords' => 'listings create listing'],
+        ['label' => 'Website settings', 'path' => 'public-listings/settings', 'permission' => 'properties.manage', 'icon' => 'settings', 'keywords' => 'website seo whatsapp logo menu'],
+        ['label' => 'Public website', 'path' => 'public-listings/public-website', 'access_path' => 'public-listings', 'public_site' => true, 'permission' => 'properties.manage', 'icon' => 'external-link', 'keywords' => 'public website stays'],
     ]],
     ['label' => 'Finance', 'icon' => 'wallet', 'items' => [
-        ['label' => 'Bill Approvals', 'path' => 'staff-bills', 'icon' => 'receipt', 'permission' => 'finance.manage'],
-        ['label' => 'Unit accounting & rent', 'path' => 'accounting/units', 'icon' => 'receipt', 'permission' => 'finance.view'],
-        ['label' => 'Invoices', 'path' => 'invoices', 'icon' => 'file-text', 'permission' => 'invoices.view'],
-        ['label' => 'Guest Payments', 'path' => 'payments/guests', 'icon' => 'wallet', 'permission' => 'finance.view'],
-        ['label' => 'Partner Owner Payments', 'path' => 'payments/partners', 'icon' => 'hand-coins', 'permission' => 'finance.view'],
-        ['label' => 'Partner Owner Balances', 'path' => 'payments/partners/owners', 'icon' => 'file-text', 'permission' => 'finance.view'],
-        ['label' => 'Host Payments', 'path' => 'payments/hosts', 'icon' => 'wallet', 'permission' => 'finance.view'],
-        ['label' => 'Owner Remittances', 'path' => 'owner-remittances', 'icon' => 'hand-coins', 'permission' => 'finance.view'],
-        ['label' => 'Expense Register', 'path' => 'expenses', 'icon' => 'receipt', 'permission' => 'finance.view'],
-        ['label' => 'Cleaner Payments', 'path' => 'payments/cleaners', 'icon' => 'wallet-cards', 'permission' => 'finance.view'],
-        ['label' => 'Cleaner Balances', 'path' => 'payments/cleaners/balances', 'icon' => 'wallet', 'permission' => 'finance.view'],
-        ['label' => 'Cleaner Statements', 'path' => 'payments/cleaners/statements', 'icon' => 'file-text', 'permission' => 'finance.view'],
+        ['section' => 'Money in', 'label' => 'Invoices & receipts', 'path' => 'invoices', 'permission' => 'invoices.view', 'icon' => 'file-text', 'keywords' => 'invoices receipts'],
+        ['section' => 'Money in', 'label' => 'Guest payments', 'path' => 'payments/guests', 'permission' => 'finance.view', 'icon' => 'wallet', 'keywords' => 'guest payments'],
+        ['section' => 'Money out', 'label' => 'Owner & partner payouts', 'path' => 'owner-remittances', 'permission' => 'finance.view', 'icon' => 'hand-coins', 'keywords' => 'owner remittances payouts'],
+        ['section' => 'Money out', 'label' => 'Partner owner payments', 'path' => 'payments/partners', 'permission' => 'finance.view', 'icon' => 'hand-coins', 'keywords' => 'partner owner payments', 'secondary' => true],
+        ['section' => 'Money out', 'label' => 'Partner owner balances', 'path' => 'payments/partners/owners', 'permission' => 'finance.view', 'icon' => 'file-text', 'keywords' => 'partner owner balances', 'secondary' => true],
+        ['section' => 'Money out', 'label' => 'Host payments', 'path' => 'payments/hosts', 'permission' => 'finance.view', 'icon' => 'wallet', 'keywords' => 'host payments', 'secondary' => true],
+        ['section' => 'Money out', 'label' => 'Cleaner payments', 'path' => 'payments/cleaners', 'permission' => 'finance.view', 'icon' => 'wallet-cards', 'keywords' => 'cleaner payments'],
+        ['section' => 'Money out', 'label' => 'Cleaner balances', 'path' => 'payments/cleaners/balances', 'permission' => 'finance.view', 'icon' => 'wallet', 'keywords' => 'cleaner balances', 'secondary' => true],
+        ['section' => 'Money out', 'label' => 'Cleaner statements', 'path' => 'payments/cleaners/statements', 'permission' => 'finance.view', 'icon' => 'file-text', 'keywords' => 'cleaner statements', 'secondary' => true],
+        ['section' => 'Money out', 'label' => 'Bill approvals', 'path' => 'staff-bills', 'permission' => 'finance.manage', 'icon' => 'receipt', 'keywords' => 'bill approvals reimbursements'],
+        ['section' => 'Money out', 'label' => 'Expenses', 'path' => 'expenses', 'permission' => 'finance.view', 'icon' => 'receipt', 'keywords' => 'expense register'],
+        ['section' => 'Accounting', 'label' => 'Apartment accounting & rent', 'path' => 'accounting/units', 'permission' => 'finance.view', 'icon' => 'receipt', 'keywords' => 'unit accounting rent'],
+        ['section' => 'Accounting', 'label' => 'Close accounting month', 'path' => 'owner-statement-closing', 'permission' => 'finance.manage', 'icon' => 'clipboard-check', 'keywords' => 'owner statement closing month end'],
     ]],
     ['label' => 'Reports', 'icon' => 'chart-column', 'items' => [
-        ['label' => 'Investor Reports', 'path' => 'reports/investor', 'icon' => 'file-chart-column-increasing', 'permission' => 'finance.view'],
-        ['label' => 'Monthly Company Income', 'path' => 'reports/monthly-company-income', 'icon' => 'chart-no-axes-combined', 'permission' => 'finance.view'],
-        ['label' => 'Monthly Host Commissions', 'path' => 'reports/monthly-host-commissions', 'icon' => 'hand-coins', 'permission' => 'finance.view'],
-        ['label' => 'Monthly Unit Expenses', 'path' => 'reports/monthly-unit-expenses', 'icon' => 'calendar-range', 'permission' => 'finance.view'],
-        ['label' => 'Housekeeping Financial Report', 'path' => 'reports/housekeeping', 'icon' => 'chart-column', 'permission' => 'finance.view'],
+        ['label' => 'Investor reports', 'path' => 'reports/investor', 'permission' => 'finance.view', 'icon' => 'file-chart-column-increasing', 'keywords' => 'investor reports'],
+        ['label' => 'Monthly company income', 'path' => 'reports/monthly-company-income', 'permission' => 'finance.view', 'icon' => 'chart-no-axes-combined', 'keywords' => 'company income'],
+        ['label' => 'Monthly host commissions', 'path' => 'reports/monthly-host-commissions', 'permission' => 'finance.view', 'icon' => 'hand-coins', 'keywords' => 'host commissions'],
+        ['label' => 'Monthly apartment expenses', 'path' => 'reports/monthly-unit-expenses', 'permission' => 'finance.view', 'icon' => 'calendar-range', 'keywords' => 'monthly unit expenses'],
+        ['label' => 'Housekeeping financial report', 'path' => 'reports/housekeeping', 'permission' => 'finance.view', 'icon' => 'chart-column', 'keywords' => 'housekeeping report cleaning'],
     ]],
-    ['label' => 'Team & Settings', 'icon' => 'settings', 'items' => [
-        ['label' => 'Staff Management', 'path' => 'staff', 'icon' => 'users', 'permission' => 'staff.view'],
-        ['label' => 'Owner Statement Closing', 'path' => 'owner-statement-closing', 'icon' => 'clipboard-check', 'permission' => 'finance.manage'],
-        ['label' => 'Cleaning Rates', 'path' => 'settings/cleaning-rates', 'icon' => 'wallet', 'permission' => 'settings.manage'],
-        ['label' => 'Staff profiles & identification', 'path' => 'staff-profiles', 'icon' => 'id-card', 'permission' => 'staff-profile.review'],
+    ['label' => 'Team', 'icon' => 'users', 'items' => [
+        ['label' => 'Staff management', 'path' => 'staff', 'permission' => 'staff.view', 'icon' => 'users', 'keywords' => 'staff'],
+        ['label' => 'Staff profiles & identification', 'path' => 'staff-profiles', 'permission' => 'staff-profile.review', 'icon' => 'id-card', 'keywords' => 'staff profiles identification'],
+        ['label' => 'Team & access', 'path' => 'company/team', 'access' => 'company_admin', 'icon' => 'shield', 'keywords' => 'team access invitations roles'],
+    ]],
+    ['label' => 'Settings', 'icon' => 'settings', 'items' => [
+        ['label' => 'Company settings', 'path' => 'company/settings', 'access' => 'company_admin', 'icon' => 'settings', 'keywords' => 'company logo reference prefix'],
+        ['label' => 'Invoice settings', 'path' => 'invoices/settings', 'access' => 'company_admin', 'icon' => 'file-text', 'keywords' => 'invoice settings'],
+        ['label' => 'Cleaning rates', 'path' => 'settings/cleaning-rates', 'permission' => 'settings.manage', 'icon' => 'wallet', 'keywords' => 'cleaning rates'],
+        ['label' => 'Subscription', 'path' => 'company/subscription', 'access' => 'company_admin', 'icon' => 'wallet-cards', 'keywords' => 'plan billing subscription'],
+        ['label' => 'Setup checklist', 'path' => 'company/setup', 'access' => 'company_admin', 'icon' => 'clipboard-check', 'keywords' => 'setup onboarding'],
     ]],
 ];
-
-$byLabel = array_column($groups, null, 'label');
-$groups = [];
-foreach (['Reservations & Guests' => 'Bookings & Guests', 'Operations' => 'Operations', 'Sales & Enquiries' => 'Sales', 'Website & listings' => 'Website & listings', 'Properties' => 'Properties & Owners', 'Finance' => 'Finance', 'Communications' => 'Messages', 'Reports' => 'Reports', 'Team & Settings' => 'Settings'] as $old => $label) {
-    $group = $byLabel[$old];
-    $group['label'] = $label;
-    if ($label === 'Bookings & Guests') {
-        $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => $item['path'] !== 'quotations'));
-    }
-    if ($label === 'Sales') {
-        $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => !in_array($item['path'], ['sales/new', 'sales/connections'], true)));
-        $group['items'][] = $byLabel['Reservations & Guests']['items'][1];
-    }
-    if ($label === 'Properties & Owners') {
-        foreach ($byLabel['Investors & Owners']['items'] as $item) {
-            if ($item['path'] !== 'investor-notifications') $group['items'][] = $item;
-        }
-    }
-    if ($label === 'Settings') {
-        $group['items'] = array_values(array_filter($group['items'], static fn (array $item): bool => $item['path'] !== 'owner-statement-closing'));
-        foreach (['company/setup' => 'Setup checklist', 'invoices/settings' => 'Invoice settings', 'company/settings' => 'Company settings', 'company/team' => 'Team & access', 'company/subscription' => 'Subscription'] as $path => $name) {
-            $group['items'][] = ['label' => $name, 'path' => $path, 'access' => 'company_admin', 'icon' => 'settings'];
-        }
-    }
-    if ($label === 'Operations') array_unshift($group['items'], ['label'=>"Today's work", 'path'=>'today', 'access'=>'daily_work', 'icon'=>'calendar-days']);
-    if ($label === 'Finance') $group['items'][] = $byLabel['Team & Settings']['items'][1];
-    $groups[] = $group;
-}
-$renamed = ['reservations' => 'Bookings', 'availability' => 'Availability calendar', 'customers' => 'Guest directory', 'staff/kyc' => 'Guest verification', 'units' => 'Apartments', 'host-agreements' => 'Management agreements', 'investors' => 'Owners & investors', 'communications/sms' => 'SMS messages & history', 'investor-notifications' => 'Email & SMS notifications', 'accounting/units' => 'Apartment accounting & rent', 'owner-remittances' => 'Owner & partner payouts', 'expenses' => 'Expenses', 'payments/cleaners' => 'Cleaner payments', 'owner-statement-closing' => 'Close accounting month'];
-$secondary = ['payments/partners', 'payments/partners/owners', 'payments/hosts', 'payments/cleaners/balances', 'payments/cleaners/statements'];
 foreach ($groups as &$group) {
     foreach ($group['items'] as &$item) {
-        $item['keywords'] = $item['label'];
-        $item['label'] = $renamed[$item['path']] ?? $item['label'];
-        $item['secondary'] = in_array($item['path'], $secondary, true);
+        $item['keywords'] = trim($item['label'].' '.($item['keywords'] ?? ''));
+        $item['secondary'] = (bool) ($item['secondary'] ?? false);
     }
     unset($item);
 }
 unset($group);
-
 $investorNavigation = $user !== null && $user->can('investor.portal') && ! $user->can('investors.view')
     && \Illuminate\Support\Facades\DB::table('investors')->where('tenant_id', app('currentTenant')->id)->where('user_id', auth()->id())->where('active', true)->exists();
 if ($investorNavigation) {
@@ -201,7 +172,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
 .hs-nav-group > summary::after { content: '\203A'; margin-left:auto; font-size:24px; line-height:1; transition:transform .15s; }
 .hs-nav-group[open] > summary::after { transform:rotate(90deg); }
 .hs-group-chevron { display:none; }
-.hs-sidebar [hidden]{display:none!important}.hs-sidebar .hs-nav-link,.hs-sidebar summary{min-height:44px}.hs-sidebar #menu-search-status:empty{display:none}.hs-sidebar :is(a,button,summary):focus-visible { outline:3px solid #ffbd8b; outline-offset:2px; }
+.hs-subnav-heading{margin:10px 0 2px 10px;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.6}.hs-account-links{margin:0 0 10px}.hs-account-links .hs-nav-link{padding:7px 0;min-height:36px;font-size:13px}.hs-sidebar [hidden]{display:none!important}.hs-sidebar .hs-nav-link,.hs-sidebar summary{min-height:44px}.hs-sidebar #menu-search-status:empty{display:none}.hs-sidebar :is(a,button,summary):focus-visible { outline:3px solid #ffbd8b; outline-offset:2px; }
 @media print { .hs-sidebar { display: none !important; } }
 </style>
 <aside id="company-navigation" class="hs-sidebar haven-sidebar-scroll" aria-label="Company navigation">
@@ -225,7 +196,7 @@ $isActive = static fn (string $path): bool => $activePath === $path;
     @endif
     <label for="menu-search" class="form-label mt-2">Find a page</label><input id="menu-search" type="search" class="form-control" placeholder="{{ $cleanerNavigation ? 'Cleaning, maintenance, bills' : 'Booking, rent, receipt' }}" autocomplete="off" aria-controls="sidebar-links"><p id="menu-search-status" class="small mt-2" role="status" aria-live="polite"></p></div><div class="hs-menu-heading">MAIN MENU</div>
     @if(!$investorNavigation)
-    @php($createActions = ['reservations/create' => 'New booking', 'sales/new' => 'New enquiry', 'quotations/create' => 'New quotation', 'invoices/create' => 'New invoice', 'communications/sms' => 'Send SMS'])
+    @php($createActions = ['sales/new' => 'New enquiry', 'reservations/create' => 'New booking', 'quotations/create' => 'New quotation', 'invoices/create' => 'New invoice', 'communications/sms' => 'Send SMS', 'public-listings/new' => 'New listing', 'partners/new' => 'New partner apartment'])
     @php($createActions = array_filter($createActions, static fn (string $path): bool => haven_can_access(site_url($path), 'GET'), ARRAY_FILTER_USE_KEY))
     @if($createActions)
     <details class="mx-3 mb-3"><summary class="p-2">+ Create</summary>
@@ -235,16 +206,16 @@ $isActive = static fn (string $path): bool => $activePath === $path;
     @endif
     <nav id="sidebar-links" class="hs-nav" aria-label="Main navigation">
         @if(!$investorNavigation && $user->can('cleaner.dashboard'))<a data-menu-item data-keywords="my dashboard summary today overview" class="hs-nav-link {{ $isActive('cleaner/dashboard') ? 'active' : '' }}" href="{{ route('cleaner.dashboard', app('currentTenant')->slug) }}" @if($isActive('cleaner/dashboard')) aria-current="page" @endif><i data-lucide="layout-dashboard"></i><span>My dashboard</span></a>@endif
-        @if(!$investorNavigation && $user->can('tasks.view'))<a data-menu-item data-keywords="tasks assignments deadlines work" class="hs-nav-link {{ str_starts_with($currentPath,'tasks') ? 'active' : '' }}" href="{{ route('tasks.index',app('currentTenant')->slug) }}" @if(str_starts_with($currentPath,'tasks')) aria-current="page" @endif>Tasks @if($taskUnread)<span class="pill">{{ $taskUnread }} unread</span>@endif</a>@endif
-        @if($user->can('staff-profile.self'))<a data-menu-item data-keywords="my profile biodata identification staff document" class="hs-nav-link {{ $isActive('my-profile') ? 'active' : '' }}" href="{{ route('staff-profile.edit', app('currentTenant')->slug) }}" @if($isActive('my-profile')) aria-current="page" @endif><i data-lucide="id-card"></i><span>My profile</span></a>@endif
-        @unless(session()->has('haven.impersonation'))<a data-menu-item data-keywords="password account security login" class="hs-nav-link {{ request()->routeIs('account.password.*') ? 'active' : '' }}" href="{{ route('account.password.edit') }}" @if(request()->routeIs('account.password.*')) aria-current="page" @endif><i data-lucide="key-round"></i><span>Change password</span></a>@endunless
 
         <?php if (!$investorNavigation && $user !== null && $user->can('dashboard.view')): ?>
             <?php if (haven_can_access(site_url('dashboard'), 'GET')): ?><a href="<?= site_url('dashboard') ?>" data-menu-item data-keywords="home overview today" class="hs-nav-link <?= $isActive('dashboard') ? 'active' : '' ?>" <?= $isActive('dashboard') ? 'aria-current="page"' : '' ?>>
                 <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
             </a><?php endif; ?>
         <?php endif; ?>
-        @if(!$investorNavigation && ($user->can('sales.view') || $user->can('reservations.view') || $user->can('finance.view')))<a data-menu-item data-keywords="approvals requests tasks finance reservations" href="{{ site_url('work') }}" class="hs-nav-link {{ $isActive('work')?'active':'' }}" @if($isActive('work')) aria-current="page" @endif>Work inbox &amp; approvals</a>@endif
+        @if(!$investorNavigation && $canAccess(['access' => 'daily_work']) && haven_can_access(site_url('today'), 'GET'))<a data-menu-item data-keywords="today daily arrivals departures cleaning work" href="{{ site_url('today') }}" class="hs-nav-link {{ $currentPath === 'today' ? 'active' : '' }}" @if($currentPath === 'today') aria-current="page" @endif><i data-lucide="calendar-days"></i><span>Today's work</span></a>@endif
+        @if(!$investorNavigation && ($user->can('sales.view') || $user->can('reservations.view') || $user->can('finance.view')))<a data-menu-item data-keywords="approvals requests tasks finance reservations" href="{{ site_url('work') }}" class="hs-nav-link {{ $isActive('work')?'active':'' }}" @if($isActive('work')) aria-current="page" @endif><i data-lucide="inbox"></i><span>Work inbox &amp; approvals</span></a>@endif
+        @if(!$investorNavigation && $user->can('tasks.view'))<a data-menu-item data-keywords="tasks assignments deadlines work" class="hs-nav-link {{ str_starts_with($currentPath,'tasks') ? 'active' : '' }}" href="{{ route('tasks.index',app('currentTenant')->slug) }}" @if(str_starts_with($currentPath,'tasks')) aria-current="page" @endif><i data-lucide="list-checks"></i><span>Tasks</span> @if($taskUnread)<span class="pill">{{ $taskUnread }} unread</span>@endif</a>@endif
+        <?php $currentMarked = false; ?>
         <?php foreach ($groups as $group): ?>
             <?php
                 $visible = array_values(array_filter($group['items'], $isVisible));
@@ -262,12 +233,14 @@ $isActive = static fn (string $path): bool => $activePath === $path;
                     <i data-lucide="chevron-right" class="hs-group-chevron"></i>
                 </summary>
                 <div class="hs-subnav">
+                    <?php $lastSection = null; ?>
                     <?php foreach ($visible as $item): ?>
+                        <?php if (($item['section'] ?? null) !== $lastSection && empty($item['secondary'])): $lastSection = $item['section'] ?? null; ?><?php if ($lastSection !== null): ?><div class="hs-subnav-heading" aria-hidden="true"><?= esc($lastSection) ?></div><?php endif; ?><?php endif; ?>
                         <?php if (!empty($item['public_site']) && !$publicWebsiteEnabled): ?>
                             <span data-menu-item data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" class="hs-nav-link" aria-disabled="true" title="Enable the public website in Website settings"><i data-lucide="<?= esc($item['icon'], 'attr') ?>"></i><span>Public website<small style="display:block;font-size:11px;opacity:.8">Website offline</small></span></span>
                             <?php continue; ?>
                         <?php endif; ?>
-                        <?php if ($isVisible($item)): ?><?php $itemActive = empty($item['public_site']) && $isActive($item['path']); ?><a data-menu-item data-secondary="<?= !empty($item['secondary']) ? 'true' : 'false' ?>" <?= !empty($item['secondary']) ? 'hidden' : '' ?> data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" href="<?= !empty($item['public_site']) ? esc(route('public-stays.index', ['company' => app('currentTenant')->slug]), 'attr') : site_url($item['path']) ?>" class="hs-nav-link <?= $itemActive ? 'active' : '' ?>" <?= $itemActive ? 'aria-current="page"' : '' ?><?= !empty($item['public_site']) ? ' target="_blank" rel="noopener noreferrer" aria-label="Public website (opens in a new tab)"' : '' ?>>
+                        <?php if ($isVisible($item)): ?><?php $itemActive = empty($item['public_site']) && $isActive($item['path']) && empty($currentMarked); if ($itemActive) { $currentMarked = true; } ?><a data-menu-item data-secondary="<?= !empty($item['secondary']) ? 'true' : 'false' ?>" <?= !empty($item['secondary']) ? 'hidden' : '' ?> data-keywords="<?= esc(($item['keywords'] ?? '').' '.$group['label'], 'attr') ?>" href="<?= !empty($item['public_site']) ? esc(route('public-stays.index', ['company' => app('currentTenant')->slug]), 'attr') : site_url($item['path']) ?>" class="hs-nav-link <?= $itemActive ? 'active' : '' ?>" <?= $itemActive ? 'aria-current="page"' : '' ?><?= !empty($item['public_site']) ? ' target="_blank" rel="noopener noreferrer" aria-label="Public website (opens in a new tab)"' : '' ?>>
                             <i data-lucide="<?= esc($item['icon'], 'attr') ?>"></i>
                             <span><?= esc($item['label']) ?></span>
                         </a><?php endif; ?>
@@ -276,7 +249,11 @@ $isActive = static fn (string $path): bool => $activePath === $path;
             </details>
         <?php endforeach; ?>
     </nav>
-    <div class="hs-sidebar-footer"><div class="mb-2"><?= esc(app("currentTenant")->name) ?></div><form method="post" action="<?= url("/logout") ?>"><?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline-light mb-3">Sign out</button></form>
+    <div class="hs-sidebar-footer"><div class="mb-2"><?= esc(app("currentTenant")->name) ?></div>
+    <nav class="hs-account-links" aria-label="My account">
+        @if($user->can('staff-profile.self'))<a data-menu-item data-keywords="my profile biodata identification staff document" class="hs-nav-link {{ $isActive('my-profile') ? 'active' : '' }}" href="{{ route('staff-profile.edit', app('currentTenant')->slug) }}" @if($isActive('my-profile')) aria-current="page" @endif><i data-lucide="id-card"></i><span>My profile</span></a>@endif
+        @unless(session()->has('haven.impersonation'))<a data-menu-item data-keywords="password account security login" class="hs-nav-link {{ request()->routeIs('account.password.*') ? 'active' : '' }}" href="{{ route('account.password.edit') }}" @if(request()->routeIs('account.password.*')) aria-current="page" @endif><i data-lucide="key-round"></i><span>Change password</span></a>@endunless
+    </nav><form method="post" action="<?= url("/logout") ?>"><?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline-light mb-3">Sign out</button></form>
         <strong>HAVEN SUITES</strong>
         <div class="small opacity-75">BNBs and STR Homes<br>Operations Platform</div>
     </div>
@@ -294,7 +271,7 @@ document.addEventListener('DOMContentLoaded', function () {
  search.addEventListener('input',()=>{const query=search.value.trim().toLowerCase();filtering=!!query;if(query&&!snapshot)snapshot=groups.map(g=>g.open);let count=0;
  links.forEach(a=>{const text=(a.textContent+' '+a.dataset.keywords).toLowerCase();const match=query.split(/\s+/).every(word=>[word,...(synonyms[word]||'').split(' ')].filter(Boolean).some(term=>text.includes(term)));a.hidden=query?!match:a.dataset.secondary==='true';if(query&&match)count++});
  groups.forEach((g,i)=>{g.hidden=!!query&&!Array.from(g.querySelectorAll('[data-menu-item]')).some(a=>!a.hidden);if(query)g.open=!g.hidden;else if(snapshot)g.open=snapshot[i]});
- document.getElementById('menu-search-status').textContent=query?(count?count+' matching pages':'No matching pages. Try booking, payment or cleaning.') : '';if(!query){snapshot=null;filtering=false}
+ nav.querySelectorAll('.hs-subnav-heading').forEach(h=>{h.hidden=!!query});document.getElementById('menu-search-status').textContent=query?(count?count+' matching pages':'No matching pages. Try booking, payment or cleaning.') : '';if(!query){snapshot=null;filtering=false}
  });
  search.addEventListener('keydown',e=>{if(e.key==='Escape'){search.value='';search.dispatchEvent(new Event('input'));e.stopPropagation()}});
  let position=0;try{position=Number(sessionStorage.getItem(key+'.scroll')||0)}catch(e){}nav.scrollTop=position;

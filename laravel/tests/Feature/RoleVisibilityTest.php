@@ -125,7 +125,7 @@ class RoleVisibilityTest extends TestCase
         foreach (['sales/connections', 'investor-notifications'] as $path) {
             $this->assertSame(1, $xpath->query('//aside//nav//a[@href="http://127.0.0.1:8001/t/roles/'.$path.'"]')->length);
         }
-        $response->assertSee('Find a page')->assertSee('Bookings &amp; Guests', false)->assertSee('Guest verification')->assertSee('Close accounting month')->assertSee('Cleaner payments pages')->assertSee('Statements')->assertSee('Company settings')->assertSee('Team &amp; access', false)->assertSee('Subscription');
+        $response->assertSee('Find a page')->assertSee('Bookings &amp; guests', false)->assertSee('Guest verification')->assertSee('Close accounting month')->assertSee('Cleaner payments pages')->assertSee('Statements')->assertSee('Company settings')->assertSee('Team &amp; access', false)->assertSee('Subscription');
         $this->get('/t/roles/sales/agents')->assertOk()->assertSee('aria-current="page"', false);
     }
 

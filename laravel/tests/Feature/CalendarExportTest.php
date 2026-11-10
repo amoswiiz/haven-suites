@@ -77,7 +77,7 @@ class CalendarExportTest extends TestCase
         $tenant = $this->company();
         $page = '/t/export-test/availability/external';
         $this->get($page)->assertOk()->assertSee('Export local apartment calendars')->assertSee('No export link generated.')
-            ->assertSee('data-keywords="External calendars Bookings &amp; Guests"', false);
+            ->assertSee('data-keywords="External calendars ical airbnb booking.com sync Bookings &amp; guests"', false);
         $this->post($page.'/exports/1')->assertSessionHas('success');
         $firstPath = $this->exportPath($tenant);
         $this->get($page)->assertOk()->assertSee($firstPath)->assertSee('Copy link');
