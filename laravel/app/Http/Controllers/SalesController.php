@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\EnquiryAcknowledgements;
+use App\Services\EnquiryTracking;
 use App\Services\PublicListingCatalog;
 use App\Services\SalesPipelineSummary;
 use App\Services\TaskAccess;
@@ -69,6 +70,12 @@ class SalesController extends Controller
             $q = $filters['q'];
             $query->where(function (Builder $query) use ($q): void {
                 $query->where('name', 'like', '%'.$q.'%')->orWhere('phone', 'like', '%'.$q.'%')->orWhere('email', 'like', '%'.$q.'%');
+                $reference = strtoupper(trim($q));
+                if (str_starts_with($reference, 'ENQ-')) {
+                    $tenantId = app('currentTenant')->id;
+                    $query->orWhereIn('id', DB::table('enquiry_tracking_links')->where('tenant_id', $tenantId)->where('reference', $reference)->select('lead_id'))
+                        ->orWhereIn('id', DB::table('public_enquiry_receipts')->where('tenant_id', $tenantId)->where('reference', $reference)->select('lead_id'));
+                }
             });
         }
         if (! empty($filters['overdue'])) {
@@ -210,7 +217,7 @@ class SalesController extends Controller
             $eligibleInvoices = $query->select('i.id', 'i.invoice_number', 'i.customer_name', 'i.issue_date', 'i.total_amount', 'i.currency', 'i.status', 'r.id as reservation_id', 'r.check_in', 'r.check_out', 'u.unit_number', 'p.name as property_name')->latest('i.id')->limit(50)->get();
         }
 
-        return view('sales.show', ['publicListing' => $publicListing, 'publicRequestedUnit' => $publicRequestedUnit, 'publicRequestedPartner' => $publicRequestedPartner, 'publicFollowupTask' => $publicFollowupTask, 'acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
+        return view('sales.show', ['publicListing' => $publicListing, 'publicRequestedUnit' => $publicRequestedUnit, 'publicRequestedPartner' => $publicRequestedPartner, 'publicFollowupTask' => $publicFollowupTask, 'acknowledgement' => app(EnquiryAcknowledgements::class)->status(app('currentTenant')->id, $id), 'tracking' => app(EnquiryTracking::class)->forLead(app('currentTenant'), $id), 'eligibleBookings' => $eligibleBookings, 'eligibleInvoices' => $eligibleInvoices, 'invoiceSearch' => $invoiceSearch, 'invoices' => $invoices, 'lead' => $lead, 'members' => $this->members(), 'activities' => $this->table('sales_activities')->where('lead_id', $id)->latest('id')->limit(100)->get(), 'quotes' => $this->table('sales_quotes')->where('lead_id', $id)->latest('id')->get(), 'messages' => auth()->user()->can('messaging.view') ? $this->table('sales_messages')->where('lead_id', $id)->latest('id')->limit(100)->get() : collect(), 'identities' => auth()->user()->can('messaging.view') ? $this->table('messaging_identities')->where('lead_id', $id)->get() : collect()]);
     }
 
     public function update(string $tenant, int $id, Request $request): RedirectResponse

@@ -10,6 +10,40 @@ The prepare preview showed only `0d4f2e2` files, so the earlier pilot
 `/usr/local/bin/haven-prepare` had lost its execute bit and was restored with
 `chmod 755`.
 
+## 10 November (later): booking lock, phone input, enquiry tracking
+
+Committed after `0d4f2e2`; not yet deployed when written.
+
+- `2313e9c` Partner bookings now lock the `partner_apartments` row before the
+  overlap check, both when creating (`Haven\Reservations::store`) and amending
+  (`BookingAmendments::save`) bookings, matching managed-unit locks.
+- `f0d05ed` `App\Support\PhoneNumber` normalises phone numbers (Kenya default):
+  `0712…`, `254…`, `+254 0712…`, `00…` become `+254…`; Kenyan numbers need
+  exactly nine digits after +254; an untouched `+254` counts as blank. Used for
+  enquiry SMS, website/listing WhatsApp numbers, guest contact phone and
+  WhatsApp links. Website settings, listing editor and guest enquiry form
+  prefill an editable `+254`. An invalid stored WhatsApp number (e.g. the live
+  `+25470289894`) now hides WhatsApp links until corrected.
+- Enquiry tracking: central table `enquiry_tracking_links` (migration
+  `2026_11_10_121007_create_enquiry_tracking_links_table`), service
+  `App\Services\EnquiryTracking`, public route `GET /e/{code}` (`enquiry.track`,
+  12-character code, 30 requests/minute, noindex, hashed code plus encrypted
+  copy for staff display, valid 180 days or 30 days after check-out).
+  - Every acknowledgement SMS (website and staff-sent) now reads: "Hi {first
+    name}, thanks for contacting {company}! Your enquiry ref is ENQ-XXXXXX.
+    Track its progress here: {link}" (one SMS for typical names).
+  - References are `ENQ-` plus six characters without look-alikes. New website
+    enquiries use the same short reference on the confirmation page; older
+    receipts keep their long references.
+  - The tracking page maps pipeline stages to guest wording (Received,
+    Reviewing, Options, Payment, Confirmed; Lost shows "Enquiry closed") and
+    shows apartment, dates, guests and contact options only; no notes, staff
+    names, budget or phone numbers.
+  - Confirmation page links to tracking; staff enquiry page shows reference and
+    tracking link; pipeline search finds `ENQ-` references.
+- After deployment: correct the WhatsApp number in Website settings, send one
+  test enquiry to a staff phone and open the SMS link.
+
 ## 10 November: website settings, WhatsApp and menu
 
 - New staff page `/t/{tenant}/public-listings/settings` (route

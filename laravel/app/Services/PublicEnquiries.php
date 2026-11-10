@@ -127,7 +127,7 @@ class PublicEnquiries
                 ]);
                 DB::table('public_enquiry_receipts')->insert([
                     'tenant_id' => $tenant->id, 'lead_id' => $id, 'token_hash' => hash('sha256', $token),
-                    'reference' => 'ENQ-'.strtoupper(Str::random(12)), 'created_at' => now(), 'updated_at' => now(),
+                    'reference' => app(EnquiryTracking::class)->newReference($tenant), 'created_at' => now(), 'updated_at' => now(),
                 ]);
                 if ($tenant->modules['tasks'] ?? true) {
                     $taskId = DB::table('task_items')->insertGetId([

@@ -6,6 +6,7 @@ use App\Http\Middleware\ResolveTenant;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\EnquiryAcknowledgements;
+use App\Services\EnquiryTracking;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
@@ -65,11 +66,15 @@ class EnquiryAcknowledgementsTest extends TestCase
             'tenant_id' => $this->company->id, 'enquiry_id' => $lead->id, 'communication_stage' => 'enquiry_acknowledgement',
             'sent_by' => $this->salesperson->id, 'phone' => '+254712345678', 'status' => 'submitted', 'provider_status' => 'pending',
         ]);
+        $tracking = app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id);
+        $this->assertMatchesRegularExpression('/^ENQ-[A-HJKMNP-Z2-9]{6}$/', $tracking['reference']);
         Http::assertSent(fn ($request) => $request['phone_number'] === '+254712345678'
-            && $request['text_message'] === "Thank you for contacting Haven Suites! We've received your enquiry and our team is working on it. We'll get back to you shortly."
+            && $request['text_message'] === 'Hi Amina, thanks for contacting Haven Suites! Your enquiry ref is '.$tracking['reference'].'. Track its progress here: '.$tracking['url']
             && str_starts_with($request['client_ref'], 'enquiry-'));
         Http::assertSentCount(1);
-        $this->get($this->url('/'.$lead->id))->assertOk()->assertSee('Submitted to SMS provider')->assertSee('delivery pending')->assertDontSee('>Delivered<', false);
+        $this->get($this->url('/'.$lead->id))->assertOk()->assertSee('Submitted to SMS provider')->assertSee('delivery pending')->assertDontSee('>Delivered<', false)
+            ->assertSee($tracking['reference'])->assertSee($tracking['url']);
+        $this->get($this->url('?q='.strtolower($tracking['reference'])))->assertOk()->assertSee('Amina Enquiry');
     }
 
     public function test_form_retries_and_repeated_acknowledgement_calls_never_duplicate_the_lead_or_sms(): void

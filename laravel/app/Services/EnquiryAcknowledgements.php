@@ -66,7 +66,10 @@ class EnquiryAcknowledgements
             ! config('services.roycetalk.manual_live') || ! $transport->configured() => 'SMS delivery is disabled or the provider is not configured. Follow up with the guest separately.',
             default => null,
         };
-        $body = 'Thank you for contacting '.$tenant->name."! We've received your enquiry and our team is working on it. We'll get back to you shortly.";
+        $tracking = app(EnquiryTracking::class)->issue($tenant, $lead);
+        $firstName = mb_substr((string) preg_replace('/[^\p{L}\'-]/u', '', explode(' ', trim((string) $lead->name))[0] ?? ''), 0, 20);
+        $body = ($firstName !== '' ? 'Hi '.$firstName.', thanks' : 'Thank you').' for contacting '.$tenant->name.'! Your enquiry ref is '
+            .$tracking['reference'].'. Track its progress here: '.$tracking['url'];
         $inserted = DB::table('manual_sms_messages')->insertOrIgnore([
             'tenant_id' => $tenant->id, 'sent_by' => $actorId, 'enquiry_id' => $enquiryId,
             'send_token' => (string) Str::uuid(), 'communication_stage' => self::STAGE,

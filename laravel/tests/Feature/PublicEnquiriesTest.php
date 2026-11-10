@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\EnquiryAcknowledgements;
+use App\Services\EnquiryTracking;
 use App\Services\PartnerAvailability;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
@@ -172,7 +173,15 @@ class PublicEnquiriesTest extends TestCase
         $this->assertSame(0, $this->inventory->table('reservations')->count());
         $this->assertMatchesRegularExpression('#/enquiries/[a-f0-9]{64}$#', $response->headers->get('Location'));
         Http::assertSentCount(1);
-        Http::assertSent(fn ($request): bool => $request['phone_number'] === '+254712345678' && str_contains($request['text_message'], 'our team is working on it'));
+        $receiptReference = DB::table('public_enquiry_receipts')->where('lead_id', $lead->id)->value('reference');
+        $tracking = app(EnquiryTracking::class)->forLead($this->company, (int) $lead->id);
+        $this->assertMatchesRegularExpression('/^ENQ-[A-HJKMNP-Z2-9]{6}$/', $receiptReference);
+        $this->assertSame($receiptReference, $tracking['reference']);
+        Http::assertSent(fn ($request): bool => $request['phone_number'] === '+254712345678'
+            && str_contains($request['text_message'], 'Your enquiry ref is '.$receiptReference.'. Track its progress here: '.$tracking['url']));
+        $this->get($response->headers->get('Location'))->assertOk()->assertSee($receiptReference)->assertSee('Track your enquiry')->assertSee($tracking['url']);
+        $this->get(parse_url($tracking['url'], PHP_URL_PATH))->assertOk()->assertSee('Enquiry received')->assertSee($receiptReference)
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
     }
 
     public function test_replaying_the_same_public_form_does_not_duplicate_the_enquiry_task_or_sms(): void

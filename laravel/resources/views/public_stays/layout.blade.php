@@ -31,7 +31,7 @@
         <meta name="twitter:image" content="{{ $socialImage['url'] }}">
         <meta name="twitter:image:alt" content="{{ $socialImage['caption'] ?? $pageTitle }}">
     @endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=3">
+    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=4">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">
