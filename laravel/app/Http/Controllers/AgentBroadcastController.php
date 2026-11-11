@@ -38,13 +38,14 @@ class AgentBroadcastController extends Controller
             'message' => 'required|string|min:10|max:'.AgentBroadcasts::MAX_LENGTH,
             'agent_ids' => 'required|array|min:1|max:1000', 'agent_ids.*' => 'integer',
             'listing_ids' => 'nullable|array|max:10', 'listing_ids.*' => 'integer',
+            'listing_prices' => 'nullable|array|max:200', 'listing_prices.*' => 'nullable|numeric|min:0|max:9999999',
             'confirm' => 'accepted',
         ], ['agent_ids.required' => 'Choose at least one agent.', 'confirm.accepted' => 'Tick the box to confirm you want to send this SMS.']);
         if (! $broadcasts->smsAvailable($tenant)) {
             throw ValidationException::withMessages(['message' => 'SMS sending is not switched on for this company yet. Ask the platform administrator to enable RoyceTalk SMS.']);
         }
         $listingIds = array_map('intval', $data['listing_ids'] ?? []);
-        $lines = $broadcasts->listingLines($tenant, $listingIds);
+        $lines = $broadcasts->listingLines($tenant, $listingIds, $data['listing_prices'] ?? []);
         $message = preg_replace("/^[ \t]*\{listings\}[ \t]*\n?/m", $lines === '' ? '' : $lines."\n", str_replace("\r\n", "\n", $data['message']));
         $message = trim(str_replace('{listings}', $lines, $message));
         if (mb_strlen($message) > AgentBroadcasts::MAX_LENGTH) {

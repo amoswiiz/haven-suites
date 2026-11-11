@@ -66,17 +66,39 @@ class AgentBroadcasts
         return $length <= 160 ? 1 : (int) ceil($length / 153);
     }
 
-    /** Short lines for chosen published listings, e.g. "- Sea View (2 bedrooms, Nyali) KES 12,000/night: link". @param list<int> $listingIds */
-    public function listingLines(Tenant $tenant, array $listingIds): string
+    /**
+     * Lines for chosen published listings, e.g. "- Sea View (2 bedrooms, Nyali) KES 12,000/night app.example.com/l/7".
+     *
+     * @param  list<int>  $listingIds
+     * @param  array<int|string, mixed>  $prices  Price per listing id for this message; blank uses the listing's own price.
+     */
+    public function listingLines(Tenant $tenant, array $listingIds, array $prices = []): string
     {
         if ($listingIds === []) {
             return '';
         }
 
-        return $this->publishedListings($tenant)->whereIn('id', $listingIds)->map(fn (array $listing): string => $listing['line'])->implode("\n");
+        return $this->publishedListings($tenant)->whereIn('id', $listingIds)->map(function (array $listing) use ($prices): string {
+            $price = $prices[$listing['id']] ?? null;
+
+            return self::listingLine($listing, is_numeric($price) ? (float) $price : $listing['price']);
+        })->implode("\n");
     }
 
-    /** @return Collection<int, array{id: int, title: string, summary: string, line: string}> */
+    /** @param array{title: string, summary: string, currency: string, short_url: string} $listing */
+    public static function listingLine(array $listing, ?float $price): string
+    {
+        return '- '.$listing['title'].($listing['summary'] !== '' ? ' ('.$listing['summary'].')' : '')
+            .($price !== null && $price > 0 ? ' '.$listing['currency'].' '.number_format($price).'/night' : '').' '.$listing['short_url'];
+    }
+
+    /** Short public link for a listing without the https:// prefix, which phones still recognise as a link. */
+    public static function shortUrl(int $listingId): string
+    {
+        return preg_replace('#^https?://#', '', route('public-stays.short', base_convert((string) $listingId, 10, 36)));
+    }
+
+    /** @return Collection<int, array{id: int, title: string, summary: string, price: ?float, currency: string, short_url: string}> */
     public function publishedListings(Tenant $tenant): Collection
     {
         $listings = rescue(fn () => app(PublicListingCatalog::class)->published($tenant), collect(), false);
@@ -84,11 +106,10 @@ class AgentBroadcasts
         return collect($listings)->map(function (array $listing) use ($tenant): array {
             $place = $listing['neighbourhood'] ?: $listing['city'];
             $layout = $listing['layout_label'] ?? PublicListingCatalog::layoutLabel($listing['bedrooms'] ?? null, $listing['property_type'] ?? null);
-            $summary = implode(', ', array_filter([$layout, $place]));
-            $price = (float) ($listing['starting_price'] ?? 0) > 0 ? ' '.$listing['currency'].' '.number_format((float) $listing['starting_price']).'/night' : '';
 
-            return ['id' => (int) $listing['id'], 'title' => $listing['title'], 'summary' => $summary,
-                'line' => '- '.$listing['title'].($summary !== '' ? ' ('.$summary.')' : '').$price.': '.route('public-stays.show', [$tenant->slug, $listing['slug']])];
+            return ['id' => (int) $listing['id'], 'title' => $listing['title'], 'summary' => implode(', ', array_filter([$layout, $place])),
+                'price' => (float) ($listing['starting_price'] ?? 0) > 0 ? (float) $listing['starting_price'] : null,
+                'currency' => $listing['currency'] ?? $tenant->currency ?? 'KES', 'short_url' => self::shortUrl((int) $listing['id'])];
         })->values();
     }
 

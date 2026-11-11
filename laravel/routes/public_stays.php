@@ -5,6 +5,8 @@ use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicStayController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/l/{code}', [PublicStayController::class, 'shortLink'])->where('code', '[0-9a-z]{1,8}')->middleware('throttle:60,1')->name('public-stays.short');
+
 Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'])->name('public-stays.')->group(function (): void {
     Route::get('/', [PublicStayController::class, 'index'])->name('index');
     Route::get('sitemap.xml', [PublicStayController::class, 'sitemap'])->name('sitemap');

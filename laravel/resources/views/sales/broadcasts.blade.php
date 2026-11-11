@@ -17,8 +17,13 @@
         <p><button type="button" data-broadcast-template>Start from the template</button></p>
         @if($listings->isNotEmpty())
             <fieldset class="broadcast-listings"><legend>Units to include <small class="muted">(up to 10, added where <code>{listings}</code> appears)</small></legend>
+                <p class="muted broadcast-listing-help">Change a price to quote an offer in this message only. Leave it blank to leave the price out.</p>
                 @foreach($listings as $listing)
-                    <label><input style="width:auto" type="checkbox" name="listing_ids[]" value="{{ $listing['id'] }}" data-line="{{ $listing['line'] }}" @checked(in_array($listing['id'], array_map('intval', old('listing_ids', [])), true))> {{ $listing['title'] }} <span class="muted">{{ $listing['summary'] }}</span></label>
+                    @php($priceValue = old('listing_prices.'.$listing['id'], $listing['price'] !== null ? (string) round($listing['price']) : ''))
+                    <div class="broadcast-listing" data-listing-row data-title="{{ $listing['title'] }}" data-summary="{{ $listing['summary'] }}" data-currency="{{ $listing['currency'] }}" data-url="{{ $listing['short_url'] }}">
+                        <label><input style="width:auto" type="checkbox" name="listing_ids[]" value="{{ $listing['id'] }}" @checked(in_array($listing['id'], array_map('intval', old('listing_ids', [])), true))> {{ $listing['title'] }} <span class="muted">{{ $listing['summary'] }}</span></label>
+                        <span class="broadcast-price"><label class="muted" for="price-{{ $listing['id'] }}">{{ $listing['currency'] }}</label><input id="price-{{ $listing['id'] }}" name="listing_prices[{{ $listing['id'] }}]" type="number" min="0" step="1" inputmode="numeric" value="{{ $priceValue }}" aria-label="Price per night for {{ $listing['title'] }}"><span class="muted">/night</span></span>
+                    </div>
                 @endforeach
             </fieldset>
         @else
@@ -79,6 +84,13 @@
 .broadcast-grid{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));align-items:start}
 .broadcast-listings{border:1px solid #dfe5ef;border-radius:10px;padding:10px 14px;margin:12px 0}
 .broadcast-listings label,.broadcast-agents label{display:block;margin:6px 0;font-weight:normal}
+.broadcast-listing-help{margin:0 0 6px;font-size:13px}
+.broadcast-listing{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 14px;padding:6px 0;border-top:1px solid #eef2f7}
+.broadcast-listing:first-of-type{border-top:0}
+.broadcast-listing>label{flex:1 1 220px;margin:0}
+.broadcast-price{display:inline-flex;align-items:center;gap:6px}
+.broadcast-price label{display:inline;margin:0}
+.broadcast-price input{width:110px;margin:0}
 .broadcast-agents{max-height:420px;overflow:auto}
 .broadcast-preview{white-space:pre-wrap;word-break:break-word;background:#f4f6fa;border:1px solid #dfe5ef;border-radius:10px;padding:12px;font:inherit;margin:0}
 </style>
@@ -107,7 +119,11 @@
         return length <= 160 ? 1 : Math.ceil(length / 153);
     };
     const render = () => {
-        const lines = [...form.querySelectorAll('input[name="listing_ids[]"]:checked')].map((box) => box.dataset.line).join('\n');
+        const lines = [...form.querySelectorAll('[data-listing-row]')].filter((row) => row.querySelector('input[name="listing_ids[]"]').checked).map((row) => {
+            const price = parseFloat(row.querySelector('input[type="number"]').value);
+            return '- ' + row.dataset.title + (row.dataset.summary ? ` (${row.dataset.summary})` : '')
+                + (price > 0 ? ` ${row.dataset.currency} ${Math.round(price).toLocaleString('en-US')}/night` : '') + ' ' + row.dataset.url;
+        }).join('\n');
         const agents = [...form.querySelectorAll('input[name="agent_ids[]"]:checked')];
         const firstName = (agents[0]?.dataset.agentName || 'Agent').trim().split(/\s+/)[0];
         let text = message.value.replace(/\r\n/g, '\n').replace(/^[ \t]*\{listings\}[ \t]*\n?/m, lines ? lines + '\n' : '').replace('{listings}', lines).trim();

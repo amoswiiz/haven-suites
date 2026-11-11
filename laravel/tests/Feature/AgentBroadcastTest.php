@@ -57,14 +57,14 @@ class AgentBroadcastTest extends TestCase
             ->push(['success' => true, 'data' => ['message_id' => 'msg-2']])]);
         $this->actingAs($this->user)->get('/t/broadcast-test/sales/agents')->assertOk()->assertSee('Message all agents');
         $this->get($this->url())->assertOk()->assertSee('Grace Achieng')->assertSee('Opted out of broadcasts')->assertSee('No mobile number')
-            ->assertSee('Sea View')->assertSee('2 bedrooms, Nyali')->assertSee('No messages sent to agents yet.');
+            ->assertSee('Sea View')->assertSee('2 bedrooms, Nyali')->assertSee('name="listing_prices[7]"', false)->assertSee('value="12000"', false)->assertSee('No messages sent to agents yet.');
 
         $payload = ['kind' => 'availability', 'message' => "Hi {name}, units available this weekend:\n{listings}\nCall us to book.",
-            'agent_ids' => array_values($this->agents), 'listing_ids' => [7]];
+            'agent_ids' => array_values($this->agents), 'listing_ids' => [7], 'listing_prices' => [7 => '9500', 8 => '']];
         $this->post($this->url(), $payload)->assertSessionHasErrors('confirm');
         $this->post($this->url(), $payload + ['confirm' => 1])->assertSessionHasNoErrors()->assertRedirect();
         $broadcast = DB::table('agent_broadcasts')->first();
-        $this->assertMatchesRegularExpression('#^Hi \{name\}, units available this weekend:\n- Sea View \(2 bedrooms, Nyali\) KES 12,000/night: https?://[^/]+/stays/broadcast-test/sea-view\nCall us to book\.$#D', $broadcast->message);
+        $this->assertMatchesRegularExpression('#^Hi \{name\}, units available this weekend:\n- Sea View \(2 bedrooms, Nyali\) KES 9,500/night [^/\s:]+(:\d+)?/l/7\nCall us to book\.$#D', $broadcast->message, 'The price typed for this message and a short link without https:// are used.');
         $this->assertSame(4, (int) $broadcast->recipient_count);
         $statuses = DB::table('agent_broadcast_recipients')->pluck('status', 'agent_id');
         $this->assertSame('pending', $statuses[$this->agents['grace']]);
@@ -95,6 +95,19 @@ class AgentBroadcastTest extends TestCase
         $otherTenant = Tenant::create(['name' => 'Other', 'slug' => 'other-broadcast', 'database_name' => 'not_connected_other', 'active' => true]);
         $otherId = DB::table('agent_broadcasts')->insertGetId(['tenant_id' => $otherTenant->id, 'kind' => 'offer', 'channel' => 'sms', 'message' => 'Private offer', 'created_at' => now(), 'updated_at' => now()]);
         $this->get($this->url('/'.$otherId))->assertNotFound();
+    }
+
+    public function test_short_links_redirect_only_to_published_listings(): void
+    {
+        $id = DB::table('public_listings')->insertGetId(['tenant_id' => $this->tenant->id, 'slug' => 'coral-gables-f5', 'title' => 'Coral Gables F5', 'description' => 'A bright two bedroom apartment near the beach.',
+            'city' => 'Mombasa', 'max_guests' => 4, 'min_nights' => 1, 'check_in_time' => '14:00', 'check_out_time' => '10:00', 'status' => 'published', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        $code = base_convert((string) $id, 10, 36);
+        $this->assertStringEndsWith('/l/'.$code, AgentBroadcasts::shortUrl($id));
+        $this->assertStringStartsNotWith('http', AgentBroadcasts::shortUrl($id));
+        $this->get('/l/'.$code)->assertRedirect(route('public-stays.show', ['broadcast-test', 'coral-gables-f5', 'utm_source' => 'agent-sms']));
+        DB::table('public_listings')->where('id', $id)->update(['status' => 'draft']);
+        $this->get('/l/'.$code)->assertNotFound();
+        $this->get('/l/zzzzzz')->assertNotFound();
     }
 
     public function test_sms_segments_follow_gsm_and_unicode_limits(): void

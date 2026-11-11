@@ -16,6 +16,7 @@ use Carbon\CarbonImmutable;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -123,6 +124,17 @@ class PublicStayController extends Controller
             'canonicalUrl' => $canonicalUrl, 'robotsContent' => $filtered ? 'noindex, follow' : 'index, follow, max-image-preview:large',
             'socialImage' => $this->socialImage($hero['photos'][0] ?? null),
         ]);
+    }
+
+    /** Short listing link such as /l/fh (the listing id in base 36), used in SMS to agents. */
+    public function shortLink(string $code): RedirectResponse
+    {
+        $listing = DB::table('public_listings as l')->join('tenants as t', 't.id', '=', 'l.tenant_id')
+            ->where('l.id', (int) base_convert($code, 36, 10))->where('l.status', 'published')->where('t.active', true)
+            ->first(['l.slug', 't.slug as tenant_slug']);
+        abort_unless($listing, 404);
+
+        return redirect()->route('public-stays.show', [$listing->tenant_slug, $listing->slug, 'utm_source' => 'agent-sms']);
     }
 
     public function show(Request $request, string $company, string $slug, PublicListingCatalog $catalog, ListingAvailability $availability, PublicEnquiries $enquiries): Response
