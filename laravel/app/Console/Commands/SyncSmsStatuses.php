@@ -25,6 +25,7 @@ class SyncSmsStatuses extends Command
         }
         if (config('services.roycetalk.manual_live')) {
             $tables[] = 'manual_sms_messages';
+            $tables[] = 'agent_broadcast_recipients';
         }
         foreach ($tables as $table) {
             $deliveries = DB::table($table)->where('channel', 'sms')->where('sms_provider', 'roycetalk')

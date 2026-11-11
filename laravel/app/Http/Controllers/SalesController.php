@@ -475,7 +475,7 @@ class SalesController extends Controller
     public function updateAgent(Request $request, string $tenant, int $id): RedirectResponse
     {
         $agent = $this->table('sales_agents')->where('id', $id)->firstOrFail();
-        $data = $this->agentData($request) + ['active' => $request->boolean('active')];
+        $data = $this->agentData($request) + ['active' => $request->boolean('active'), 'broadcast_opt_out' => $request->boolean('broadcast_opt_out')];
         $this->table('sales_agents')->where('id', $agent->id)->update([...$data, 'updated_at' => now()]);
 
         return redirect()->route('sales.agents', $tenant)->with('success', 'Referral agent '.$data['name'].' updated.');
@@ -485,7 +485,7 @@ class SalesController extends Controller
     private function agentData(Request $request): array
     {
         $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'whatsapp' => 'nullable|string|max:50',
-            'email' => 'nullable|email|max:255', 'commission_terms' => 'nullable|string|max:2000', 'active' => 'sometimes|boolean']);
+            'email' => 'nullable|email|max:255', 'commission_terms' => 'nullable|string|max:2000', 'active' => 'sometimes|boolean', 'broadcast_opt_out' => 'sometimes|boolean']);
         $whatsapp = null;
         if (! PhoneNumber::isBlank($data['whatsapp'] ?? null)) {
             $whatsapp = PhoneNumber::normalize($data['whatsapp']);

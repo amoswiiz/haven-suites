@@ -3,10 +3,11 @@
 @section('content')
 @php($canManageAgents = auth()->user()->can('agents.manage'))
 <h1>Referral agents</h1><p class="muted">Referral commission terms are separate from partner-property payouts. Recording terms does not create a payment obligation.</p>
+@if($canManageAgents)<p><a class="button" href="{{ route('sales.broadcasts', app('currentTenant')->slug) }}">Message all agents</a> <span class="muted">Send available units and offers to every agent by SMS.</span></p>@endif
 <section class="card"><div class="table-wrap"><table><thead><tr><th>Agent</th><th>Contact</th><th>WhatsApp</th><th>Commission terms</th>@if($canManageAgents)<th>Actions</th>@endif</tr></thead><tbody>
 @forelse($agents as $agent)
     <tr>
-        <td>{{ $agent->name }}@if(!$agent->active)<br><span class="muted">Inactive</span>@endif</td>
+        <td>{{ $agent->name }}@if(!$agent->active)<br><span class="muted">Inactive</span>@endif @if(!empty($agent->broadcast_opt_out))<br><span class="muted">No broadcast SMS</span>@endif</td>
         <td>@if($agent->phone)<a href="tel:{{ preg_replace('/[^+0-9]/', '', $agent->phone) }}">{{ $agent->phone }}</a>@endif @if($agent->email)<br><a href="mailto:{{ $agent->email }}">{{ $agent->email }}</a>@endif</td>
         <td>@if($agent->whatsapp_url)<a href="{{ $agent->whatsapp_url }}" target="_blank" rel="noopener noreferrer" aria-label="Chat with {{ $agent->name }} on WhatsApp">Chat on WhatsApp &nearr;</a>@else<span class="muted">No mobile number</span>@endif</td>
         <td>{{ $agent->commission_terms ?: 'Not agreed' }}</td>

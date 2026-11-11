@@ -11,6 +11,8 @@
     <label for="terms">Commission terms, payable trigger and cancellation policy</label><textarea id="terms" name="commission_terms" rows="4" maxlength="2000">{{ old('commission_terms', $agent->commission_terms) }}</textarea>
     <input type="hidden" name="active" value="0">
     <label><input style="width:auto" type="checkbox" name="active" value="1" @checked(old('active', $agent->active))> Active &mdash; can be chosen on new leads</label>
+    <input type="hidden" name="broadcast_opt_out" value="0">
+    <label><input style="width:auto" type="checkbox" name="broadcast_opt_out" value="1" @checked(old('broadcast_opt_out', $agent->broadcast_opt_out ?? false))> Does not want broadcast SMS (availability and offers)</label>
     <div class="actions"><button>Save changes</button> <a href="{{ route('sales.agents', app('currentTenant')->slug) }}">Cancel</a></div>
 </form>
 @endsection
