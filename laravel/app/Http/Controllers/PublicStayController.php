@@ -69,7 +69,7 @@ class PublicStayController extends Controller
                 && (empty($filters['collection']) || in_array($filters['collection'], $listing['collections'] ?? [], true))
                 && (empty($filters['guests']) || $listing['max_guests'] >= (int) $filters['guests'])
                 && ((! isset($filters['min_price']) && ! isset($filters['max_price'])) || (float) $listing['starting_price'] > 0)
-                && (! isset($filters['bedrooms']) || $filters['bedrooms'] === null || $listing['bedrooms'] === (int) $filters['bedrooms'])
+                && (! isset($filters['bedrooms']) || $filters['bedrooms'] === null || ($listing['bedrooms'] === (int) $filters['bedrooms'] || ((int) $filters['bedrooms'] >= 6 && $listing['bedrooms'] !== null && $listing['bedrooms'] >= 6)))
                 && (! isset($filters['min_price']) || $filters['min_price'] === null || (float) $listing['starting_price'] >= (float) $filters['min_price'])
                 && (! isset($filters['max_price']) || $filters['max_price'] === null || (float) $listing['starting_price'] <= (float) $filters['max_price'])
                 && ! array_diff($filters['amenities'] ?? [], $listing['amenities'])

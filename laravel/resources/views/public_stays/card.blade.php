@@ -1,6 +1,7 @@
 @php
     $stayUrl = route('public-stays.show', [$tenant->slug, $stay['slug'], ...array_intersect_key($filters ?? [], array_flip(['check_in', 'check_out', 'guests']))]);
-    $bedroomLabel = $stay['bedrooms'] === null ? 'Bedroom details on request' : ($stay['bedrooms'] === 0 ? 'Studio' : $stay['bedrooms'].' bedroom'.($stay['bedrooms'] === 1 ? '' : 's'));
+    $bedroomLabel = $stay['layout_label'] ?? \App\Services\PublicListingCatalog::layoutLabel($stay['bedrooms'], $stay['property_type'] ?? null) ?? 'Bedroom details on request';
+    $bedLabel = !empty($stay['beds']) ? $stay['beds'].' bed'.($stay['beds'] === 1 ? '' : 's') : null;
     $bathroomLabel = $stay['bathrooms'] === null ? 'Bathroom details on request' : $stay['bathrooms'].' bathroom'.($stay['bathrooms'] === 1 ? '' : 's');
     $quickLinks = $stay['links'] ?? ['enquiry_url' => $stayUrl.'#enquire', 'whatsapp_url' => null];
 @endphp
@@ -14,7 +15,7 @@
         @if(!empty($stay['availability']))
             <span class="stay-pill {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
         @endif
-        <div class="stay-facts"><span>{{ $bedroomLabel }}</span><span>{{ $bathroomLabel }}</span><span>Up to {{ $stay['max_guests'] }} guests</span></div>
+        <div class="stay-facts"><span>{{ $bedroomLabel }}</span>@if($bedLabel)<span>{{ $bedLabel }}</span>@endif<span>{{ $bathroomLabel }}</span><span>Up to {{ $stay['max_guests'] }} guests</span></div>
         <div class="stay-card-bottom"><div class="stay-price">
             @if((float)$stay['starting_price'] > 0)<small>From</small><strong>{{ $stay['currency'] }} {{ number_format((float)$stay['starting_price'], (float)$stay['starting_price'] == floor((float)$stay['starting_price']) ? 0 : 2) }}</strong><small>per night</small>@else<strong>Price on request</strong>@endif
         </div><a href="{{ $stayUrl }}">View details &rarr;</a></div>

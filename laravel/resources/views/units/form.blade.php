@@ -92,16 +92,15 @@ $propertyList = $properties ?? [];
 
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">
-                            Bedrooms
+                            Layout / bedrooms
                         </label>
 
-                        <input type="number"
-                               name="bedrooms"
-                               class="form-control"
-                               min="0"
-                               max="30"
-                               required
-                               value="<?= esc($value('bedrooms', 1)) ?>">
+                        <?php $currentBedrooms = (int) $value('bedrooms', 1); $layoutOptions = \App\Services\PublicListingCatalog::LAYOUTS; if (! isset($layoutOptions[$currentBedrooms])) { $layoutOptions[$currentBedrooms] = $currentBedrooms.' bedrooms'; } ?>
+                        <select name="bedrooms" class="form-select" required>
+                            <?php foreach ($layoutOptions as $layoutValue => $layoutLabel): ?>
+                                <option value="<?= $layoutValue ?>" <?= $currentBedrooms === $layoutValue ? 'selected' : '' ?>><?= esc($layoutLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="col-md-4">

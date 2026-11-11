@@ -159,6 +159,8 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
     Route::post('/', [SalesController::class, 'store'])->middleware(['permission:sales.manage', 'throttle:20,1'])->name('sales.store');
     Route::get('agents', [SalesController::class, 'agents'])->middleware('permission:agents.view')->name('sales.agents');
     Route::post('agents', [SalesController::class, 'agent'])->middleware('permission:agents.manage')->name('sales.agent.store');
+    Route::get('agents/{id}/edit', [SalesController::class, 'editAgent'])->whereNumber('id')->middleware('permission:agents.manage')->name('sales.agent.edit');
+    Route::post('agents/{id}', [SalesController::class, 'updateAgent'])->whereNumber('id')->middleware('permission:agents.manage')->name('sales.agent.update');
     Route::get('connections', [SalesController::class, 'connections'])->middleware('permission:messaging.view')->name('sales.connections');
     Route::get('{id}', [SalesController::class, 'show'])->whereNumber('id')->middleware('permission:sales.view')->name('sales.show');
     Route::post('{id}', [SalesController::class, 'update'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.update');

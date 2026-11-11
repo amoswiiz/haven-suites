@@ -15,7 +15,7 @@
         if (!empty($filters['area'])) { $activeFilters[] = ['label' => $filters['area'], 'url' => $removeFilter('area')]; }
         if (!empty($filters['collection'])) { $activeFilters[] = ['label' => \App\Services\PublicListingCatalog::COLLECTIONS[$filters['collection']], 'url' => $removeFilter('collection')]; }
         if (!empty($filters['type'])) { $activeFilters[] = ['label' => \App\Services\PublicListingCatalog::PROPERTY_TYPES[$filters['type']], 'url' => $removeFilter('type')]; }
-        if (isset($filters['bedrooms']) && $filters['bedrooms'] !== null) { $activeFilters[] = ['label' => (int) $filters['bedrooms'] === 0 ? 'Studio' : $filters['bedrooms'].' bedroom'.((int) $filters['bedrooms'] === 1 ? '' : 's'), 'url' => $removeFilter('bedrooms')]; }
+        if (isset($filters['bedrooms']) && $filters['bedrooms'] !== null) { $activeFilters[] = ['label' => (int) $filters['bedrooms'] === 0 ? 'Studio' : ((int) $filters['bedrooms'] >= 6 ? '6+ bedrooms' : $filters['bedrooms'].' bedroom'.((int) $filters['bedrooms'] === 1 ? '' : 's')), 'url' => $removeFilter('bedrooms')]; }
         if (!empty($filters['q'])) { $activeFilters[] = ['label' => '“'.$filters['q'].'”', 'url' => $removeFilter('q')]; }
         if (isset($filters['min_price']) || isset($filters['max_price'])) { $activeFilters[] = ['label' => 'Price', 'url' => $removeFilter('min_price', 'max_price')]; }
         if (!empty($filters['amenities'])) { $activeFilters[] = ['label' => count($filters['amenities']).' '.(count($filters['amenities']) === 1 ? 'amenity' : 'amenities'), 'url' => $removeFilter('amenities')]; }
@@ -46,7 +46,7 @@
                 @if(count($propertyTypes) > 1)
                     <div><label for="stay-type">Property type</label><select id="stay-type" name="type"><option value="">Any type</option>@foreach($propertyTypes as $typeKey => $typeLabel)<option value="{{ $typeKey }}" @selected(($filters['type'] ?? '') === $typeKey)>{{ $typeLabel }}</option>@endforeach</select></div>
                 @endif
-                <div><label for="stay-bedrooms">Bedrooms</label><select id="stay-bedrooms" name="bedrooms"><option value="">Any size</option>@for($bedrooms=0;$bedrooms<=6;$bedrooms++)<option value="{{ $bedrooms }}" @selected(isset($filters['bedrooms']) && $filters['bedrooms'] !== null && (int)$filters['bedrooms'] === $bedrooms)>{{ $bedrooms === 0 ? 'Studio' : $bedrooms.' bedroom'.($bedrooms === 1 ? '' : 's') }}</option>@endfor</select></div>
+                <div><label for="stay-bedrooms">Bedrooms</label><select id="stay-bedrooms" name="bedrooms"><option value="">Any size</option>@for($bedrooms=0;$bedrooms<=6;$bedrooms++)<option value="{{ $bedrooms }}" @selected(isset($filters['bedrooms']) && $filters['bedrooms'] !== null && (int)$filters['bedrooms'] === $bedrooms)>{{ $bedrooms === 0 ? 'Studio' : ($bedrooms === 6 ? '6+ bedrooms' : $bedrooms.' bedroom'.($bedrooms === 1 ? '' : 's')) }}</option>@endfor</select></div>
                 <div><label for="min-price">Minimum starting price ({{ $tenant->currency }})</label><input type="number" min="0" step="1" id="min-price" name="min_price" value="{{ $filters['min_price'] ?? '' }}"></div>
                 <div><label for="max-price">Maximum starting price ({{ $tenant->currency }})</label><input type="number" min="0" step="1" id="max-price" name="max_price" value="{{ $filters['max_price'] ?? '' }}"></div>
             </div>

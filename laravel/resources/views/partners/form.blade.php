@@ -16,7 +16,8 @@
         <div><label for="building_name">Building or block</label><input id="building_name" name="building_name" maxlength="150" value="{{ $value('building_name') }}"></div>
         <div><label for="unit_number">Unit number</label><input id="unit_number" name="unit_number" maxlength="50" value="{{ $value('unit_number') }}"></div>
         <div><label for="location">Area / location</label><input id="location" name="location" required maxlength="150" value="{{ $value('location') }}" placeholder="e.g. Diani"></div>
-        <div><label for="bedrooms">Bedrooms</label><input id="bedrooms" name="bedrooms" type="number" min="0" max="20" required value="{{ $value('bedrooms', 1) }}"><small class="muted">Use 0 for a studio.</small></div>
+        @php($currentBedrooms = (int) $value('bedrooms', 1))
+        <div><label for="bedrooms">Layout / bedrooms</label><select id="bedrooms" name="bedrooms" required>@foreach(\App\Services\PublicListingCatalog::LAYOUTS + [$currentBedrooms => $currentBedrooms.' bedrooms'] as $layoutValue => $layoutLabel)<option value="{{ $layoutValue }}" @selected($currentBedrooms === $layoutValue)>{{ $layoutLabel }}</option>@endforeach</select></div>
         <div><label for="bathrooms">Bathrooms</label><input id="bathrooms" name="bathrooms" type="number" min="0" max="20" value="{{ $value('bathrooms') }}"></div>
         <div><label for="status">Status</label><select id="status" name="status">@foreach(['active' => 'Active', 'inactive' => 'Inactive'] as $key => $label)<option value="{{ $key }}" @selected($value('status', 'active') === $key)>{{ $label }}</option>@endforeach</select></div>
     </div>

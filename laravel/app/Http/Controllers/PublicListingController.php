@@ -284,6 +284,9 @@ class PublicListingController extends Controller
             'starting_price' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999.99', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
             'amenities' => 'nullable|array|max:30', 'amenities.*' => ['string', Rule::in(array_keys(PublicListingCatalog::AMENITIES))],
             'property_type' => ['nullable', Rule::in(array_keys(PublicListingCatalog::PROPERTY_TYPES))],
+            'bedrooms' => ['nullable', 'integer', Rule::in(array_keys(PublicListingCatalog::LAYOUTS))],
+            'bathrooms' => 'nullable|integer|min:0|max:20', 'beds' => 'nullable|integer|min:1|max:60',
+            'bed_setup' => 'nullable|string|max:160|not_regex:/[<>]/',
             'collections' => 'nullable|array|max:6', 'collections.*' => ['string', Rule::in(array_keys(PublicListingCatalog::COLLECTIONS))],
             'listing_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Z0-9][A-Z0-9-]*$/D', Rule::unique('public_listings')->where('tenant_id', $tenant->id)->ignore($id)],
             'house_rules' => 'nullable|string|max:5000', 'status' => 'required|in:draft,published,paused', 'featured' => 'sometimes|boolean',
@@ -340,8 +343,9 @@ class PublicListingController extends Controller
                 if ($photoCount > 30 || ($data['status'] === 'published' && ($photoCount < 1 || $unit->status !== 'active'))) {
                     throw ValidationException::withMessages(['photos' => 'A published listing needs an active apartment and at least one photo. Keep at most 30 photos.']);
                 }
-                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message', 'cleaning_fee', 'weekly_discount_percent', 'monthly_discount_percent']));
-                $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null, 'cleaning_fee' => null, 'weekly_discount_percent' => null, 'monthly_discount_percent' => null];
+                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message', 'cleaning_fee', 'weekly_discount_percent', 'monthly_discount_percent', 'bedrooms', 'bathrooms', 'beds', 'bed_setup']));
+                $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null, 'cleaning_fee' => null, 'weekly_discount_percent' => null, 'monthly_discount_percent' => null,
+                    'bedrooms' => null, 'bathrooms' => null, 'beds' => null, 'bed_setup' => null];
                 $changes['property_type'] = $data['property_type'] ?? null;
                 $changes['listing_code'] = ($data['listing_code'] ?? null) ?: null;
                 $changes['collections'] = json_encode(array_values(array_unique($data['collections'] ?? [])), JSON_THROW_ON_ERROR);

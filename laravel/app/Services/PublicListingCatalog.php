@@ -16,7 +16,27 @@ class PublicListingCatalog
     public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas'];
 
     /** @var array<string, string> */
-    public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'cottage' => 'Cottage'];
+    public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'maisonette' => 'Maisonette', 'penthouse' => 'Penthouse', 'cottage' => 'Cottage'];
+
+    /** Bedroom choices offered on forms and filters; 0 is a studio. @var array<int, string> */
+    public const LAYOUTS = [0 => 'Studio', 1 => '1 bedroom', 2 => '2 bedrooms', 3 => '3 bedrooms', 4 => '4 bedrooms', 5 => '5 bedrooms',
+        6 => '6 bedrooms', 7 => '7 bedrooms', 8 => '8 bedrooms', 9 => '9 bedrooms', 10 => '10 bedrooms'];
+
+    /** Short label such as "Studio", "2 bedrooms" or "4-bedroom villa". */
+    public static function layoutLabel(?int $bedrooms, ?string $propertyType = null): ?string
+    {
+        if ($bedrooms === null) {
+            return null;
+        }
+        if ($bedrooms === 0) {
+            return 'Studio';
+        }
+        if ($propertyType !== null && ! in_array($propertyType, ['apartment', 'studio'], true) && isset(self::PROPERTY_TYPES[$propertyType])) {
+            return $bedrooms.'-bedroom '.strtolower(self::PROPERTY_TYPES[$propertyType]);
+        }
+
+        return $bedrooms.' bedroom'.($bedrooms === 1 ? '' : 's');
+    }
 
     /** Curated groups chosen per listing, shown as quick filters. @var array<string, string> */
     public const COLLECTIONS = [
@@ -313,6 +333,8 @@ class PublicListingCatalog
         $amenities = array_values(array_intersect(json_decode($listing->amenities ?? '[]', true) ?? [], array_keys(self::AMENITIES)));
         $collections = array_values(array_intersect(json_decode($listing->collections ?? '[]', true) ?? [], array_keys(self::COLLECTIONS)));
         $propertyType = array_key_exists((string) ($listing->property_type ?? ''), self::PROPERTY_TYPES) ? $listing->property_type : null;
+        $bedrooms = ($listing->bedrooms ?? null) !== null ? (int) $listing->bedrooms : ($unit->bedrooms !== null ? (int) $unit->bedrooms : null);
+        $bathrooms = ($listing->bathrooms ?? null) !== null ? (int) $listing->bathrooms : ($unit->bathrooms !== null ? (int) $unit->bathrooms : null);
 
         return [
             'property_type' => $propertyType, 'property_type_label' => $propertyType ? self::PROPERTY_TYPES[$propertyType] : null,
@@ -323,7 +345,10 @@ class PublicListingCatalog
             'inventory_kind' => $unit->kind,
             'slug' => $listing->slug, 'title' => $listing->title, 'description' => $listing->description,
             'city' => $listing->city, 'neighbourhood' => $listing->neighbourhood, 'public_location' => $listing->public_location,
-            'bedrooms' => $unit->bedrooms !== null ? (int) $unit->bedrooms : null, 'bathrooms' => $unit->bathrooms !== null ? (int) $unit->bathrooms : null,
+            'bedrooms' => $bedrooms, 'bathrooms' => $bathrooms,
+            'layout_label' => self::layoutLabel($bedrooms, $propertyType),
+            'beds' => ($listing->beds ?? null) !== null ? (int) $listing->beds : null,
+            'bed_setup' => trim((string) ($listing->bed_setup ?? '')) ?: null,
             'max_guests' => $listing->max_guests !== null ? (int) $listing->max_guests : null, 'min_nights' => $listing->min_nights !== null ? (int) $listing->min_nights : null,
             'check_in_time' => $listing->check_in_time, 'check_out_time' => $listing->check_out_time,
             'starting_price' => $listing->starting_price ?? $unit->nightly_rate, 'currency' => $tenant->currency,

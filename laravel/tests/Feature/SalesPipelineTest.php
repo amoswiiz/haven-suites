@@ -128,7 +128,14 @@ class SalesPipelineTest extends TestCase
         [$tenant, $user] = $this->member();
         $this->actingAs($user)->post('/t/'.$tenant->slug.'/sales/agents', ['name' => 'Referral partner', 'commission_terms' => '5% after completed stay, refunded stays excluded'])->assertSessionHasNoErrors();
         $agentId = DB::table('sales_agents')->value('id');
-        $this->get('/t/'.$tenant->slug.'/sales/agents')->assertOk()->assertSee('Referral partner');
+        $this->get('/t/'.$tenant->slug.'/sales/agents')->assertOk()->assertSee('Referral partner')->assertSee('No mobile number');
+        $this->post('/t/'.$tenant->slug.'/sales/agents/'.$agentId, ['name' => 'Referral partner Ltd', 'phone' => '0712 345 678', 'whatsapp' => '', 'active' => 1, 'commission_terms' => '5% after completed stay'])->assertSessionHasNoErrors()->assertRedirect();
+        $this->get('/t/'.$tenant->slug.'/sales/agents/'.$agentId.'/edit')->assertOk()->assertSee('Edit Referral partner Ltd')->assertSee('0712 345 678');
+        $this->get('/t/'.$tenant->slug.'/sales/agents')->assertOk()->assertSee('href="https://wa.me/254712345678"', false)->assertSee('Chat on WhatsApp');
+        $this->post('/t/'.$tenant->slug.'/sales/agents/'.$agentId, ['name' => 'Referral partner Ltd', 'phone' => '0712 345 678', 'whatsapp' => '+44 7700 900123', 'active' => 1])->assertSessionHasNoErrors();
+        $this->get('/t/'.$tenant->slug.'/sales/agents')->assertSee('href="https://wa.me/447700900123"', false);
+        $this->post('/t/'.$tenant->slug.'/sales/agents/'.$agentId, ['name' => 'Referral partner Ltd', 'whatsapp' => '12345', 'active' => 1])->assertSessionHasErrors('whatsapp');
+        $this->get('/t/'.$tenant->slug.'/sales/agents/999/edit')->assertNotFound();
         $this->post('/t/'.$tenant->slug.'/sales', [...$this->payload($user), 'agent_id' => $agentId])->assertSessionHasNoErrors();
         $id = DB::table('sales_leads')->value('id');
         $this->assertSame($agentId, DB::table('sales_leads')->value('agent_id'));

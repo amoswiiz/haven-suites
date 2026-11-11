@@ -450,15 +450,60 @@ class SalesController extends Controller
 
     public function agents(): View
     {
-        return view('sales.agents', ['agents' => $this->table('sales_agents')->orderBy('name')->paginate(30)]);
+        $agents = $this->table('sales_agents')->orderByDesc('active')->orderBy('name')->paginate(30);
+        $agents->getCollection()->transform(function (object $agent): object {
+            $agent->whatsapp_url = self::agentWhatsappUrl($agent);
+
+            return $agent;
+        });
+
+        return view('sales.agents', ['agents' => $agents]);
     }
 
     public function agent(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'commission_terms' => 'nullable|string|max:2000']);
-        DB::table('sales_agents')->insert([...$data, 'tenant_id' => app('currentTenant')->id, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('sales_agents')->insert([...$this->agentData($request), 'active' => true, 'tenant_id' => app('currentTenant')->id, 'created_at' => now(), 'updated_at' => now()]);
 
         return back()->with('success', 'Referral agent saved.');
+    }
+
+    public function editAgent(string $tenant, int $id): View
+    {
+        return view('sales.agent_edit', ['agent' => $this->table('sales_agents')->where('id', $id)->firstOrFail()]);
+    }
+
+    public function updateAgent(Request $request, string $tenant, int $id): RedirectResponse
+    {
+        $agent = $this->table('sales_agents')->where('id', $id)->firstOrFail();
+        $data = $this->agentData($request) + ['active' => $request->boolean('active')];
+        $this->table('sales_agents')->where('id', $agent->id)->update([...$data, 'updated_at' => now()]);
+
+        return redirect()->route('sales.agents', $tenant)->with('success', 'Referral agent '.$data['name'].' updated.');
+    }
+
+    /** @return array{name: string, phone: ?string, whatsapp: ?string, email: ?string, commission_terms: ?string} */
+    private function agentData(Request $request): array
+    {
+        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'whatsapp' => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255', 'commission_terms' => 'nullable|string|max:2000', 'active' => 'sometimes|boolean']);
+        $whatsapp = null;
+        if (! PhoneNumber::isBlank($data['whatsapp'] ?? null)) {
+            $whatsapp = PhoneNumber::normalize($data['whatsapp']);
+            if ($whatsapp === null) {
+                throw ValidationException::withMessages(['whatsapp' => 'Enter a mobile number such as 0712 345 678 or +254 712 345 678.']);
+            }
+        }
+
+        return ['name' => $data['name'], 'phone' => PhoneNumber::isBlank($data['phone'] ?? null) ? null : trim($data['phone']), 'whatsapp' => $whatsapp,
+            'email' => $data['email'] ?? null, 'commission_terms' => $data['commission_terms'] ?? null];
+    }
+
+    /** WhatsApp chat link from the agent's WhatsApp number, or their phone when it is a mobile number. */
+    public static function agentWhatsappUrl(object $agent): ?string
+    {
+        $number = ($agent->whatsapp ?? null) ?: PhoneNumber::normalize($agent->phone ?? null);
+
+        return $number ? 'https://wa.me/'.ltrim($number, '+') : null;
     }
 
     public function connections(): View

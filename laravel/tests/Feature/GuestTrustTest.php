@@ -193,6 +193,29 @@ class GuestTrustTest extends TestCase
         $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'weekly_discount_percent' => 95] + $payload)->assertSessionHasErrors('weekly_discount_percent');
     }
 
+    public function test_listing_layout_beds_and_villa_override_the_apartment_record(): void
+    {
+        $this->get('/stays/trust-stays/sea-view')->assertOk()->assertSee('2 bedrooms');
+        $this->staff()->get(route('public-listings.edit', [$this->company->slug, $this->listingId]))->assertOk()
+            ->assertSee('Layout, bathrooms and beds')->assertSee('Use apartment record')->assertSee('>Studio</option>', false)->assertSee('5 bedrooms');
+        $payload = ['version' => 1, 'unit_id' => 1, 'slug' => 'sea-view', 'title' => 'Sea View Villa', 'description' => 'A bright four bedroom villa near the beach with a private garden.',
+            'city' => 'Mombasa', 'neighbourhood' => 'Nyali', 'max_guests' => 9, 'min_nights' => 2, 'check_in_time' => '14:00', 'check_out_time' => '10:00', 'starting_price' => '30000', 'status' => 'published',
+            'property_type' => 'villa', 'bedrooms' => 4, 'bathrooms' => 3, 'beds' => 5, 'bed_setup' => '2 king, 2 queen, 1 sofa bed'];
+        $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), $payload)->assertSessionHasNoErrors();
+        $listing = DB::table('public_listings')->find($this->listingId);
+        $this->assertSame([4, 3, 5], [(int) $listing->bedrooms, (int) $listing->bathrooms, (int) $listing->beds]);
+
+        auth()->logout();
+        $this->get('/stays/trust-stays/sea-view')->assertOk()->assertSee('4-bedroom villa')->assertSee('5 beds')->assertSee('2 king, 2 queen, 1 sofa bed')->assertSee('3 bathrooms');
+        $this->get('/stays/trust-stays?bedrooms=4')->assertOk()->assertSee('Sea View Villa');
+        $this->get('/stays/trust-stays?bedrooms=2')->assertOk()->assertDontSee('Sea View Villa');
+
+        $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'bedrooms' => 0, 'property_type' => 'studio', 'bathrooms' => '', 'beds' => 1, 'bed_setup' => ''] + $payload)->assertSessionHasNoErrors();
+        auth()->logout();
+        $this->get('/stays/trust-stays/sea-view')->assertOk()->assertSee('Studio')->assertSee('1 bed ', false)->assertSee('2 bathrooms');
+        $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 3, 'bedrooms' => 11, 'beds' => 0] + $payload)->assertSessionHasErrors(['bedrooms', 'beds']);
+    }
+
     public function test_blog_drafts_stay_private_and_published_posts_render_safely(): void
     {
         Storage::fake('local');
