@@ -6,7 +6,20 @@
     $quickLinks = $stay['links'] ?? ['enquiry_url' => $stayUrl.'#enquire', 'whatsapp_url' => null];
 @endphp
 <article class="stay-card">
-    <a class="stay-card-image" href="{{ $stayUrl }}"><img src="{{ $stay['photos'][0]['url'] }}?w=480" srcset="{{ \App\Services\ListingPhotoVariants::srcset($stay['photos'][0]['url']) }}" sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 380px" alt="{{ $stay['photos'][0]['caption'] }}" loading="lazy" width="700" height="480" decoding="async"><span class="stay-card-media">{{ count($stay['photos']) }} photo{{ count($stay['photos']) === 1 ? '' : 's' }}@if(!empty($stay['videos'])) <span aria-hidden="true">&middot;</span> Video tour{{ count($stay['videos']) === 1 ? '' : 's' }}@endif</span></a>
+    @php($cardPhotos = array_slice($stay['photos'], 0, 5))
+    <div class="stay-card-image" data-card-slider>
+        <div class="stay-card-track" data-card-track>
+            @foreach($cardPhotos as $cardPhoto)
+                <a class="stay-card-slide" href="{{ $stayUrl }}" @if(!$loop->first) tabindex="-1" aria-hidden="true" @endif><img src="{{ $cardPhoto['url'] }}?w=480" srcset="{{ \App\Services\ListingPhotoVariants::srcset($cardPhoto['url']) }}" sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 380px" alt="{{ $loop->first ? $cardPhoto['caption'] : '' }}" loading="lazy" width="700" height="480" decoding="async"></a>
+            @endforeach
+        </div>
+        @if(count($cardPhotos) > 1)
+            <button type="button" class="stay-card-arrow is-prev" data-card-prev aria-label="Previous photo of {{ $stay['title'] }}" hidden>&#8249;</button>
+            <button type="button" class="stay-card-arrow is-next" data-card-next aria-label="Next photo of {{ $stay['title'] }}" hidden>&#8250;</button>
+            <span class="stay-card-dots" aria-hidden="true">@foreach($cardPhotos as $cardPhoto)<i @if($loop->first) class="is-active" @endif></i>@endforeach</span>
+        @endif
+        <span class="stay-card-media">{{ count($stay['photos']) }} photo{{ count($stay['photos']) === 1 ? '' : 's' }}@if(!empty($stay['videos'])) <span aria-hidden="true">&middot;</span> Video tour{{ count($stay['videos']) === 1 ? '' : 's' }}@endif</span>
+    </div>
     <div class="stay-card-body">
         <p class="stay-location">{{ $stay['neighbourhood'] ? $stay['neighbourhood'].' · ' : '' }}{{ $stay['city'] }}</p>
         <h3><a href="{{ $stayUrl }}">{{ $stay['title'] }}</a></h3>

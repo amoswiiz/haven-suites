@@ -184,3 +184,40 @@
         });
     });
 })();
+
+/* Listing photos: choose the cover and move photos earlier or later instead of typing order numbers. */
+(() => {
+    const sorter = document.querySelector('[data-photo-sorter]');
+    if (!sorter) return;
+    const items = () => Array.from(sorter.querySelectorAll('[data-photo-item]'));
+    const renumber = () => {
+        const list = items();
+        list.forEach((item, position) => {
+            item.querySelector('[data-order-input]').value = position;
+            const [earlier, later] = item.querySelectorAll('[data-move]');
+            earlier.disabled = position === 0;
+            later.disabled = position === list.length - 1;
+        });
+        const cover = list[0];
+        list.forEach((item) => item.classList.toggle('is-cover', item === cover));
+        const radio = cover?.querySelector('[data-cover-choice]');
+        if (radio) radio.checked = true;
+    };
+    items().forEach((item) => {
+        item.querySelector('[data-photo-move]').hidden = false;
+        item.querySelector('[data-order-field]').hidden = true;
+        item.querySelectorAll('[data-move]').forEach((button) => button.addEventListener('click', () => {
+            const sibling = Number(button.dataset.move) < 0 ? item.previousElementSibling : item.nextElementSibling;
+            if (!sibling) return;
+            Number(button.dataset.move) < 0 ? sorter.insertBefore(item, sibling) : sorter.insertBefore(sibling, item);
+            renumber();
+            button.focus();
+        }));
+        item.querySelector('[data-cover-choice]').addEventListener('change', () => {
+            sorter.prepend(item);
+            renumber();
+            item.scrollIntoView({ block: 'nearest' });
+        });
+    });
+    renumber();
+})();

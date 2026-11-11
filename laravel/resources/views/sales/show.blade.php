@@ -14,6 +14,7 @@
 @if($publicListing)<a href="{{ route('public-stays.show', [app('currentTenant')->slug, $publicListing['slug']]) }}" target="_blank" rel="noopener">View public listing</a>@else<span class="muted">The listing is not currently published.</span>@endif
 @if($publicFollowupTask)<a href="{{ route('tasks.show', [app('currentTenant')->slug, $publicFollowupTask->id]) }}">View follow-up task</a>@endif
 </div></section>
+@include('sales.check_in_guide')
 @endif
 <section class="card" aria-labelledby="enquiry-acknowledgement-heading">
 <h2 id="enquiry-acknowledgement-heading">Enquiry acknowledgement SMS</h2>

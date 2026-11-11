@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicAboutPage;
 use App\Services\PublicGuestInfo;
@@ -297,6 +298,20 @@ class PublicListingController extends Controller
             'photos' => 'nullable|array|max:10', 'photos.*' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120',
             'remove_photos' => 'nullable|array|max:30', 'remove_photos.*' => 'required|integer',
             'photo_order' => 'nullable|array|max:30', 'photo_order.*' => 'required|integer|min:0|max:1000',
+            'cover_photo' => 'nullable|integer|min:1',
+            'photo_rooms' => 'nullable|array|max:30', 'photo_rooms.*' => ['nullable', Rule::in(array_keys(ListingDetails::ROOM_TAGS))],
+            'location' => 'nullable|string|max:1000',
+            'nearby' => 'nullable|array|max:'.ListingDetails::MAX_NEARBY, 'nearby.*.name' => 'nullable|string|max:60',
+            'nearby.*.minutes' => 'nullable|integer|min:1|max:600', 'nearby.*.mode' => ['nullable', Rule::in(array_keys(ListingDetails::TRAVEL_MODES))],
+            'rooms' => 'nullable|array|max:'.ListingDetails::MAX_ROOMS, 'rooms.*.name' => 'nullable|string|max:40',
+            'rooms.*.beds' => 'nullable|string|max:80|not_regex:/[<>]/', 'rooms.*.photo_id' => 'nullable|integer', 'rooms.*.ensuite' => 'sometimes|boolean',
+            'size_sqm' => 'nullable|integer|min:10|max:5000', 'floor_level' => 'nullable|string|max:30|not_regex:/[<>]/',
+            'parking_spaces' => 'nullable|integer|min:0|max:20', 'virtual_tour_url' => 'nullable|string|max:500',
+            'photos_checked' => 'sometimes|boolean', 'check_in_guide' => 'nullable|string|max:5000',
+            'weekend_price' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
+            'seasonal_rates' => 'nullable|array|max:'.ListingDetails::MAX_SEASONS, 'seasonal_rates.*.name' => 'nullable|string|max:40',
+            'seasonal_rates.*.from' => 'nullable|date_format:Y-m-d', 'seasonal_rates.*.to' => 'nullable|date_format:Y-m-d|after_or_equal:seasonal_rates.*.from',
+            'seasonal_rates.*.price' => 'nullable|numeric|min:1|max:9999999999',
             'photo_captions' => 'nullable|array|max:30', 'photo_captions.*' => 'nullable|string|max:180',
             'youtube_videos' => 'sometimes|array|max:2', 'youtube_videos.*' => 'required|array:url,title',
             'youtube_videos.*.url' => 'nullable|string|max:2048', 'youtube_videos.*.title' => 'nullable|string|max:120',
@@ -324,6 +339,15 @@ class PublicListingController extends Controller
         if (DB::table('public_listings')->where('tenant_id', $tenant->id)->where($source, $data[$source])->when($id, fn ($query) => $query->where('id', '!=', $id))->exists()) {
             throw ValidationException::withMessages([$errorField => 'This apartment already has a public listing. Edit that listing instead.']);
         }
+        $location = ListingDetails::parseLocation($data['location'] ?? null);
+        if (trim((string) ($data['location'] ?? '')) !== '' && $location === null) {
+            throw ValidationException::withMessages(['location' => 'Paste a Google Maps link or coordinates such as -4.0435, 39.7123.']);
+        }
+        if (trim((string) ($data['virtual_tour_url'] ?? '')) !== '' && ListingDetails::tourEmbed($data['virtual_tour_url']) === null) {
+            throw ValidationException::withMessages(['virtual_tour_url' => 'Use a Kuula share link (https://kuula.co/share/...) or a Matterport link (https://my.matterport.com/show/?m=...).']);
+        }
+        $data['latitude'] = $location[0] ?? null;
+        $data['longitude'] = $location[1] ?? null;
         $encoded = array_map(fn (UploadedFile $file): array => $this->encode($file), $request->file('photos', []));
         $stored = [];
         $remove = [];
@@ -348,6 +372,18 @@ class PublicListingController extends Controller
                 $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message', 'cleaning_fee', 'weekly_discount_percent', 'monthly_discount_percent', 'bedrooms', 'bathrooms', 'beds', 'bed_setup']));
                 $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null, 'cleaning_fee' => null, 'weekly_discount_percent' => null, 'monthly_discount_percent' => null,
                     'bedrooms' => null, 'bathrooms' => null, 'beds' => null, 'bed_setup' => null];
+                $keptPhotoIds = array_values(array_diff($currentPhotos->keys()->map(fn ($photoId): int => (int) $photoId)->all(), array_map('intval', $deletedIds)));
+                $changes += [
+                    'latitude' => $data['latitude'], 'longitude' => $data['longitude'],
+                    'nearby' => json_encode(ListingDetails::nearby($data['nearby'] ?? []), JSON_THROW_ON_ERROR),
+                    'rooms' => json_encode(ListingDetails::rooms($data['rooms'] ?? [], $keptPhotoIds), JSON_THROW_ON_ERROR),
+                    'size_sqm' => $data['size_sqm'] ?? null, 'floor_level' => trim((string) ($data['floor_level'] ?? '')) ?: null,
+                    'parking_spaces' => $data['parking_spaces'] ?? null, 'virtual_tour_url' => trim((string) ($data['virtual_tour_url'] ?? '')) ?: null,
+                    'weekend_price' => ($data['weekend_price'] ?? null) ?: null,
+                    'seasonal_rates' => json_encode(ListingDetails::seasons($data['seasonal_rates'] ?? []), JSON_THROW_ON_ERROR),
+                    'check_in_guide' => trim((string) ($data['check_in_guide'] ?? '')) ?: null,
+                    'photos_verified_at' => ! empty($data['photos_checked']) ? now()->toDateString() : ($latest->photos_verified_at ?? null),
+                ];
                 $changes['property_type'] = $data['property_type'] ?? null;
                 $changes['listing_code'] = ($data['listing_code'] ?? null) ?: null;
                 $changes['collections'] = json_encode(array_values(array_unique($data['collections'] ?? [])), JSON_THROW_ON_ERROR);
@@ -374,8 +410,19 @@ class PublicListingController extends Controller
                     }
                     DB::table('public_listing_photos')->where('id', $photo->id)->update([
                         'sort_order' => $data['photo_order'][$photo->id] ?? $photo->sort_order,
-                        'caption' => $data['photo_captions'][$photo->id] ?? $photo->caption, 'updated_at' => now(),
+                        'caption' => $data['photo_captions'][$photo->id] ?? $photo->caption,
+                        'room' => array_key_exists($photo->id, $data['photo_rooms'] ?? []) ? ($data['photo_rooms'][$photo->id] ?: null) : $photo->room,
+                        'updated_at' => now(),
                     ]);
+                }
+                $coverId = (int) ($data['cover_photo'] ?? 0);
+                if ($coverId > 0 && $currentPhotos->has($coverId) && ! in_array($coverId, array_map('intval', $deletedIds), true)) {
+                    // The chosen cover goes first; the others keep their order behind it.
+                    $ordered = DB::table('public_listing_photos')->where('tenant_id', $tenant->id)->where('listing_id', $listingId)
+                        ->orderBy('sort_order')->orderBy('id')->pluck('id')->map(fn ($photoId): int => (int) $photoId)->all();
+                    foreach (array_values(array_unique([$coverId, ...$ordered])) as $position => $photoId) {
+                        DB::table('public_listing_photos')->where('id', $photoId)->update(['sort_order' => $position, 'updated_at' => now()]);
+                    }
                 }
                 $sort = (int) $currentPhotos->max('sort_order') + 1;
                 foreach ($encoded as $photo) {

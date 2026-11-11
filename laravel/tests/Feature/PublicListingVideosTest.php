@@ -231,8 +231,11 @@ class PublicListingVideosTest extends TestCase
             $this->assertSame(2, $document->query('//a[@href="'.$watch.'"]')->length);
             $this->assertSame('https://www.youtube-nocookie.com/embed/'.$id.'?rel=0', $document->query('//a[@data-play-video and @href="'.$watch.'"]')->item(0)->getAttribute('data-video-url'));
         }
-        $heroPhotos = $document->query('//section[@id="stay-photos"]/div[contains(@class,"stay-gallery")]/a[@data-gallery-photo]');
-        $this->assertSame(3, $heroPhotos->length);
+        $slides = $document->query('//section[@id="stay-photos"]//div[@data-slider-track]/a[@data-gallery-photo]');
+        $this->assertSame(5, $slides->length, 'Every photo is in the slider and reachable without JavaScript.');
+        $this->assertSame('high', $slides->item(0)->getElementsByTagName('img')->item(0)->getAttribute('fetchpriority'));
+        $this->assertSame('lazy', $slides->item(1)->getElementsByTagName('img')->item(0)->getAttribute('loading'));
+        $this->assertSame(5, $document->query('//*[@data-slider-thumbs]//*[@data-slide-go]')->length);
         $gridPhotos = $document->query('//*[@id="photo-grid"]/a[@data-gallery-photo]');
         $this->assertSame(5, $gridPhotos->length);
         $projection = app(PublicListingCatalog::class)->findPublished($this->company, $listing->slug);

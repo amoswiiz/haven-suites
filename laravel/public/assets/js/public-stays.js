@@ -391,6 +391,9 @@
     const cleaning = Number(form.dataset.cleaning || 0);
     const weekly = Number(form.dataset.weekly || 0);
     const monthly = Number(form.dataset.monthly || 0);
+    const weekend = Number(form.dataset.weekend || 0);
+    let seasons = [];
+    try { seasons = JSON.parse(form.dataset.seasons || '[]'); } catch { seasons = []; }
     const currency = form.dataset.currency || '';
     const minNights = Number(form.dataset.minNights || 1);
     const checkIn = form.querySelector('[name="check_in"]');
@@ -416,11 +419,23 @@
             box.replaceChildren();
             return;
         }
-        const base = nightly * nights;
+        // Price each night: a seasonal price first, then the weekend price on Friday and Saturday nights.
+        const nightPrices = [];
+        for (let night = 0; night < nights; night++) {
+            const date = new Date(start.getTime() + night * 86400000);
+            const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            const season = seasons.find(([from, to]) => day >= from && day <= to);
+            nightPrices.push(season ? Number(season[2]) : (weekend > 0 && (date.getDay() === 5 || date.getDay() === 6) ? weekend : nightly));
+        }
+        const base = nightPrices.reduce((total, price) => total + price, 0);
         const percent = nights >= 28 && monthly > 0 ? monthly : (nights >= 7 && weekly > 0 ? weekly : 0);
         const saving = base * percent / 100;
         const list = document.createElement('dl');
-        add(list, `${money(nightly)} × ${nights} night${nights === 1 ? '' : 's'}`, money(base));
+        if (nightPrices.every((price) => price === nightly)) {
+            add(list, `${money(nightly)} × ${nights} night${nights === 1 ? '' : 's'}`, money(base));
+        } else {
+            add(list, `${nights} night${nights === 1 ? '' : 's'} (average ${money(base / nights)} a night)`, money(base));
+        }
         if (saving > 0) {
             add(list, `${nights >= 28 && monthly > 0 ? 'Monthly' : 'Weekly'} discount (${percent}%)`, `− ${money(saving)}`, 'is-saving');
         }
@@ -469,4 +484,91 @@
     const update = () => bar.classList.toggle('is-visible', !actionsVisible && !formVisible);
     new IntersectionObserver(([entry]) => { actionsVisible = entry.isIntersecting; update(); }).observe(actions);
     if (form) new IntersectionObserver(([entry]) => { formVisible = entry.isIntersecting; update(); }, { rootMargin: '0px 0px -20% 0px' }).observe(form);
+})();
+
+/* Listing photo slider: swipe on phones, arrows, keyboard and thumbnails on larger screens. Tapping a photo still opens the full-screen viewer. */
+(() => {
+    const slider = document.querySelector('[data-photo-slider]');
+    if (!slider) return;
+    const track = slider.querySelector('[data-slider-track]');
+    const slides = Array.from(track.querySelectorAll('[data-slide]'));
+    const previous = slider.querySelector('[data-slider-prev]');
+    const next = slider.querySelector('[data-slider-next]');
+    const count = slider.querySelector('[data-slider-count]');
+    const caption = slider.querySelector('[data-slider-caption]');
+    const thumbs = Array.from(document.querySelectorAll('[data-slider-thumbs] [data-slide-go]'));
+    let current = 0;
+    const goTo = (index) => {
+        const target = Math.max(0, Math.min(slides.length - 1, index));
+        track.scrollTo({ left: slides[target].offsetLeft - track.offsetLeft, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    };
+    const update = (index) => {
+        if (index === current && count?.dataset.ready) return;
+        current = index;
+        if (count) { count.textContent = (index + 1) + ' / ' + slides.length; count.dataset.ready = '1'; }
+        if (caption) caption.textContent = slides[index].dataset.photoCaption || '';
+        if (previous) previous.disabled = index === 0;
+        if (next) next.disabled = index === slides.length - 1;
+        thumbs.forEach((thumb, position) => {
+            if (position === index) { thumb.setAttribute('aria-current', 'true'); thumb.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+            else thumb.removeAttribute('aria-current');
+        });
+    };
+    let frame;
+    track.addEventListener('scroll', () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => update(Math.round(track.scrollLeft / Math.max(1, track.clientWidth))));
+    }, { passive: true });
+    previous?.addEventListener('click', () => goTo(current - 1));
+    next?.addEventListener('click', () => goTo(current + 1));
+    thumbs.forEach((thumb) => thumb.addEventListener('click', () => goTo(Number(thumb.dataset.slideGo))));
+    track.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight') { event.preventDefault(); goTo(current + 1); }
+        if (event.key === 'ArrowLeft') { event.preventDefault(); goTo(current - 1); }
+    });
+    if (previous) previous.hidden = false;
+    if (next) next.hidden = false;
+    update(0);
+})();
+
+/* Listing cards: swipe through up to five photos; arrows on devices with a mouse. */
+(() => {
+    document.querySelectorAll('[data-card-slider]').forEach((slider) => {
+        const track = slider.querySelector('[data-card-track]');
+        const slides = track ? Array.from(track.children) : [];
+        if (slides.length < 2) return;
+        const previous = slider.querySelector('[data-card-prev]');
+        const next = slider.querySelector('[data-card-next]');
+        const dots = Array.from(slider.querySelectorAll('.stay-card-dots i'));
+        let current = 0;
+        const sync = () => {
+            current = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+            dots.forEach((dot, index) => dot.classList.toggle('is-active', index === current));
+            if (previous) previous.disabled = current === 0;
+            if (next) next.disabled = current === slides.length - 1;
+        };
+        const go = (step) => track.scrollTo({ left: (current + step) * track.clientWidth, behavior: 'smooth' });
+        previous?.addEventListener('click', (event) => { event.preventDefault(); go(-1); });
+        next?.addEventListener('click', (event) => { event.preventDefault(); go(1); });
+        track.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+        if (previous) previous.hidden = false;
+        if (next) next.hidden = false;
+        sync();
+    });
+})();
+
+/* 360° tour: the outside service loads only when the guest asks for it. */
+(() => {
+    document.querySelectorAll('[data-virtual-tour]').forEach((holder) => {
+        holder.querySelector('[data-open-tour]')?.addEventListener('click', () => {
+            const frame = document.createElement('iframe');
+            frame.src = holder.dataset.tourUrl;
+            frame.title = '360° virtual tour';
+            frame.allow = 'fullscreen; xr-spatial-tracking; gyroscope; accelerometer';
+            frame.allowFullscreen = true;
+            frame.referrerPolicy = 'strict-origin-when-cross-origin';
+            holder.replaceChildren(frame);
+            frame.focus();
+        });
+    });
 })();

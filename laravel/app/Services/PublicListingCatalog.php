@@ -51,6 +51,7 @@ class PublicListingCatalog
         'kitchen' => 'Kitchen', 'balcony' => 'Balcony', 'gym' => 'Gym', 'washer' => 'Washing machine',
         'security' => 'Security', 'elevator' => 'Lift', 'workspace' => 'Workspace', 'pets_allowed' => 'Pets allowed',
         'backup_power' => 'Backup power', 'water_backup' => 'Backup water', 'hot_water' => 'Hot water', 'smart_tv' => 'Smart TV', 'cctv' => 'CCTV',
+        'gated' => 'Gated compound',
     ];
 
     public function settings(Tenant $tenant): ?object
@@ -414,11 +415,24 @@ class PublicListingCatalog
             'cleaning_fee' => (float) ($listing->cleaning_fee ?? 0) > 0 ? (float) $listing->cleaning_fee : null,
             'weekly_discount' => (int) ($listing->weekly_discount_percent ?? 0) ?: null, 'monthly_discount' => (int) ($listing->monthly_discount_percent ?? 0) ?: null,
             'videos' => app(YouTubeListingVideos::class)->project($listing->youtube_videos ?? null),
+            // Guest details. Exact coordinates and the private check-in guide are never projected.
+            'area_map' => ListingDetails::areaMap($listing->latitude ?? null, $listing->longitude ?? null),
+            'nearby' => ListingDetails::nearby(json_decode($listing->nearby ?? '[]', true)),
+            'rooms' => ListingDetails::rooms(json_decode($listing->rooms ?? '[]', true), $photos->pluck('id')->map(fn ($id): int => (int) $id)->all()),
+            'size_sqm' => ($listing->size_sqm ?? null) ? (int) $listing->size_sqm : null,
+            'floor_level' => trim((string) ($listing->floor_level ?? '')) ?: null,
+            'parking_spaces' => ($listing->parking_spaces ?? null) !== null ? (int) $listing->parking_spaces : null,
+            'virtual_tour' => ListingDetails::tourEmbed($listing->virtual_tour_url ?? null),
+            'photos_checked' => ListingDetails::photosChecked($listing->photos_verified_at ?? null),
+            'weekend_price' => (float) ($listing->weekend_price ?? 0) > 0 ? (float) $listing->weekend_price : null,
+            'seasonal_rates' => array_values(array_filter(ListingDetails::seasons(json_decode($listing->seasonal_rates ?? '[]', true)),
+                fn (array $season): bool => $season['to'] >= now()->toDateString())),
             'seo_title' => $listing->seo_title ?? null, 'seo_description' => $listing->seo_description ?? null,
             'whatsapp_number' => $listing->whatsapp_number ?? null, 'whatsapp_message' => $listing->whatsapp_message ?? null,
             'updated_at' => $listing->updated_at,
             'photos' => $photos->map(fn (object $photo): array => [
                 'id' => (int) $photo->id, 'caption' => $photo->caption ?: $listing->title,
+                'room' => isset(ListingDetails::ROOM_TAGS[$photo->room ?? '']) ? $photo->room : null,
                 'url' => $preview
                     ? route('public-listings.photo', ['tenant' => $tenant->slug, 'id' => $listing->id, 'photo' => $photo->id])
                     : route('public-stays.photo', ['company' => $tenant->slug, 'slug' => $listing->slug, 'photo' => $photo->id]),

@@ -219,6 +219,91 @@ class GuestTrustTest extends TestCase
         $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 3, 'bedrooms' => 11, 'beds' => 0] + $payload)->assertSessionHasErrors(['bedrooms', 'beds']);
     }
 
+    /** @return array<string, mixed> */
+    private function detailsPayload(int $photoId): array
+    {
+        return ['version' => 1, 'unit_id' => 1, 'slug' => 'sea-view', 'title' => 'Sea View Retreat', 'description' => 'A bright two bedroom apartment near the beach with a balcony.',
+            'city' => 'Mombasa', 'neighbourhood' => 'Nyali', 'public_location' => 'Near Nyali Beach', 'max_guests' => 4, 'min_nights' => 2, 'check_in_time' => '14:00', 'check_out_time' => '10:00',
+            'starting_price' => '12000', 'status' => 'published', 'amenities' => ['wifi', 'elevator', 'gated'],
+            'location' => 'https://www.google.com/maps/place/Nyali/@-4.043512,39.712345,17z/data=!3m1!4b1',
+            'nearby' => [['name' => 'Nyali Beach', 'minutes' => 5, 'mode' => 'walk'], ['name' => 'City Mall', 'minutes' => 8, 'mode' => 'drive'], ['name' => '', 'minutes' => '', 'mode' => 'drive']],
+            'rooms' => [['name' => 'Master bedroom', 'beds' => '1 king bed', 'photo_id' => $photoId, 'ensuite' => 1], ['name' => 'Second bedroom', 'beds' => '2 single beds', 'photo_id' => '', 'ensuite' => 0], ['name' => '', 'beds' => '']],
+            'size_sqm' => 95, 'floor_level' => '5th floor', 'parking_spaces' => 1, 'virtual_tour_url' => 'https://kuula.co/share/7abcD',
+            'photos_checked' => 1, 'check_in_guide' => 'Gate code 4512. Wi-Fi password HavenGuest2026.', 'weekend_price' => '15000',
+            'seasonal_rates' => [['name' => 'December holidays', 'from' => '2099-12-15', 'to' => '2100-01-05', 'price' => '20000'], ['name' => 'Old season', 'from' => '2020-01-01', 'to' => '2020-01-10', 'price' => '9000']],
+            'photo_rooms' => [$photoId => 'bedroom']];
+    }
+
+    public function test_listing_details_show_rooms_area_map_nearby_facts_prices_and_tour_without_private_data(): void
+    {
+        $photo = (int) DB::table('public_listing_photos')->where('listing_id', $this->listingId)->value('id');
+        $this->staff()->get(route('public-listings.edit', [$this->company->slug, $this->listingId]))->assertOk()
+            ->assertSee('Listing quality:')->assertSee('Where guests sleep')->assertSee('Map and nearby places')->assertSee('Check-in guide')->assertSee('name="photo_rooms['.$photo.']"', false);
+        $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), $this->detailsPayload($photo))->assertSessionHasNoErrors();
+        $listing = DB::table('public_listings')->find($this->listingId);
+        $this->assertEquals(-4.043512, (float) $listing->latitude);
+        $this->assertSame(now()->toDateString(), $listing->photos_verified_at);
+        $this->assertSame('bedroom', DB::table('public_listing_photos')->where('id', $photo)->value('room'));
+        $this->assertCount(2, json_decode($listing->rooms, true));
+        $this->get(route('public-listings.edit', [$this->company->slug, $this->listingId]))->assertSee('value="-4.043512, 39.712345"', false);
+
+        auth()->logout();
+        $page = $this->get('/stays/trust-stays/sea-view')->assertOk();
+        $page->assertSee("Where you'll sleep", false)->assertSee('Master bedroom')->assertSee('1 king bed')->assertSee('Ensuite bathroom')
+            ->assertSee('openstreetmap.org/export/embed.html', false)->assertSee('Nyali Beach')->assertSee('5 min walk')->assertSee('8 min drive')
+            ->assertSee('95 m²')->assertSee('5th floor')->assertSee('Lift available')->assertSee('1 parking space')->assertSee('Gated compound')
+            ->assertSee('Photos checked '.now()->format('F Y'))->assertSee('Prices by date')->assertSee('December holidays')->assertDontSee('Old season')
+            ->assertSee('data-weekend="15000"', false)->assertSee('2099-12-15', false)
+            ->assertSee('data-tour-url="https://kuula.co/share/7abcD?fs=1', false)
+            ->assertDontSee('Gate code')->assertDontSee('HavenGuest2026')->assertDontSee('43512')->assertDontSee('712345');
+
+        $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'location' => 'somewhere nice'] + $this->detailsPayload($photo))->assertSessionHasErrors('location');
+        $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'virtual_tour_url' => 'https://evil.example/share/abc'] + $this->detailsPayload($photo))->assertSessionHasErrors('virtual_tour_url');
+        $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'seasonal_rates' => [['name' => 'Bad', 'from' => '2099-02-10', 'to' => '2099-02-01', 'price' => 100]]] + $this->detailsPayload($photo))->assertSessionHasErrors('seasonal_rates.0.to');
+    }
+
+    public function test_check_in_guide_is_offered_on_the_enquiry_only_after_the_booking_is_won(): void
+    {
+        $photo = (int) DB::table('public_listing_photos')->where('listing_id', $this->listingId)->value('id');
+        $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), $this->detailsPayload($photo))->assertSessionHasNoErrors();
+        // The enquiry page passes the listing's guide to this partial (SalesController::show); rendered here directly
+        // because the full enquiry page needs company tables this fixture does not create.
+        $guide = DB::table('public_listings')->where('id', $this->listingId)->first(['title', 'check_in_guide']);
+        $lead = (object) ['name' => 'Grace Achieng', 'phone' => '0712 345 678', 'stage' => 'new'];
+        $this->staff();
+        $this->view('sales.check_in_guide', ['checkInGuide' => $guide, 'lead' => $lead])
+            ->assertSee('becomes available to send here once the booking is confirmed')->assertDontSee('Gate code 4512');
+        $lead->stage = 'won';
+        $this->view('sales.check_in_guide', ['checkInGuide' => $guide, 'lead' => $lead])->assertSee('Hi Grace, here is your check-in guide for Sea View Retreat')
+            ->assertSee('Gate code 4512')->assertSee('https://wa.me/254712345678?text=', false);
+        $this->assertStringContainsString("'checkInGuide' => \$checkInGuide", file_get_contents(app_path('Http/Controllers/SalesController.php')));
+    }
+
+    public function test_staff_choose_the_cover_photo_and_it_leads_the_slider_and_cards(): void
+    {
+        $base = ['tenant_id' => $this->company->id, 'listing_id' => $this->listingId, 'mime_type' => 'image/jpeg', 'created_at' => now(), 'updated_at' => now()];
+        $kitchen = DB::table('public_listing_photos')->insertGetId($base + ['storage_key' => 'listing-photos/'.$this->company->id.'/'.$this->listingId.'/'.str_repeat('b', 48).'.jpg', 'caption' => 'Kitchen', 'sort_order' => 1]);
+        $bedroom = DB::table('public_listing_photos')->insertGetId($base + ['storage_key' => 'listing-photos/'.$this->company->id.'/'.$this->listingId.'/'.str_repeat('c', 48).'.jpg', 'caption' => 'Bedroom', 'sort_order' => 2]);
+        $balcony = (int) DB::table('public_listing_photos')->where('caption', 'Balcony')->value('id');
+
+        $this->staff()->get(route('public-listings.edit', [$this->company->slug, $this->listingId]))->assertOk()
+            ->assertSee('data-photo-sorter', false)->assertSee('name="cover_photo" value="'.$balcony.'" checked', false)->assertSee('Cover photo');
+        $payload = ['version' => 1, 'unit_id' => 1, 'slug' => 'sea-view', 'title' => 'Sea View Retreat', 'description' => 'A bright two bedroom apartment near the beach with a balcony.',
+            'city' => 'Mombasa', 'max_guests' => 4, 'min_nights' => 2, 'check_in_time' => '14:00', 'check_out_time' => '10:00', 'status' => 'published',
+            'photo_order' => [$balcony => 0, $kitchen => 1, $bedroom => 2], 'cover_photo' => $bedroom];
+        $this->post(route('public-listings.update', [$this->company->slug, $this->listingId]), $payload)->assertSessionHasNoErrors();
+        $this->assertSame([$bedroom, $balcony, $kitchen], DB::table('public_listing_photos')->where('listing_id', $this->listingId)->orderBy('sort_order')->pluck('id')->map(fn ($id) => (int) $id)->all());
+
+        auth()->logout();
+        $page = $this->get('/stays/trust-stays/sea-view')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('#data-slider-track[^>]*>\s*<a class="stay-slide" href="[^"]+/photos/'.$bedroom.'\?w=1200"#', $page, 'The cover photo is the first slide.');
+        $this->assertStringContainsString('aria-label="Photo 1 of 3: Bedroom"', $page);
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('/sea-view/photos/'.$bedroom.'?w=480', false);
+
+        $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 2, 'cover_photo' => 999999, 'photo_order' => [$bedroom => 0, $balcony => 1, $kitchen => 2]] + $payload)->assertSessionHasNoErrors();
+        $this->assertSame($bedroom, (int) DB::table('public_listing_photos')->where('listing_id', $this->listingId)->orderBy('sort_order')->value('id'), 'An unknown cover is ignored.');
+    }
+
     public function test_blog_editor_uploads_images_that_render_in_published_posts(): void
     {
         Storage::fake('local');
