@@ -238,8 +238,10 @@ class PublicListingVideosTest extends TestCase
         $projection = app(PublicListingCatalog::class)->findPublished($this->company, $listing->slug);
         foreach ($gridPhotos as $index => $photo) {
             $this->assertSame((string) $index, $photo->getAttribute('data-photo-index'));
-            $this->assertSame($projection['photos'][$index]['url'], $photo->getAttribute('href'));
-            $this->get($photo->getAttribute('href'))->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+            // Gallery links ask for the 1200px WebP copy made at upload; the original stays available.
+            $this->assertSame($projection['photos'][$index]['url'].'?w=1200', $photo->getAttribute('href'));
+            $this->get($photo->getAttribute('href'))->assertOk()->assertHeader('Content-Type', 'image/webp')->assertHeader('Cache-Control', 'immutable, max-age=31536000, public');
+            $this->get($projection['photos'][$index]['url'])->assertOk()->assertHeader('Content-Type', 'image/jpeg');
         }
         $this->assertSame(5, $document->query('//*[@data-photo-dialog]//*[@data-photo-go]')->length);
         Http::assertNothingSent();

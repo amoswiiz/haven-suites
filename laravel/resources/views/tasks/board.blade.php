@@ -1,7 +1,7 @@
 @extends('saas.layout')
 @section('title', $owner ? 'Property tasks' : 'Task board')
-@push('styles')<link rel="stylesheet" href="{{ asset('assets/css/task-board.css') }}?v=2">@endpush
-@push('scripts')<script src="{{ asset('assets/js/task-board.js') }}?v=1" defer></script>@endpush
+@push('styles')<link rel="stylesheet" href="{{ \App\Support\AssetVersion::url('assets/css/task-board.css') }}">@endpush
+@push('scripts')<script src="{{ \App\Support\AssetVersion::url('assets/js/task-board.js') }}" defer></script>@endpush
 @section('content')
 @php
     $slug = app('currentTenant')->slug;

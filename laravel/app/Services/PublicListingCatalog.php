@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -258,7 +259,46 @@ class PublicListingCatalog
             ->values()->all();
     }
 
+    /** @var array<int, Collection> Stays already loaded during the current request, by company. */
+    private static array $publishedByTenant = [];
+
+    private static ?object $memoRequest = null;
+
+    /**
+     * Published, complete stays for the public website.
+     *
+     * Kept for the rest of the request and cached briefly across requests: building it opens connections to the
+     * company database. Staff saves clear the cache (see ForgetPublicCatalogue).
+     */
     public function published(Tenant $tenant): Collection
+    {
+        $seconds = (int) config('haven.public_catalogue_cache_seconds', 60);
+        if ($seconds <= 0) {
+            return $this->loadPublished($tenant);
+        }
+        $request = app()->bound('request') ? app('request') : null;
+        if (self::$memoRequest !== $request) {
+            self::$memoRequest = $request;
+            self::$publishedByTenant = [];
+        }
+
+        return self::$publishedByTenant[$tenant->id] ??= collect(Cache::remember(self::cacheKey((int) $tenant->id), $seconds,
+            fn (): array => $this->loadPublished($tenant)->all()));
+    }
+
+    /** Drop the cached catalogue for a company after its listings, photos, apartments or website change. */
+    public static function forget(int $tenantId): void
+    {
+        Cache::forget(self::cacheKey($tenantId));
+        unset(self::$publishedByTenant[$tenantId]);
+    }
+
+    private static function cacheKey(int $tenantId): string
+    {
+        return 'public-catalogue:'.$tenantId;
+    }
+
+    private function loadPublished(Tenant $tenant): Collection
     {
         if ($this->site($tenant) === null) {
             return collect();
@@ -296,11 +336,28 @@ class PublicListingCatalog
         return $this->project($tenant, $listing, $unit, $photos, true);
     }
 
-    public function image(Tenant $tenant, string $slug, int $photo): array
+    /** Photo of a published listing, optionally its smaller WebP copy. */
+    public function image(Tenant $tenant, string $slug, int $photo, ?int $width = null): array
     {
-        [$listing] = $this->publishedEntry($tenant, $slug);
+        // With caching on, the cached catalogue already applies every rule (complete, active apartment, has photos),
+        // so a page of photos does not reopen the company database for each image.
+        if ((int) config('haven.public_catalogue_cache_seconds', 60) > 0) {
+            $listing = $this->published($tenant)->firstWhere('slug', $slug);
+            abort_unless($listing, 404);
+            $listingId = (int) $listing['id'];
+        } else {
+            [$entry] = $this->publishedEntry($tenant, $slug);
+            $listingId = (int) $entry->id;
+        }
+        $image = $this->imageForListing($tenant, $listingId, $photo);
+        if ($width !== null && in_array($width, ListingPhotoVariants::WIDTHS, true)) {
+            $variant = ListingPhotoVariants::key($image['storage_key'], $width);
+            if (Storage::disk('local')->exists($variant)) {
+                return ['path' => Storage::disk('local')->path($variant), 'mime_type' => 'image/webp', 'storage_key' => $variant];
+            }
+        }
 
-        return $this->imageForListing($tenant, (int) $listing->id, $photo);
+        return $image;
     }
 
     private function publishedEntry(Tenant $tenant, string $slug): array
@@ -320,7 +377,7 @@ class PublicListingCatalog
         abort_unless(preg_match($pattern, $image->storage_key) && in_array($image->mime_type, ['image/jpeg', 'image/png'], true), 404);
         abort_unless(Storage::disk('local')->exists($image->storage_key), 404);
 
-        return ['path' => Storage::disk('local')->path($image->storage_key), 'mime_type' => $image->mime_type];
+        return ['path' => Storage::disk('local')->path($image->storage_key), 'mime_type' => $image->mime_type, 'storage_key' => $image->storage_key];
     }
 
     private function reference(object $listing): string

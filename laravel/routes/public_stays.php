@@ -16,6 +16,7 @@ Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'
     Route::get('faq', [PublicStayController::class, 'faq'])->name('faq');
     Route::get('blog', [PublicStayController::class, 'blog'])->name('blog');
     Route::get('blog/{slug}', [PublicStayController::class, 'post'])->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('blog.show');
+    Route::get('blog/images/{name}', [PublicStayController::class, 'blogImage'])->where('name', '[A-Za-z0-9]{32}')->name('blog.image');
     Route::get('blog/{slug}/cover', [PublicStayController::class, 'blogCover'])->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('blog.cover');
     Route::get('in/{city}', [PublicStayController::class, 'area'])->where('city', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('city');
     Route::get('in/{city}/{area}', [PublicStayController::class, 'area'])->where(['city' => '[a-z0-9]+(?:-[a-z0-9]+)*', 'area' => '[a-z0-9]+(?:-[a-z0-9]+)*'])->name('area');

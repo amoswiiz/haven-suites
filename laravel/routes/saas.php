@@ -79,6 +79,7 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
         Route::get('blog', [PublicContentController::class, 'posts'])->name('blog');
         Route::get('blog/new', [PublicContentController::class, 'create'])->name('blog.create');
         Route::post('blog', [PublicContentController::class, 'store'])->middleware('throttle:20,1')->name('blog.store');
+        Route::post('blog/images', [PublicContentController::class, 'uploadImage'])->middleware('throttle:30,1')->name('blog.image');
         Route::get('blog/{id}/edit', [PublicContentController::class, 'edit'])->whereNumber('id')->name('blog.edit');
         Route::post('blog/{id}', [PublicContentController::class, 'update'])->whereNumber('id')->middleware('throttle:20,1')->name('blog.update');
         Route::post('blog/{id}/delete', [PublicContentController::class, 'destroy'])->whereNumber('id')->name('blog.destroy');

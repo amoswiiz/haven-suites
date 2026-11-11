@@ -72,10 +72,16 @@ runuser -u deploy -- composer install \
 runuser -u deploy -- php artisan optimize:clear
 runuser -u deploy -- php artisan package:discover --no-interaction
 runuser -u deploy -- php artisan migrate --force --no-interaction
-runuser -u deploy -- php artisan view:cache
+# Cache config, routes, events and views so requests skip re-reading them.
+# After editing .env later, run: runuser -u deploy -- php artisan config:cache
+runuser -u deploy -- php artisan optimize
 systemctl reload php8.5-fpm
 runuser -u deploy -- php artisan up
 trap - ERR
+
+# Smaller WebP copies of listing photos (runs as the web user, which owns uploaded photos). Never blocks a deploy.
+runuser -u www-data -- php artisan haven:listing-photo-variants --limit=5000 \
+    || echo "Photo copies were not all created; the hourly scheduled task will retry."
 
 echo "Deployed $(git_as_deploy rev-parse --short HEAD). File backup: $backup"
 echo "Open https://app.havensuitesbnb.com/t/haven/public-listings to prepare and review apartment drafts."

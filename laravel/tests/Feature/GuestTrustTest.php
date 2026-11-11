@@ -5,11 +5,14 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\ListingAvailability;
+use App\Services\ListingPhotoVariants;
 use App\Services\PublicEnquiries;
+use App\Services\PublicListingCatalog;
 use App\Services\PublicReviews;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -214,6 +217,55 @@ class GuestTrustTest extends TestCase
         auth()->logout();
         $this->get('/stays/trust-stays/sea-view')->assertOk()->assertSee('Studio')->assertSee('1 bed ', false)->assertSee('2 bathrooms');
         $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 3, 'bedrooms' => 11, 'beds' => 0] + $payload)->assertSessionHasErrors(['bedrooms', 'beds']);
+    }
+
+    public function test_blog_editor_uploads_images_that_render_in_published_posts(): void
+    {
+        Storage::fake('local');
+        $this->staff()->get(route('public-listings.blog.create', $this->company->slug))->assertOk()
+            ->assertSee('toastui-editor-all.min.js', false)->assertSee('data-post-editor', false)->assertSee('data-upload-url="'.route('public-listings.blog.image', $this->company->slug).'"', false);
+        $url = $this->postJson(route('public-listings.blog.image', $this->company->slug), ['image' => UploadedFile::fake()->image('beach.png', 900, 600)])
+            ->assertOk()->json('url');
+        $this->assertMatchesRegularExpression('#/stays/trust-stays/blog/images/[A-Za-z0-9]{32}$#', $url);
+        $this->postJson(route('public-listings.blog.image', $this->company->slug), ['image' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf')])
+            ->assertUnprocessable()->assertJsonValidationErrors('image');
+
+        $body = "Our favourite beach walk.\n\n![Nyali beach at sunrise]({$url})\n\n| Area | Distance |\n| --- | --- |\n| Nyali | 5 min |";
+        $this->post(route('public-listings.blog.store', $this->company->slug), ['title' => 'Walks near Nyali', 'body' => $body, 'status' => 'published'])->assertSessionHasNoErrors();
+        auth()->logout();
+        $this->get('/stays/trust-stays/blog/walks-near-nyali')->assertOk()->assertSee('<img src="'.$url.'" alt="Nyali beach at sunrise"', false)->assertSee('<table>', false);
+        $this->get(parse_url($url, PHP_URL_PATH))->assertOk()->assertHeader('Content-Type', 'image/jpeg')->assertHeader('Cache-Control', 'immutable, max-age=31536000, public');
+        $this->get('/stays/trust-stays/blog/images/'.str_repeat('a', 32))->assertNotFound();
+        $this->get('/stays/other-company/blog/images/'.basename($url))->assertNotFound();
+    }
+
+    public function test_cached_catalogue_is_cleared_by_staff_saves_and_photos_use_smaller_copies(): void
+    {
+        Storage::fake('local');
+        config(['haven.public_catalogue_cache_seconds' => 60]);
+        $photo = DB::table('public_listing_photos')->first();
+        Storage::disk('local')->put($photo->storage_key, UploadedFile::fake()->image('balcony.jpg', 2000, 1200)->getContent());
+
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('Sea View Retreat');
+        DB::table('public_listings')->where('id', $this->listingId)->update(['title' => 'Renamed Behind The Scenes']);
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('Sea View Retreat', false)->assertDontSee('Renamed Behind The Scenes');
+        $this->assertTrue(Cache::has('public-catalogue:'.$this->company->id));
+        $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 99])->assertSessionHasErrors();
+        $this->assertFalse(Cache::has('public-catalogue:'.$this->company->id), 'Staff saves clear the cached catalogue.');
+        auth()->logout();
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('Renamed Behind The Scenes');
+
+        $photoUrl = '/stays/trust-stays/sea-view/photos/'.$photo->id;
+        $this->get('/stays/trust-stays')->assertSee($photoUrl.'?w=480 480w', false);
+        $this->get($photoUrl.'?w=480')->assertOk()->assertHeader('Content-Type', 'image/jpeg')->assertHeader('Cache-Control', 'max-age=3600, public');
+        $this->artisan('haven:listing-photo-variants')->assertSuccessful();
+        Storage::disk('local')->assertExists(ListingPhotoVariants::key($photo->storage_key, 480));
+        $small = $this->get($photoUrl.'?w=480')->assertOk()->assertHeader('Content-Type', 'image/webp')->assertHeader('Cache-Control', 'immutable, max-age=31536000, public');
+        $this->assertSame(480, getimagesizefromstring($small->streamedContent() ?: file_get_contents($small->baseResponse->getFile()->getPathname()))[0]);
+        $this->get($photoUrl.'?w=999')->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        DB::table('public_listings')->where('id', $this->listingId)->update(['status' => 'paused']);
+        PublicListingCatalog::forget($this->company->id);
+        $this->get($photoUrl)->assertNotFound();
     }
 
     public function test_blog_drafts_stay_private_and_published_posts_render_safely(): void

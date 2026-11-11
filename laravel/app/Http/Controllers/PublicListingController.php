@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ListingPhotoVariants;
 use App\Services\PublicAboutPage;
 use App\Services\PublicGuestInfo;
 use App\Services\PublicListingCatalog;
@@ -224,6 +225,7 @@ class PublicListingController extends Controller
         foreach ($photos as $path) {
             if (is_string($path) && str_starts_with($path, 'listing-photos/'.$company->id.'/')) {
                 Storage::disk('local')->delete($path);
+                app(ListingPhotoVariants::class)->delete($path);
             }
         }
 
@@ -402,9 +404,13 @@ class PublicListingController extends Controller
         foreach ($remove as $path) {
             try {
                 Storage::disk('local')->delete($path);
+                app(ListingPhotoVariants::class)->delete($path);
             } catch (\Throwable $exception) {
                 report($exception);
             }
+        }
+        foreach ($stored as $path) {
+            app(ListingPhotoVariants::class)->make($path);
         }
 
         return $this->saved($request, route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $id]), 'Listing saved. Only published listings appear on an enabled public site.');

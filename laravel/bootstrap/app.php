@@ -3,9 +3,12 @@
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureSaasVerified;
 use App\Http\Middleware\EnsureTenantMember;
+use App\Http\Middleware\ForgetPublicCatalogue;
+use App\Http\Middleware\ImpersonateUser;
 use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\ResolveTenant;
 use App\Http\Middleware\TenantWriteAccess;
+use App\Support\ErrorAlerts;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -22,8 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.write' => TenantWriteAccess::class,
         ]);
         $middleware->redirectGuestsTo('/login');
-        $middleware->web(append: [\App\Http\Middleware\ImpersonateUser::class]);
+        $middleware->web(append: [ImpersonateUser::class, ForgetPublicCatalogue::class]);
         $middleware->preventRequestForgery(except: ['billing/webhooks/stripe', 'billing/webhooks/mpesa/*']);
     })
-    ->withExceptions(function (Exceptions $exceptions): void {})
+    ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->report(fn (Throwable $exception) => ErrorAlerts::report($exception));
+    })
     ->create();

@@ -164,12 +164,19 @@ class PublicStayController extends Controller
             ->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff');
     }
 
-    public function photo(string $company, string $slug, int $photo, PublicListingCatalog $catalog): BinaryFileResponse
+    /**
+     * Public listing photo. "?w=480" or "?w=1200" returns the smaller WebP copy when it exists.
+     * Stored file names are random and never reused, so browsers may keep photos for a year.
+     */
+    public function photo(Request $request, string $company, string $slug, int $photo, PublicListingCatalog $catalog): BinaryFileResponse
     {
         [$tenant] = $this->company($company, $catalog);
-        $image = $catalog->image($tenant, $slug, $photo);
+        $width = $request->integer('w') ?: null;
+        $image = $catalog->image($tenant, $slug, $photo, $width);
+        $fallback = $width !== null && $image['mime_type'] !== 'image/webp';
 
-        return response()->file($image['path'], ['Content-Type' => $image['mime_type'], 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=60']);
+        return response()->file($image['path'], ['Content-Type' => $image['mime_type'], 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => $fallback ? 'public, max-age=3600' : 'public, max-age=31536000, immutable']);
     }
 
     public function about(string $company, PublicListingCatalog $catalog, PublicAboutPage $about): Response
@@ -258,6 +265,16 @@ class PublicStayController extends Controller
         abort_unless($path && preg_match('#^public-posts/'.(int) $tenant->id.'/[A-Za-z0-9]{32}\.jpg$#D', $path) && Storage::disk('local')->exists($path), 404);
 
         return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=86400']);
+    }
+
+    /** Image placed inside a blog post with the editor. File names are random and never reused, so they cache for a year. */
+    public function blogImage(string $company, string $name, PublicListingCatalog $catalog): BinaryFileResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        $path = 'public-posts/'.(int) $tenant->id.'/inline/'.$name.'.jpg';
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=31536000, immutable']);
     }
 
     public function area(Request $request, string $company, string $city, PublicListingCatalog $catalog, PublicAreaGuides $guides, ?string $area = null): Response

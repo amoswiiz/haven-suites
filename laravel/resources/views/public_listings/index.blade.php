@@ -1,7 +1,7 @@
 @extends('saas.layout')
 @section('title', 'Public listings')
-@push('styles')<link rel="stylesheet" href="{{ asset('assets/css/listing-management.css') }}?v=1">@endpush
-@push('scripts')<script src="{{ asset('assets/js/listing-management.js') }}?v=1" defer></script>@endpush
+@push('styles')<link rel="stylesheet" href="{{ \App\Support\AssetVersion::url('assets/css/listing-management.css') }}">@endpush
+@push('scripts')<script src="{{ \App\Support\AssetVersion::url('assets/js/listing-management.js') }}" defer></script>@endpush
 @section('content')
 @php
     $tenantSlug = app('currentTenant')->slug;

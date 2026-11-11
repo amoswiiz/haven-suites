@@ -55,7 +55,7 @@
 .sales-enquiry[draggable=true]{cursor:grab}.sales-enquiry.sales-dragging{opacity:.55}.sales-move:focus-visible{outline:3px solid #294780;outline-offset:3px}
 #sales-move-dialog [hidden]{display:none!important}
 </style>
-<script src="{{ asset('assets/js/sales-pipeline.js') }}" defer></script>
+<script src="{{ \App\Support\AssetVersion::url('assets/js/sales-pipeline.js') }}" defer></script>
 @endif
 @endif
 {{ $leads->links() }}

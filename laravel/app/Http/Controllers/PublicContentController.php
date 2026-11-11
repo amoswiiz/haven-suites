@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicImageEncoder;
 use App\Services\PublicListingCatalog;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +56,17 @@ class PublicContentController extends Controller
         $this->deleteCover($post->cover_path);
 
         return redirect()->route('public-listings.blog', $tenant)->with('success', 'Post deleted.');
+    }
+
+    /** Image dropped or pasted into the blog editor; returns its public address for the post body. */
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $tenant = app('currentTenant');
+        $request->validate(['image' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120']);
+        $name = Str::random(32);
+        Storage::disk('local')->put('public-posts/'.$tenant->id.'/inline/'.$name.'.jpg', app(PublicImageEncoder::class)->jpeg($request->file('image'), 'image', 1600));
+
+        return response()->json(['url' => route('public-stays.blog.image', [$tenant->slug, $name])]);
     }
 
     public function areas(PublicListingCatalog $catalog, PublicAreaGuides $guides): View

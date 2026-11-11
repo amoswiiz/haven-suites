@@ -36,7 +36,7 @@
     @endif
     <meta name="theme-color" content="#1f4ba8">
     @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
-    <link rel="stylesheet" href="{{ asset('assets/css/public-stays.css') }}?v=16">
+    <link rel="stylesheet" href="{{ \App\Support\AssetVersion::url('assets/css/public-stays.css') }}">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>
 <body class="public-stays">
@@ -98,6 +98,6 @@
         </div>
         <div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><span>Serviced apartments &amp; short stays in Kenya</span><a class="stay-staff-link" href="{{ route('login') }}">Staff sign in</a></div>
     </footer>
-    <script src="{{ asset('assets/js/public-stays.js') }}?v=8" defer></script>
+    <script src="{{ \App\Support\AssetVersion::url('assets/js/public-stays.js') }}" defer></script>
 </body>
 </html>

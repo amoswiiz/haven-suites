@@ -93,3 +93,48 @@ body { background: var(--haven-bg); color: var(--haven-ink); }
   .hs-topbar-staff { max-width:100%; padding-left:0; border:0; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } }
+
+/* ---------------------------------------------------------------------------
+   Shared UI components (resources/views/components/ui/*). They look the same in
+   both admin layouts, so pages can move to them one at a time.
+--------------------------------------------------------------------------- */
+.ui-card{background:#fff;border:1px solid var(--haven-border);border-radius:14px;padding:22px;margin-bottom:20px;box-shadow:0 4px 18px rgba(29,45,76,.03)}
+.ui-card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.ui-card-head h2{font-size:1.15rem;margin:0;color:var(--haven-navy)}
+.ui-card-head p{margin:2px 0 0;color:#64748b;font-size:.9rem}
+.ui-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 18px;border-radius:9px;border:1px solid var(--haven-blue);background:var(--haven-blue);color:#fff!important;font:inherit;font-weight:600;line-height:1.2;text-decoration:none!important;cursor:pointer;transition:background-color .15s ease,border-color .15s ease}
+.ui-button:hover{background:#183c88;border-color:#183c88}
+.ui-button.is-secondary{background:#fff;color:var(--haven-blue)!important}
+.ui-button.is-secondary:hover{background:#edf2fa}
+.ui-button.is-danger{background:#b42318;border-color:#b42318}
+.ui-button.is-danger:hover{background:#912018;border-color:#912018}
+.ui-button[disabled]{opacity:.55;cursor:not-allowed}
+.ui-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px}
+.ui-field{margin-bottom:14px}
+.ui-field label{display:block;font-weight:600;margin-bottom:5px;color:var(--haven-navy)}
+.ui-field input:not([type=checkbox]):not([type=radio]),.ui-field select,.ui-field textarea{width:100%;min-height:42px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;background:#fff;color:var(--haven-ink)}
+.ui-field input:focus,.ui-field select:focus,.ui-field textarea:focus{outline:3px solid rgba(226,141,87,.35);outline-offset:1px;border-color:var(--haven-orange)}
+.ui-field .ui-hint{display:block;margin-top:4px;color:#64748b;font-size:.85rem}
+.ui-field .ui-error{display:block;margin-top:4px;color:#b42318;font-size:.85rem;font-weight:600}
+.ui-field.has-error input,.ui-field.has-error select,.ui-field.has-error textarea{border-color:#b42318}
+.ui-check{display:flex!important;align-items:flex-start;gap:10px;font-weight:400!important;cursor:pointer}
+.ui-check input{width:20px;height:20px;margin-top:2px;flex:0 0 auto}
+.ui-status{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:700;background:#edf2fa;color:var(--haven-blue);white-space:nowrap}
+.ui-status::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.ui-status.is-success{background:#e7f6ec;color:#11713a}
+.ui-status.is-warning{background:#fff4e5;color:#a15c07}
+.ui-status.is-danger{background:#fdecec;color:#b42318}
+.ui-status.is-muted{background:#f1f5f9;color:#64748b}
+.ui-empty{text-align:center;padding:34px 18px;color:#64748b}
+.ui-empty strong{display:block;color:var(--haven-navy);font-size:1.05rem;margin-bottom:4px}
+.ui-empty .ui-actions{justify-content:center}
+
+/* Phones: comfortable tap targets and no zoom-on-focus for field staff (both admin layouts). */
+@media (max-width: 760px) {
+  .hs-content .btn, button, .button, .ui-button { min-height: 44px; }
+  .hs-content .form-control, .hs-content .form-select, input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea { font-size: 16px; min-height: 44px; }
+  .hs-content .form-check-input, input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
+  .hs-content .table td, .hs-content .table th { padding-top: .65rem; padding-bottom: .65rem; }
+  .ui-card { padding: 16px; border-radius: 12px; }
+  .ui-actions > .ui-button { flex: 1 1 auto; }
+}

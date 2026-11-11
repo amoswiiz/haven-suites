@@ -455,3 +455,18 @@
         });
     });
 })();
+
+/* Sticky enquiry bar: shown on phones once the main contact buttons scroll away, hidden while the form is visible. */
+(() => {
+    const bar = document.querySelector('[data-mobile-bar]');
+    const actions = document.querySelector('[data-quick-contact]');
+    if (!bar || !actions || !('IntersectionObserver' in window)) return;
+    const form = document.getElementById('enquire');
+    let actionsVisible = true;
+    let formVisible = false;
+    bar.hidden = false;
+    document.body.classList.add('has-mobile-bar');
+    const update = () => bar.classList.toggle('is-visible', !actionsVisible && !formVisible);
+    new IntersectionObserver(([entry]) => { actionsVisible = entry.isIntersecting; update(); }).observe(actions);
+    if (form) new IntersectionObserver(([entry]) => { formVisible = entry.isIntersecting; update(); }, { rootMargin: '0px 0px -20% 0px' }).observe(form);
+})();

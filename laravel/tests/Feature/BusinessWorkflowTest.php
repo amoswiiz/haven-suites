@@ -104,7 +104,10 @@ class BusinessWorkflowTest extends TestCase
             'full_name' => 'Migration test staff', 'phone' => '0700000000', 'email' => 'staff-test@example.test', 'role' => 'cleaner',
             'location' => 'Nairobi', 'status' => 'active', 'user_id' => null, 'created_at' => now(), 'updated_at' => now(),
         ]);
-        $this->get('/t/workflow/staff/'.$id.'/account/create')->assertOk()->assertSee('Create Staff Login Account');
+        // Logins for existing staff are now created from the staff edit form (see StaffAccounts::create).
+        $this->get('/t/workflow/staff/'.$id.'/account/create')->assertRedirect();
+        $this->assertStringEndsWith('/staff/edit/'.$id, $this->get('/t/workflow/staff/'.$id.'/account/create')->headers->get('Location'));
+        $this->get('/t/workflow/staff/edit/'.$id)->assertOk()->assertSee('Login Details')->assertSee('name="password"', false);
     }
 
     public function test_sales_moves_to_invoice_and_deposit_stages_without_a_quotation(): void
@@ -256,6 +259,9 @@ class BusinessWorkflowTest extends TestCase
         $user->tenants()->updateExistingPivot(app('currentTenant')->id, ['roles' => json_encode(['manager'])]);
         $user->unsetRelation('tenants');
         $this->get($url)->assertOk()->assertDontSee('id="reservation-payment"', false);
+        // Managers hold invoices.manage (commit f89e579); a role without invoice rights still cannot record payments.
+        $user->tenants()->updateExistingPivot(app('currentTenant')->id, ['roles' => json_encode(['sales'])]);
+        $user->unsetRelation('tenants');
         $this->post($endpoint, $payment)->assertForbidden();
     }
 

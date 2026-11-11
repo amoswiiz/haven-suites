@@ -4,8 +4,8 @@
     @if($photoCount)
         <div class="stay-gallery {{ $photoCount === 1 ? 'single' : ($photoCount === 2 ? 'two' : '') }}">
             @foreach(array_slice($listing['photos'], 0, 3) as $photo)
-                <a href="{{ $photo['url'] }}" data-gallery-photo data-photo-index="{{ $loop->index }}" data-photo-caption="{{ $photo['caption'] }}" aria-label="View photo {{ $loop->iteration }} of {{ $photoCount }}: {{ $photo['caption'] }}">
-                    <img src="{{ $photo['url'] }}" alt="{{ $photo['caption'] }}" width="900" height="650" @if($loop->first) fetchpriority="high" @else loading="lazy" @endif decoding="async">
+                <a href="{{ $photo['url'] }}?w=1200" data-gallery-photo data-photo-index="{{ $loop->index }}" data-photo-caption="{{ $photo['caption'] }}" aria-label="View photo {{ $loop->iteration }} of {{ $photoCount }}: {{ $photo['caption'] }}">
+                    <img src="{{ $photo['url'] }}?w=1200" srcset="{{ \App\Services\ListingPhotoVariants::srcset($photo['url']) }}" sizes="(max-width: 760px) 100vw, 60vw" alt="{{ $photo['caption'] }}" width="900" height="650" @if($loop->first) fetchpriority="high" @else loading="lazy" @endif decoding="async">
                 </a>
             @endforeach
         </div>
@@ -17,8 +17,8 @@
             <summary>Browse every photo</summary>
             <div class="stay-photo-grid" id="photo-grid">
                 @foreach($listing['photos'] as $photo)
-                    <a href="{{ $photo['url'] }}" data-gallery-photo data-photo-index="{{ $loop->index }}" data-photo-caption="{{ $photo['caption'] }}" aria-label="View photo {{ $loop->iteration }} of {{ $photoCount }}: {{ $photo['caption'] }}">
-                        <img src="{{ $photo['url'] }}" alt="{{ $photo['caption'] }}" width="700" height="480" loading="lazy" decoding="async"><span>{{ $photo['caption'] }}</span>
+                    <a href="{{ $photo['url'] }}?w=1200" data-gallery-photo data-photo-index="{{ $loop->index }}" data-photo-caption="{{ $photo['caption'] }}" aria-label="View photo {{ $loop->iteration }} of {{ $photoCount }}: {{ $photo['caption'] }}">
+                        <img src="{{ $photo['url'] }}?w=480" alt="{{ $photo['caption'] }}" width="700" height="480" loading="lazy" decoding="async"><span>{{ $photo['caption'] }}</span>
                     </a>
                 @endforeach
             </div>
@@ -29,7 +29,7 @@
             <div class="stay-photo-controls"><button type="button" data-photo-prev aria-label="Previous photo">&larr;</button><span data-photo-count role="status" aria-live="polite">1 / {{ $photoCount }}</span><button type="button" data-photo-next aria-label="Next photo">&rarr;</button></div>
             <div class="stay-photo-thumbnails" aria-label="Choose a photo">
                 @foreach($listing['photos'] as $photo)
-                    <button type="button" data-photo-go="{{ $loop->index }}" aria-label="Show photo {{ $loop->iteration }}: {{ $photo['caption'] }}"><img src="{{ $photo['url'] }}" alt="" width="96" height="72" loading="lazy" decoding="async"></button>
+                    <button type="button" data-photo-go="{{ $loop->index }}" aria-label="Show photo {{ $loop->iteration }}: {{ $photo['caption'] }}"><img src="{{ $photo['url'] }}?w=480" alt="" width="96" height="72" loading="lazy" decoding="async"></button>
                 @endforeach
             </div>
         </dialog>

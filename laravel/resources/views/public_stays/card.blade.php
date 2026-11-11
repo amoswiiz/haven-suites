@@ -6,7 +6,7 @@
     $quickLinks = $stay['links'] ?? ['enquiry_url' => $stayUrl.'#enquire', 'whatsapp_url' => null];
 @endphp
 <article class="stay-card">
-    <a class="stay-card-image" href="{{ $stayUrl }}"><img src="{{ $stay['photos'][0]['url'] }}" alt="{{ $stay['photos'][0]['caption'] }}" loading="lazy" width="700" height="480" decoding="async"><span class="stay-card-media">{{ count($stay['photos']) }} photo{{ count($stay['photos']) === 1 ? '' : 's' }}@if(!empty($stay['videos'])) <span aria-hidden="true">&middot;</span> Video tour{{ count($stay['videos']) === 1 ? '' : 's' }}@endif</span></a>
+    <a class="stay-card-image" href="{{ $stayUrl }}"><img src="{{ $stay['photos'][0]['url'] }}?w=480" srcset="{{ \App\Services\ListingPhotoVariants::srcset($stay['photos'][0]['url']) }}" sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 380px" alt="{{ $stay['photos'][0]['caption'] }}" loading="lazy" width="700" height="480" decoding="async"><span class="stay-card-media">{{ count($stay['photos']) }} photo{{ count($stay['photos']) === 1 ? '' : 's' }}@if(!empty($stay['videos'])) <span aria-hidden="true">&middot;</span> Video tour{{ count($stay['videos']) === 1 ? '' : 's' }}@endif</span></a>
     <div class="stay-card-body">
         <p class="stay-location">{{ $stay['neighbourhood'] ? $stay['neighbourhood'].' · ' : '' }}{{ $stay['city'] }}</p>
         <h3><a href="{{ $stayUrl }}">{{ $stay['title'] }}</a></h3>

@@ -315,17 +315,24 @@ class InvestorPortalTest extends TestCase
         $this->assertDatabaseHas('investor_deliveries', ['id' => $id, 'status' => 'blocked']);
     }
 
-    public function test_invites_use_owner_role_and_only_verified_matching_recipient_can_accept(): void
+    public function test_invite_route_sets_up_an_owner_login_directly_without_sending_an_invitation(): void
     {
         Notification::fake();
         $tenant = $this->company();
         $admin = $this->member($tenant, 'admin');
         $investor = $this->profile($tenant);
-        $this->actingAs($admin)->post('/t/'.$tenant->slug.'/investors/'.$investor->id.'/invite')->assertSessionHasNoErrors();
-        $invitation = CompanyInvitation::first();
-        $this->assertSame('owner', $invitation->role);
-        $this->assertSame($investor->id, $invitation->investor_id);
+        $url = '/t/'.$tenant->slug.'/investors/'.$investor->id.'/invite';
+        $this->actingAs($admin)->post($url)->assertSessionHasErrors(['password', 'email_confirmed']);
         $this->assertNull(DB::table('investors')->where('id', $investor->id)->value('user_id'));
+
+        $this->post($url, ['password' => 'a-long-password-123', 'password_confirmation' => 'a-long-password-123', 'email_confirmed' => 1])
+            ->assertSessionHasNoErrors()->assertSessionHas('success');
+        $user = User::where('email', 'investor@example.test')->firstOrFail();
+        $this->assertSame($user->id, (int) DB::table('investors')->where('id', $investor->id)->value('user_id'));
+        $this->assertSame(['owner'], json_decode($user->tenants()->whereKey($tenant->id)->first()->pivot->roles, true));
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertSame(0, CompanyInvitation::count(), 'No invitation is sent.');
+        Notification::assertNothingSent();
         $this->assertDatabaseCount('investor_audit_events', 1);
     }
 

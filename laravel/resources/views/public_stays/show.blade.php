@@ -32,6 +32,11 @@
             <a class="stay-share" href="https://wa.me/?text={{ rawurlencode($shareText) }}" target="_blank" rel="noopener noreferrer" data-share-url="{{ $listingLinks['public_url'] }}" data-share-title="{{ $listing['title'] }}">Share <span aria-hidden="true">&nearr;</span></a>
             <span class="stay-quick-note">Our team confirms your dates and final price.</span>
         </div>
+        <div class="stay-mobile-bar" data-mobile-bar hidden>
+            <div class="stay-mobile-bar-price">@if((float)$listing['starting_price'] > 0)<strong>{{ $listing['currency'] }} {{ number_format((float)$listing['starting_price']) }}</strong><span>per night</span>@else<strong>Price on request</strong>@endif</div>
+            @if(!empty($listingLinks['whatsapp_url']))<a class="stay-button secondary" href="{{ $listingLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp us about {{ $listing['title'] }}">WhatsApp</a>@endif
+            @if($canEnquire)<a class="stay-button" href="{{ $listingLinks['enquiry_url'] }}">Enquire</a>@endif
+        </div>
     @endif
     @include('public_stays.media')
     <nav class="stay-section-nav" aria-label="Explore this apartment"><a href="#stay-overview">About the stay</a>@if(!empty($listing['videos']))<a href="#stay-videos">Video tours</a>@endif @if($listing['amenity_labels'])<a href="#stay-amenities">Amenities</a>@endif<a href="#stay-availability">Availability</a>@if($reviews['count'])<a href="#stay-reviews">Reviews</a>@endif<a href="#stay-rules">Good to know</a>@if($listing['public_location'])<a href="#stay-location">Location</a>@endif</nav>

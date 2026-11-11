@@ -21,7 +21,8 @@
     @if(($totals['pending'] ?? 0) + ($totals['processing'] ?? 0) > 0)<p class="muted">Messages go out within a minute or two. Refresh this page to see progress.</p>@endif
     <div class="table-wrap"><table><thead><tr><th>Agent</th><th>Number</th><th>Status</th><th>Details</th></tr></thead><tbody>
     @foreach($recipients as $recipient)
-        <tr><td>{{ $recipient->agent_name }}</td><td>{{ $recipient->phone ?: '—' }}</td><td>{{ $labels[$recipient->status] ?? ucfirst($recipient->status) }}</td>
+        @php($tone = match ($recipient->status) { 'delivered', 'submitted' => 'success', 'pending', 'processing', 'failed' => 'info', 'skipped' => 'muted', default => 'danger' })
+        <tr><td>{{ $recipient->agent_name }}</td><td>{{ $recipient->phone ?: '—' }}</td><td><x-ui.status :tone="$tone">{{ $labels[$recipient->status] ?? ucfirst($recipient->status) }}</x-ui.status></td>
             <td class="muted">{{ $recipient->last_error ?: ($recipient->delivered_at ? 'Delivered '.\Carbon\Carbon::parse($recipient->delivered_at)->format('j M, H:i') : ($recipient->sent_at ? 'Sent '.\Carbon\Carbon::parse($recipient->sent_at)->format('j M, H:i') : '')) }}</td></tr>
     @endforeach
     </tbody></table></div>

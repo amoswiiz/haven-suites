@@ -1,14 +1,25 @@
 <?php
+
 namespace App\Providers;
+
+use App\Support\Migration\Connection;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+
 class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void { $this->app->scoped(\App\Support\Migration\Connection::class); }
-    public function boot(): void {
+    public function register(): void
+    {
+        $this->app->scoped(Connection::class);
+    }
+
+    public function boot(): void
+    {
         date_default_timezone_set(config('app.timezone'));
-        \Illuminate\Support\Facades\RateLimiter::for('login',fn($request)=>[
-            \Illuminate\Cache\RateLimiting\Limit::perMinute(6)->by(strtolower((string)$request->input('email')).'|'.$request->ip()),
-            \Illuminate\Cache\RateLimiting\Limit::perMinute(60)->by('login-ip|'.$request->ip()),
+        RateLimiter::for('login', fn ($request) => [
+            Limit::perMinute(6)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(60)->by('login-ip|'.$request->ip()),
         ]);
     }
 }

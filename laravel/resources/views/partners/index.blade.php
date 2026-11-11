@@ -1,6 +1,6 @@
 @extends('saas.layout')
 @section('title', 'Partner apartments')
-@push('scripts')<script src="{{ asset('assets/js/partner-directory.js') }}?v=3" defer></script>@endpush
+@push('scripts')<script src="{{ \App\Support\AssetVersion::url('assets/js/partner-directory.js') }}" defer></script>@endpush
 @section('content')
 @php
     $tenantSlug = app('currentTenant')->slug;

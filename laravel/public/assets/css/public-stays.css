@@ -198,3 +198,9 @@
 
 /* Rooms and beds summary on listing pages */
 .stay-layout-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;padding:0;margin:22px 0 0;list-style:none}.stay-layout-facts li{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}.stay-layout-facts strong{display:block;font-size:.95rem}.stay-layout-facts span{display:block;color:var(--muted);font-size:.8rem;margin-top:3px}
+
+/* Content written with the blog editor */
+.stay-post-body img{max-width:100%;display:block;margin:22px auto}.stay-post-body table{width:100%;border-collapse:collapse;margin:20px 0;font-size:.95rem;display:block;overflow-x:auto}.stay-post-body th,.stay-post-body td{border:1px solid var(--line);padding:8px 12px;text-align:left}.stay-post-body th{background:#f4f6fa}.stay-post-body hr{border:0;border-top:1px solid var(--line);margin:32px 0}.stay-post-body li input[type=checkbox]{margin-right:8px}.stay-post-body del{color:var(--muted)}
+
+/* Sticky enquiry bar on phones (listing pages) */
+.stay-mobile-bar{display:none}@media (max-width:760px){.stay-mobile-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;gap:10px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(15,23,42,.08);transform:translateY(110%);transition:transform .2s ease}.stay-mobile-bar[hidden]{display:flex}.stay-mobile-bar.is-visible{transform:none}.stay-mobile-bar-price{flex:1;min-width:0;line-height:1.2}.stay-mobile-bar-price strong{display:block;font-size:1rem}.stay-mobile-bar-price span{font-size:.75rem;color:var(--muted)}.stay-mobile-bar .stay-button{padding:10px 14px;min-height:44px}body.has-mobile-bar .stay-footer{padding-bottom:84px}}@media (prefers-reduced-motion:reduce){.stay-mobile-bar{transition:none}}
