@@ -21,7 +21,16 @@
         @if(!empty($site?->logo_path))<p><img src="{{ route('public-stays.logo', $tenantSlug) }}?v={{ strtotime((string) $site->logo_updated_at) }}" alt="Current logo" style="max-height:64px;width:auto;background:#fff;border:1px solid #e2e7e9;border-radius:8px;padding:8px"></p><label><input type="checkbox" name="remove_logo" value="1" style="width:auto"> Remove the logo and show the company name instead</label>@endif
         <div><label for="logo">{{ !empty($site?->logo_path) ? 'Replace logo' : 'Upload logo' }}</label><input id="logo" name="logo" type="file" accept="image/webp,image/png"></div>
     </section>
-    <section class="card" aria-labelledby="site-seo-heading"><h2 id="site-seo-heading">Search appearance</h2><p class="muted">Use a clear website title and introduction for search engines and shared links. Leave these blank to use your company name and website introduction. Individual apartments can have their own search details.</p><div class="grid">
+    <section class="card" aria-labelledby="site-layout-heading"><h2 id="site-layout-heading">Homepage layout</h2>
+    <p class="muted">Turn on the new homepage one step at a time. Searches, addresses, enquiries and WhatsApp messages work the same in both layouts, so you can switch a step off again at any time.</p>
+    <p class="muted">Preview before switching on: <a href="{{ route('public-stays.index', $tenantSlug) }}?layout=new" target="_blank" rel="noopener">new layout</a> &middot; <a href="{{ route('public-stays.index', $tenantSlug) }}?layout=classic" target="_blank" rel="noopener">current layout</a></p>
+    @php($layoutSteps = \App\Services\HomepageLayout::saved($site))
+    @foreach(\App\Services\HomepageLayout::STEPS as $layoutStep => $layoutLabel)
+        <input type="hidden" name="homepage_layout[{{ $layoutStep }}]" value="0">
+        <label><input type="checkbox" name="homepage_layout[{{ $layoutStep }}]" value="1" style="width:auto" @checked(old('homepage_layout.'.$layoutStep, $layoutSteps[$layoutStep]))> Step {{ $loop->iteration }}: {{ $layoutLabel }}</label>
+    @endforeach
+</section>
+<section class="card" aria-labelledby="site-seo-heading"><h2 id="site-seo-heading">Search appearance</h2><p class="muted">Use a clear website title and introduction for search engines and shared links. Leave these blank to use your company name and website introduction. Individual apartments can have their own search details.</p><div class="grid">
         <div><label for="seo_title">Website search title</label><input id="seo_title" name="seo_title" maxlength="180" value="{{ old('seo_title', $site->seo_title ?? '') }}"><small class="muted">Aim for about 50–60 characters. Maximum 180.</small></div>
         <div><label for="seo_description">Website search description</label><textarea id="seo_description" name="seo_description" maxlength="320" rows="3">{{ old('seo_description', $site->seo_description ?? '') }}</textarea><small class="muted">Summarise what guests can discover in about 150–160 characters. Maximum 320.</small></div>
     </div></section>

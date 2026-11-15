@@ -76,6 +76,16 @@ class ListingDetails
         ];
     }
 
+    /** Map pin for the area (rounded to about 500 m, like areaMap), never the exact building. @return array{0: float, 1: float}|null */
+    public static function areaPoint(mixed $latitude, mixed $longitude): ?array
+    {
+        if (! is_numeric($latitude) || ! is_numeric($longitude)) {
+            return null;
+        }
+
+        return [round((float) $latitude * 200) / 200, round((float) $longitude * 200) / 200];
+    }
+
     /** @return list<array{name: string, minutes: int, mode: string}> */
     public static function nearby(mixed $rows): array
     {
@@ -162,6 +172,34 @@ class ListingDetails
         }
 
         return (float) ($listing['starting_price'] ?? 0) > 0 ? (float) $listing['starting_price'] : null;
+    }
+
+    /**
+     * Estimated total for a stay, worked out exactly like the estimate on the listing page: each night's price, minus a
+     * monthly (28+ nights) or weekly (7+ nights) discount, plus the cleaning fee. The team's quote confirms the price.
+     *
+     * @param  array<string, mixed>  $listing
+     * @return array{nights: int, total: float}|null
+     */
+    public static function estimate(array $listing, ?string $checkIn, ?string $checkOut): ?array
+    {
+        if (! $checkIn || ! $checkOut || (float) ($listing['starting_price'] ?? 0) <= 0) {
+            return null;
+        }
+        $start = CarbonImmutable::parse($checkIn)->startOfDay();
+        $nights = (int) $start->diffInDays(CarbonImmutable::parse($checkOut)->startOfDay());
+        if ($nights < 1) {
+            return null;
+        }
+        $base = 0.0;
+        for ($night = 0; $night < $nights; $night++) {
+            $base += self::nightlyPrice($listing, $start->addDays($night)) ?? 0.0;
+        }
+        $monthly = (int) ($listing['monthly_discount'] ?? 0);
+        $weekly = (int) ($listing['weekly_discount'] ?? 0);
+        $percent = $nights >= 28 && $monthly > 0 ? $monthly : ($nights >= 7 && $weekly > 0 ? $weekly : 0);
+
+        return ['nights' => $nights, 'total' => round($base - $base * $percent / 100 + (float) ($listing['cleaning_fee'] ?? 0), 2)];
     }
 
     /** "Photos checked" date for guests, hidden after 18 months. */

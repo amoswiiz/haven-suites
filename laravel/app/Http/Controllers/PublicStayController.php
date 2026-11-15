@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Services\HomepageLayout;
 use App\Services\ListingAvailability;
+use App\Services\ListingDetails;
 use App\Services\PublicAboutPage;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicBlog;
@@ -89,10 +91,11 @@ class PublicStayController extends Controller
             }
         }
         $ratings = app(PublicReviews::class)->summaries($tenant);
-        $listings = $listings->map(function (array $listing) use ($states, $tenant, $site, $request, $ratings): array {
+        $listings = $listings->map(function (array $listing) use ($states, $tenant, $site, $request, $ratings, $filters): array {
             $listing['availability'] = $states[$listing['id']] ?? null;
             $listing['rating'] = $ratings[$listing['id']] ?? null;
             $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
+            $listing['estimate'] = ListingDetails::estimate($listing, $filters['check_in'] ?? null, $filters['check_out'] ?? null);
 
             return $listing;
         })->filter(fn (array $listing): bool => empty($filters['available_only']) || $nights === null
@@ -116,7 +119,7 @@ class PublicStayController extends Controller
         $highlights = $filtered || $page > 1 ? collect() : app(PublicReviews::class)->highlights($tenant, $published->pluck('id')->all());
 
         return $this->page('public_stays.index', compact('tenant', 'site', 'stays', 'cities', 'filters', 'hero', 'destinations', 'propertyTypes', 'collectionCounts') + [
-            'amenities' => PublicListingCatalog::AMENITIES, 'today' => $today,
+            'amenities' => PublicListingCatalog::AMENITIES, 'today' => $today, 'layout' => HomepageLayout::for($site, $request),
             'guestInfo' => app(PublicGuestInfo::class)->content($tenant, $site), 'reviewHighlights' => $highlights,
             'listingTitles' => $published->mapWithKeys(fn (array $listing): array => [$listing['id'] => ['title' => $listing['title'], 'slug' => $listing['slug']]]),
             'pageTitle' => ($this->plainText($site->seo_title ?? '', 180) ?: $this->plainText($tenant->name, 100).' | Find your next stay').($page > 1 ? ' | Page '.$page : ''),
@@ -197,6 +200,35 @@ class PublicStayController extends Controller
                 'telephone' => $site->contact_phone ?? null, 'email' => $site->contact_email ?? null,
                 'areaServed' => array_map(fn (string $area): array => ['@type' => 'City', 'name' => $area], array_values(array_unique($areas)))]),
         ]);
+    }
+
+    /**
+     * Stays the guest saved with ♡. The list lives only in the guest's browser; the page script adds it as
+     * "?stays=slug-one,slug-two". Nothing is stored on the server and the page is kept out of search results.
+     */
+    public function saved(Request $request, string $company, PublicListingCatalog $catalog): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $slugs = collect(explode(',', (string) $request->query('stays', '')))->map(fn (string $slug): string => trim($slug))
+            ->filter(fn (string $slug): bool => (bool) preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug))->unique()->take(50)->values()->all();
+        $ratings = app(PublicReviews::class)->summaries($tenant);
+        $stays = $catalog->published($tenant)->filter(fn (array $listing): bool => in_array($listing['slug'], $slugs, true))
+            ->map(function (array $listing) use ($tenant, $site, $request, $ratings): array {
+                $listing['availability'] = null;
+                $listing['rating'] = $ratings[$listing['id']] ?? null;
+                $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
+                $listing['estimate'] = null;
+
+                return $listing;
+            })->values();
+
+        return $this->page('public_stays.saved', [
+            'tenant' => $tenant, 'site' => $site, 'stays' => $stays, 'filters' => [], 'requested' => count($slugs),
+            'layout' => ['search' => true, 'cards' => true, 'explore' => true],
+            'pageTitle' => 'Saved stays | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => 'Stays you saved on this device.',
+            'canonicalUrl' => $this->publicUrl('public-stays.saved', ['company' => $tenant->slug]), 'robotsContent' => 'noindex, follow',
+        ])->header('X-Robots-Tag', 'noindex, follow');
     }
 
     public function faq(string $company, PublicListingCatalog $catalog): Response

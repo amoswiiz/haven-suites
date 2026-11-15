@@ -572,3 +572,115 @@
         });
     });
 })();
+
+/* Filter drawer (new homepage): closes with the × button, the backdrop or Escape, and locks page scrolling while open. */
+(() => {
+    const drawer = document.querySelector('[data-filter-drawer]');
+    if (!drawer) return;
+    const panel = drawer.querySelector('.stay-drawer-panel');
+    const close = () => { drawer.open = false; };
+    drawer.addEventListener('toggle', () => {
+        document.body.classList.toggle('stay-drawer-open', drawer.open);
+        if (drawer.open) panel.querySelector('input, select, button')?.focus();
+        else drawer.querySelector('summary')?.focus();
+    });
+    drawer.querySelector('[data-close-drawer]')?.addEventListener('click', close);
+    drawer.addEventListener('click', (event) => { if (drawer.open && !panel.contains(event.target) && event.target !== drawer.querySelector('summary') && !drawer.querySelector('summary').contains(event.target)) close(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && drawer.open) close(); });
+})();
+
+/* Saved stays (♡): kept only in this browser. The Saved page receives the list as ?stays=slug,slug. */
+(() => {
+    const key = 'haven.saved-stays';
+    const read = () => { try { const list = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(list) ? list.filter((slug) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)).slice(0, 50) : []; } catch { return []; } };
+    const write = (list) => { try { localStorage.setItem(key, JSON.stringify(list)); } catch { /* Private browsing: saving is skipped. */ } };
+    const buttons = Array.from(document.querySelectorAll('[data-save-stay]'));
+    const link = document.querySelector('[data-saved-link]');
+    const count = document.querySelector('[data-saved-count]');
+    const refresh = () => {
+        const saved = read();
+        buttons.forEach((button) => {
+            const on = saved.includes(button.dataset.saveStay);
+            button.setAttribute('aria-pressed', on ? 'true' : 'false');
+            const name = button.getAttribute('aria-label').replace(/^(Save|Remove) /, '').replace(/ from saved$/, '');
+            button.setAttribute('aria-label', on ? `Remove ${name} from saved` : `Save ${name}`);
+            if (button.dataset.saveLabel !== undefined) button.querySelector('[data-save-text]').textContent = on ? 'Saved' : 'Save';
+        });
+        if (link) link.href = link.href.split('?')[0] + (saved.length ? '?stays=' + saved.join(',') : '');
+        if (count) { count.textContent = saved.length; count.hidden = saved.length === 0; }
+    };
+    buttons.forEach((button) => {
+        button.hidden = false;
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const saved = read();
+            const slug = button.dataset.saveStay;
+            write(saved.includes(slug) ? saved.filter((item) => item !== slug) : [slug, ...saved]);
+            refresh();
+        });
+    });
+    const page = document.querySelector('[data-saved-page]');
+    if (page) {
+        const saved = read();
+        const current = new URLSearchParams(location.search).get('stays') || '';
+        if (saved.join(',') !== current && (saved.length || current)) {
+            location.replace(page.dataset.savedBase + (saved.length ? '?stays=' + saved.join(',') : ''));
+            return;
+        }
+    }
+    refresh();
+})();
+
+/* Map view: loads the map library and map images only when the guest asks. Pins show each stay's area. */
+(() => {
+    const toggle = document.querySelector('[data-map-toggle]');
+    const view = document.querySelector('[data-map-view]');
+    const cards = Array.from(document.querySelectorAll('[data-stay-card][data-map-lat]'));
+    if (!toggle || !view || !cards.length) return;
+    toggle.hidden = false;
+    let map;
+    const load = () => new Promise((resolve, reject) => {
+        if (window.L) { resolve(); return; }
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = view.dataset.leafletCss;
+        document.head.append(css);
+        const script = document.createElement('script');
+        script.src = view.dataset.leafletJs;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+    });
+    const draw = () => {
+        const canvas = view.querySelector('[data-map-canvas]');
+        map = window.L.map(canvas, { scrollWheelZoom: false });
+        window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+        const points = cards.map((card) => {
+            const point = [Number(card.dataset.mapLat), Number(card.dataset.mapLng)];
+            const pin = document.createElement('a');
+            pin.className = 'stay-map-pin';
+            pin.href = card.dataset.mapUrl;
+            pin.textContent = card.dataset.mapPrice || card.dataset.mapTitle;
+            pin.setAttribute('aria-label', card.dataset.mapTitle + (card.dataset.mapPrice ? ', ' + card.dataset.mapPrice + ' a night' : ''));
+            pin.title = card.dataset.mapTitle;
+            window.L.marker(point, { icon: window.L.divIcon({ className: '', html: pin.outerHTML, iconSize: null }), keyboard: false }).addTo(map);
+            return point;
+        });
+        map.fitBounds(points, { padding: [40, 40], maxZoom: 14 });
+    };
+    toggle.addEventListener('click', async () => {
+        const showing = view.hidden;
+        view.hidden = !showing;
+        toggle.setAttribute('aria-pressed', showing ? 'true' : 'false');
+        toggle.querySelector('[data-map-label]').textContent = showing ? 'Hide map' : 'Map';
+        if (!showing) return;
+        try {
+            await load();
+            if (!map) draw(); else map.invalidateSize();
+            view.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } catch {
+            view.querySelector('[data-map-canvas]').textContent = 'The map could not load. Check your connection and try again.';
+        }
+    });
+})();

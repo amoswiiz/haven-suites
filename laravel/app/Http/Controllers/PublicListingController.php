@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\HomepageLayout;
 use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicAboutPage;
@@ -135,9 +136,13 @@ class PublicListingController extends Controller
             'about_main_locations' => 'nullable|string|max:255', 'about_other_areas' => 'nullable|string|max:2000',
             'cancellation_policy' => 'nullable|string|max:3000', 'payment_policy' => 'nullable|string|max:3000', 'faq' => 'nullable|string|max:15000',
             'host_intro' => 'nullable|string|max:1500', 'host_reply_time' => 'nullable|string|max:80|not_regex:/[<>]/', 'host_languages' => 'nullable|string|max:120|not_regex:/[<>]/',
+            'homepage_layout' => 'sometimes|array', 'homepage_layout.*' => 'boolean',
         ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
+        }
+        if (array_key_exists('homepage_layout', $data)) {
+            $data['homepage_layout'] = HomepageLayout::encode($data['homepage_layout']);
         }
         $data['enabled'] = $request->boolean('enabled');
         if ($data['enabled'] && (empty($data['enquiry_assignee_id']) || ($tenant->modules['sales'] ?? true) === false)) {

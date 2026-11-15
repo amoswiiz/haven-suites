@@ -71,7 +71,7 @@
                             <ul>
                                 @foreach($menuDestinations as $destination)
                                     <li><a href="{{ $areaLinks->url($tenant, $destination['city']) }}">{{ $destination['city'] }} <span>({{ $destination['count'] }})</span></a>
-                                        @if(count($destination['areas']) > 1)<ul>@foreach($destination['areas'] as $area)<li><a href="{{ \Illuminate\Support\Str::slug($area['name']) !== '' ? $areaLinks->url($tenant, $destination['city'], $area['name']) : $publicBrowseUrl.'?city='.rawurlencode($destination['city']).'&area='.rawurlencode($area['name']).'#find-stay' }}">{{ $area['name'] }} <span>({{ $area['count'] }})</span></a></li>@endforeach</ul>@endif
+                                        @if(count($destination['areas']) >= 1)<ul>@foreach($destination['areas'] as $area)<li><a href="{{ \Illuminate\Support\Str::slug($area['name']) !== '' ? $areaLinks->url($tenant, $destination['city'], $area['name']) : $publicBrowseUrl.'?city='.rawurlencode($destination['city']).'&area='.rawurlencode($area['name']).'#find-stay' }}">{{ $area['name'] }} <span>({{ $area['count'] }})</span></a></li>@endforeach</ul>@endif
                                     </li>
                                 @endforeach
                             </ul>

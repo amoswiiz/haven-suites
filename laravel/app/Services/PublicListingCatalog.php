@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 class PublicListingCatalog
 {
     /** Listing addresses that clash with other public pages under /stays/{company}/. */
-    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas'];
+    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas', 'saved'];
 
     /** @var array<string, string> */
     public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'maisonette' => 'Maisonette', 'penthouse' => 'Penthouse', 'cottage' => 'Cottage'];
@@ -417,6 +417,7 @@ class PublicListingCatalog
             'videos' => app(YouTubeListingVideos::class)->project($listing->youtube_videos ?? null),
             // Guest details. Exact coordinates and the private check-in guide are never projected.
             'area_map' => ListingDetails::areaMap($listing->latitude ?? null, $listing->longitude ?? null),
+            'area_point' => ListingDetails::areaPoint($listing->latitude ?? null, $listing->longitude ?? null),
             'nearby' => ListingDetails::nearby(json_decode($listing->nearby ?? '[]', true)),
             'rooms' => ListingDetails::rooms(json_decode($listing->rooms ?? '[]', true), $photos->pluck('id')->map(fn ($id): int => (int) $id)->all()),
             'size_sqm' => ($listing->size_sqm ?? null) ? (int) $listing->size_sqm : null,
