@@ -139,6 +139,7 @@ class PublicListingController extends Controller
             'homepage_layout' => 'sometimes|array', 'homepage_layout.*' => 'boolean',
             'social_links' => 'sometimes|array', 'social_links.*' => 'nullable|string|max:300',
             'office_addresses' => ['nullable', 'string', 'max:600', 'not_regex:/[<>]/'],
+            'google_rating' => ['nullable', 'numeric', 'min:1', 'max:5', 'regex:/^\d(\.\d)?$/D'], 'google_review_count' => 'nullable|integer|min:1|max:1000000',
         ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);

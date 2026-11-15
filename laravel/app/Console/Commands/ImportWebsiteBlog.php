@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Tenant;
 use App\Services\BlogHtmlToMarkdown;
 use App\Services\ListingPhotoVariants;
+use App\Services\PublicBlog;
 use App\Services\PublicImageEncoder;
 use App\Services\WebsiteBlogSource;
 use Carbon\CarbonImmutable;
@@ -107,6 +108,7 @@ class ImportWebsiteBlog extends Command
                         'tenant_id' => $tenant->id, 'slug' => $post['slug'], 'title' => $title,
                         'excerpt' => $post['excerpt'] !== '' ? Str::limit($post['excerpt'], 317) : null, 'body' => $body,
                         'cover_path' => $cover, 'status' => $publish ? 'published' : 'draft', 'published_at' => $publishedAt,
+                        'audience' => PublicBlog::guessAudience($title, $body),
                         'author_id' => $actor !== null ? (int) $actor : null, 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }

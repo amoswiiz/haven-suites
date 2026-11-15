@@ -2,12 +2,24 @@
 @section('content')
 <section class="stay-about-hero">
     <div class="stay-container">
-        <span class="stay-eyebrow">Travel tips &amp; guides</span>
-        <h1>Plan a better stay in Kenya</h1>
-        <p>Neighbourhood guides, travel tips and news from the {{ $tenant->name }} team.</p>
+        @if($audience === 'owners')
+            <span class="stay-eyebrow">For property owners</span>
+            <h1>Earn more from your property in Kenya</h1>
+            <p>Practical advice on short-term rental income, pricing, regulations and management from the {{ $tenant->name }} team. <a href="{{ route('public-stays.owners', $tenant->slug) }}">Talk to us about managing your property &rarr;</a></p>
+        @else
+            <span class="stay-eyebrow">Travel tips &amp; guides</span>
+            <h1>Plan a better stay in Kenya</h1>
+            <p>Neighbourhood guides, travel tips and news from the {{ $tenant->name }} team.</p>
+        @endif
     </div>
 </section>
 <div class="stay-container stay-section">
+    @if($audienceCounts['guests'] > 0 && $audienceCounts['owners'] > 0)
+        <nav class="stay-blog-tabs" aria-label="Guides for">
+            <a href="{{ route('public-stays.blog', $tenant->slug) }}" @if($audience === 'guests') aria-current="page" @endif>For guests <span>{{ $audienceCounts['guests'] }}</span></a>
+            <a href="{{ route('public-stays.blog', [$tenant->slug, 'for' => 'owners']) }}" @if($audience === 'owners') aria-current="page" @endif>For property owners <span>{{ $audienceCounts['owners'] }}</span></a>
+        </nav>
+    @endif
     @if($posts->count())
         <div class="stay-blog-grid">
             @foreach($posts as $post)

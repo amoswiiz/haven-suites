@@ -472,6 +472,92 @@ class GuestTrustTest extends TestCase
         $this->get('/stays/'.$slug.'/blog/nyali-beach-apartments-a-family-guide')->assertOk()->assertDontSee('Edit this article')->assertDontSee('Search score');
     }
 
+    public function test_property_owners_page_sends_enquiries_to_the_sales_pipeline(): void
+    {
+        $page = $this->get('/stays/trust-stays/list-your-property')->assertOk()
+            ->assertSee('Earn more from your property')->assertSee('Tell us about your property')->assertSee('"@type":"Service"', false);
+        preg_match('/name="form_issued_at" value="(\d+)"/', $page->getContent(), $issued);
+        preg_match('/name="form_token" value="([a-f0-9]{64})"/', $page->getContent(), $token);
+        $form = ['full_name' => 'Wanjiku Kamau', 'phone' => '0712 345 678', 'email' => 'owner@example.com', 'location' => 'Nyali, Mombasa',
+            'property_type' => 'apartment', 'bedrooms' => 2, 'current_use' => 'long_term', 'message' => 'Furnished, available from January.',
+            'consent' => 1, 'form_issued_at' => $issued[1], 'form_token' => $token[1]];
+
+        $this->post('/stays/trust-stays/list-your-property', $form)->assertSessionHasErrors('owner_enquiry');
+        $this->travel(5)->seconds();
+        $this->post('/stays/trust-stays/list-your-property', ['form_token' => str_repeat('a', 64)] + $form)->assertSessionHasErrors('owner_enquiry');
+        $this->post('/stays/trust-stays/list-your-property', ['phone' => '12'] + $form)->assertSessionHasErrors('phone');
+        $this->post('/stays/trust-stays/list-your-property', ['website' => 'spam'] + $form)->assertRedirect();
+        $this->assertSame(0, DB::table('sales_leads')->count(), 'Refused and robot submissions create no lead.');
+
+        $this->post('/stays/trust-stays/list-your-property', $form)->assertRedirect('/stays/trust-stays/list-your-property#owner-enquiry');
+        $lead = DB::table('sales_leads')->first();
+        $this->assertSame(['owner_website', '+254712345678', 'Nyali, Mombasa', 'new', $this->admin->id], [$lead->public_origin, $lead->phone, $lead->location, $lead->stage, (int) $lead->assigned_to]);
+        $this->assertSame('Owner: Apartment, 2 bedrooms, in Nyali, Mombasa', $lead->unit_preference);
+        $this->assertStringContainsString('Let to a long-term tenant', $lead->notes);
+        $this->assertSame('Call property owner: Wanjiku Kamau', DB::table('task_items')->where('id', $lead->public_task_id)->value('title'));
+        $this->followingRedirects()->get('/stays/trust-stays/list-your-property')->assertOk();
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('List your property with us');
+    }
+
+    public function test_blog_is_split_for_guests_and_property_owners(): void
+    {
+        $slug = $this->company->slug;
+        $this->staff()->post(route('public-listings.blog.store', $slug), ['title' => 'Where to eat in Nyali', 'body' => 'Seafood, coffee and sunset spots near the beach that our guests love most.',
+            'status' => 'published', 'published_at' => '2026-01-01 09:00'])->assertSessionHasNoErrors();
+        $this->post(route('public-listings.blog.store', $slug), ['title' => 'Airbnb taxes in Kenya for investors', 'body' => 'VAT, withholding tax and county levies explained for property owners who host.',
+            'status' => 'published', 'published_at' => '2026-02-01 09:00'])->assertSessionHasNoErrors();
+        $this->assertSame(['guests', 'owners'], DB::table('public_posts')->orderBy('published_at')->pluck('audience')->all(), 'New posts get a sensible audience.');
+        $this->get(route('public-listings.blog.edit', [$slug, DB::table('public_posts')->where('audience', 'owners')->value('id')]))->assertOk()->assertSee('Written for');
+
+        auth()->logout();
+        $this->get('/stays/'.$slug.'/blog')->assertOk()->assertSee('For guests')->assertSee('Where to eat in Nyali')->assertDontSee('Airbnb taxes in Kenya for investors');
+        $ownersTab = $this->get('/stays/'.$slug.'/blog?for=owners')->assertOk()->assertSee('Earn more from your property in Kenya')->assertSee('Airbnb taxes in Kenya for investors')->getContent();
+        $this->assertStringNotContainsString('Where to eat in Nyali', explode('<footer', $ownersTab)[0]);
+        $owner = $this->get('/stays/'.$slug.'/blog/airbnb-taxes-in-kenya-for-investors')->assertOk()->assertSee('Own a property in Kenya?')->assertSee('Guides for property owners');
+        $this->assertStringNotContainsString('Airbnb taxes in Kenya for investors</a>', substr($owner->getContent(), strpos($owner->getContent(), 'Latest guides')), 'The footer lists guest guides only.');
+        $this->get('/stays/'.$slug.'/list-your-property')->assertOk()->assertSee('Airbnb taxes in Kenya for investors');
+
+        DB::table('public_posts')->update(['audience' => 'guests']);
+        $this->artisan('haven:sort-blog-audience', ['tenant' => $slug, '--dry-run' => true])->expectsOutputToContain('Dry run: 1 for guests and 1 for property owners.')->assertSuccessful();
+        $this->assertSame(0, DB::table('public_posts')->where('audience', 'owners')->count());
+        $this->artisan('haven:sort-blog-audience', ['tenant' => $slug])->assertSuccessful();
+        $this->assertSame('owners', DB::table('public_posts')->where('slug', 'airbnb-taxes-in-kenya-for-investors')->value('audience'));
+    }
+
+    public function test_homepage_shows_business_data_google_rating_long_stays_and_mobile_whatsapp(): void
+    {
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['google_rating' => 4.8, 'google_review_count' => 126, 'whatsapp_number' => '+254702898694',
+            'contact_phone' => '+254702898694', 'office_addresses' => "Westlands Arcade, Nairobi\nThird Avenue Beach Apartments, Nyali",
+            'social_links' => json_encode(['instagram' => 'https://www.instagram.com/havensuites.bnb/'])]);
+        $html = $this->get('/stays/trust-stays')->assertOk()
+            ->assertDontSee('on Google', false)
+            ->assertSee('Staying a month or more, or booking for your team?')->assertSee('collection=long_stay', false)
+            ->assertSee('class="stay-float-whatsapp"', false)->getContent();
+        $this->assertStringContainsString('"@type":"LodgingBusiness"', $html);
+        $this->assertStringContainsString('"telephone":"+254702898694"', $html);
+        $this->assertStringContainsString('"streetAddress":"Third Avenue Beach Apartments, Nyali"', $html);
+        $this->assertStringContainsString('"sameAs":["https:\/\/www.instagram.com\/havensuites.bnb\/"]', $html);
+        $this->assertStringContainsString('"@type":"ItemList"', $html);
+        $this->assertStringNotContainsString('aggregateRating', $html, 'Google ignores self-published ratings.');
+        $header = substr($html, strpos($html, 'Main navigation'), 2000);
+        $this->assertStringNotContainsString('#find-stay">Find a stay</a><a', explode('</nav>', $header)[0], 'The header has one Find a stay button, not a menu duplicate.');
+
+        $this->company->forceFill(['google_review_url' => 'https://share.google/gIhA3wxXBRoPNO1Ll'])->save();
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('4.8</strong> on Google', false)->assertSee('126 reviews')->assertSee('href="https://share.google/gIhA3wxXBRoPNO1Ll"', false);
+        $this->get('/stays/trust-stays?city=Mombasa')->assertOk()->assertDontSee('"@type":"LodgingBusiness"', false);
+
+        $this->staff()->post(route('public-listings.site.update', $this->company->slug), ['version' => 1, 'enabled' => 1, 'enquiry_assignee_id' => $this->admin->id,
+            'response_hours' => 2, 'google_rating' => '6'])->assertSessionHasErrors('google_rating');
+    }
+
+    public function test_warm_command_prepares_the_stays_list_ahead_of_visitors(): void
+    {
+        config(['haven.public_catalogue_cache_seconds' => 60]);
+        Cache::forget('public-catalogue:'.$this->company->id);
+        $this->artisan('haven:warm-public-sites')->expectsOutputToContain('trust-stays: 1 stays ready.')->assertSuccessful();
+        $this->assertCount(1, Cache::get('public-catalogue:'.$this->company->id));
+    }
+
     public function test_cached_catalogue_is_cleared_by_staff_saves_and_photos_use_smaller_copies(): void
     {
         Storage::fake('local');

@@ -20,7 +20,7 @@ class PublicWebsiteLinks
     ];
 
     /** Menu destinations and their labels in the Website settings menu editor. */
-    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'blog' => 'Blog', 'faq' => 'FAQ', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
+    public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'blog' => 'Blog', 'faq' => 'FAQ', 'contact' => 'Contact', 'track' => 'Track my enquiry', 'owners' => 'List your property'];
 
     /** Social profiles shown in the footer, with the website addresses each one may use. */
     public const SOCIAL_NETWORKS = [
@@ -224,6 +224,7 @@ class PublicWebsiteLinks
             'label' => $link['label'],
             'url' => match ($link['target']) {
                 'home' => $base, 'stays' => $base.'#find-stay', 'contact' => $base.'#stay-contact', 'track' => $track, 'about' => $aboutUrl, 'faq' => $faqUrl, 'blog' => $blogUrl,
+                'owners' => $this->canonicalUrl('public-stays.owners', ['company' => $tenant->slug]),
             },
         ], array_values(array_filter($this->navigationForForm($site), static fn (array $link): bool => $link['target'] !== 'blog' || $hasBlog)));
     }

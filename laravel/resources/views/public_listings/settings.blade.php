@@ -27,6 +27,11 @@
         <label for="office_addresses">Office addresses <small class="muted">one per line, up to 4</small></label>
         <textarea id="office_addresses" name="office_addresses" rows="3" maxlength="600" placeholder="Westlands Arcade, First Floor, Nairobi&#10;Third Avenue Beach Apartments, Nyali, Mombasa">{{ old('office_addresses', $site->office_addresses ?? '') }}</textarea>
         <div class="grid">
+            <div><label for="google_rating">Google rating <small class="muted">e.g. 4.8</small></label><input id="google_rating" name="google_rating" inputmode="decimal" maxlength="3" pattern="[1-5](\.[0-9])?" value="{{ old('google_rating', $site->google_rating ?? '') }}"></div>
+            <div><label for="google_review_count">Number of Google reviews</label><input id="google_review_count" name="google_review_count" type="number" min="1" max="1000000" value="{{ old('google_review_count', $site->google_review_count ?? '') }}"></div>
+        </div>
+        <p class="muted">Copy both from your Google Business Profile and update them now and then. The rating shows on the homepage and footer and links to your Google page (the Google review link in Company settings). Leave blank to hide it.</p>
+        <div class="grid">
             @foreach(\App\Services\PublicWebsiteLinks::SOCIAL_NETWORKS as $network => $details)
                 <div><label for="social-{{ $network }}">{{ $details['label'] }}</label><input id="social-{{ $network }}" name="social_links[{{ $network }}]" type="url" maxlength="300" value="{{ old('social_links.'.$network, $savedSocial[$network] ?? '') }}" placeholder="https://{{ $details['hosts'][0] }}/…"></div>
             @endforeach

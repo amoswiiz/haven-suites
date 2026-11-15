@@ -87,7 +87,7 @@
                             </ul>
                         </details>
                     @endif
-                    @foreach($navigationItems as $menuItem)<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach
+                    @foreach($navigationItems as $menuItem)@continue(str_ends_with($menuItem['url'], '#find-stay'))<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach
                 </nav>
                 <div class="stay-header-actions">
                     @if(!empty($contactLinks['whatsapp_url']))<a class="stay-button secondary stay-header-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp us <span aria-hidden="true">&nearr;</span></a>@endif
@@ -101,12 +101,18 @@
         @yield('content')
     </main>
     @php
-        $footerPosts = empty($preview) ? rescue(fn () => app(\App\Services\PublicBlog::class)->published($tenant, 4), collect(), false) : collect();
+        $footerPosts = empty($preview) ? rescue(function () use ($tenant) {
+            $blog = app(\App\Services\PublicBlog::class);
+            $guides = $blog->published($tenant, 4, 'guests');
+
+            return $guides->isNotEmpty() ? $guides : $blog->published($tenant, 4);
+        }, collect(), false) : collect();
         $footerLinks = collect($navigationItems)->concat([
             ['label' => 'About us', 'url' => route('public-stays.about', $tenant->slug)],
             ['label' => 'Questions & policies', 'url' => route('public-stays.faq', $tenant->slug)],
             ...($footerPosts->isNotEmpty() ? [['label' => 'Travel tips & guides', 'url' => route('public-stays.blog', $tenant->slug)]] : []),
             ['label' => 'Track an enquiry', 'url' => route('public-stays.track', $tenant->slug)],
+            ['label' => 'List your property with us', 'url' => route('public-stays.owners', $tenant->slug)],
         ])->unique(fn ($link) => strtok($link['url'], '?'))->values();
         $socialLinks = \App\Services\PublicWebsiteLinks::socialLinks($site ?? null);
         $offices = \App\Services\PublicWebsiteLinks::officeAddresses($site ?? null);
@@ -122,11 +128,15 @@
             @endif
             <div><strong>Contact us</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif
                 @if($offices !== [])<address class="stay-footer-offices">@foreach($offices as $office)<p>{{ $office }}</p>@endforeach</address>@endif
+                @include('public_stays.google_rating')
                 @if($socialLinks !== [])<nav class="stay-footer-social" aria-label="Social media">@foreach($socialLinks as $network => $url)<a href="{{ $url }}" target="_blank" rel="noopener noreferrer me">{{ $network }}</a>@endforeach</nav>@endif
                 <p class="stay-contact-note">We use your contact details to respond to your enquiry and help arrange your stay.</p></div>
         </div>
         <div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><span>Serviced apartments &amp; short stays in Kenya</span><a class="stay-staff-link" href="{{ route('login') }}">Staff sign in</a></div>
     </footer>
+    @if(!empty($contactLinks['whatsapp_url']) && empty($listing) && empty($preview))
+        <a class="stay-float-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg><span>WhatsApp us</span></a>
+    @endif
     <script src="{{ \App\Support\AssetVersion::url('assets/js/public-stays.js') }}" defer></script>
 </body>
 </html>

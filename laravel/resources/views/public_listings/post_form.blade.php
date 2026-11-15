@@ -13,6 +13,7 @@
     <section class="card">
         <label for="post-title">Title</label><input id="post-title" data-seo-field name="title" required minlength="5" maxlength="180" value="{{ old('title', $post->title ?? '') }}" placeholder="Best areas to stay in Nairobi for a business trip">
         <label for="post-slug">Web address</label><input id="post-slug" data-seo-field name="slug" maxlength="160" pattern="[a-z0-9]+(-[a-z0-9]+)*" value="{{ old('slug', $post->slug ?? '') }}" placeholder="Leave blank to create it from the title"><small class="muted">/blog/<strong>this-part</strong>. Lowercase letters, numbers and hyphens.</small>
+        <label for="post-audience">Written for</label><select id="post-audience" name="audience">@foreach(\App\Services\PublicBlog::AUDIENCES as $value => $label)<option value="{{ $value }}" @selected(old('audience', $post->audience ?? 'guests') === $value)>{{ $label }}</option>@endforeach</select><small class="muted">Guest posts appear in "Travel tips" and the footer. Owner posts appear under "For property owners" and on the List your property page.</small>
         <label for="post-excerpt">Short summary <small class="muted">optional, shown in the blog list</small></label><textarea id="post-excerpt" data-seo-field name="excerpt" rows="2" maxlength="320">{{ old('excerpt', $post->excerpt ?? '') }}</textarea>
         <label for="post-body">Post</label>
         <div class="post-editor" data-post-editor data-upload-url="{{ route('public-listings.blog.image', $tenantSlug) }}" hidden></div>

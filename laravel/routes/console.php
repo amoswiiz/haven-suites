@@ -14,6 +14,7 @@ Schedule::command('haven:deliver-investor-notifications')->everyMinute()->withou
 Schedule::command('haven:sync-sms-status')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('haven:deliver-agent-broadcasts')->everyMinute()->withoutOverlapping();
 Schedule::command('haven:listing-photo-variants')->hourly()->withoutOverlapping();
+Schedule::command('haven:warm-public-sites')->everyMinute()->withoutOverlapping();
 
 Schedule::command('haven:accrue-rent')->dailyAt('00:10')->timezone('Africa/Nairobi')->withoutOverlapping();
 

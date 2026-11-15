@@ -35,6 +35,22 @@
             <div class="stay-empty"><h2>Let's find the right stay for you.</h2><p>No stays match these preferences right now. Try removing a filter, choosing flexible dates or another destination, or ask our team: we often know of options that are not listed yet.</p><div class="stay-track-actions" style="justify-content:center"><a class="stay-button secondary" href="{{ route('public-stays.index', $tenant->slug) }}#find-stay">Show all stays</a>@if(!empty($websiteContactLinks['whatsapp_url']))<a class="stay-button" href="{{ $websiteContactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Ask us on WhatsApp <span aria-hidden="true">&nearr;</span></a>@endif</div></div>
         @endif
     </section>
+    @php
+        $corporateWhatsapp = !empty($site->whatsapp_number) && ($number = \App\Support\PhoneNumber::normalize($site->whatsapp_number))
+            ? 'https://wa.me/'.ltrim($number, '+').'?text='.rawurlencode('Hello '.$tenant->name.', I am looking for a monthly or corporate stay. Dates: , Guests: , Area: ')
+            : null;
+    @endphp
+    <section class="stay-corporate" aria-labelledby="corporate-heading">
+        <div>
+            <span class="stay-eyebrow">Long stays &amp; companies</span>
+            <h2 id="corporate-heading">Staying a month or more, or booking for your team?</h2>
+            <p>Furnished apartments with Wi-Fi and a full kitchen, at monthly rates. We can invoice your company or organisation and host consultants, relocations and project teams.</p>
+        </div>
+        <div class="stay-track-actions">
+            <a class="stay-button" href="{{ route('public-stays.index', [$tenant->slug, 'collection' => 'long_stay']) }}#find-stay">See long-stay apartments &rarr;</a>
+            @if($corporateWhatsapp)<a class="stay-button secondary" href="{{ $corporateWhatsapp }}" target="_blank" rel="noopener noreferrer">Ask for monthly or corporate rates <span aria-hidden="true">&nearr;</span></a>@endif
+        </div>
+    </section>
     @if(($reviewHighlights ?? collect())->isNotEmpty())
         <section class="stay-section" aria-labelledby="home-reviews-heading"><span class="stay-eyebrow">Guest stories</span><h2 id="home-reviews-heading">What our guests say</h2>
             <div class="stay-review-grid">@foreach($reviewHighlights as $review)@include('public_stays.review_card', ['review' => $review, 'stayLink' => $listingTitles[$review->listing_id] ?? null])@endforeach</div>

@@ -2,7 +2,7 @@
 @section('content')
 <article class="stay-post">
     <header class="stay-container stay-post-head">
-        <nav class="stay-breadcrumb" aria-label="Breadcrumb"><a href="{{ route('public-stays.index', $tenant->slug) }}">Home</a> <span aria-hidden="true">›</span> <a href="{{ route('public-stays.blog', $tenant->slug) }}">Travel tips &amp; guides</a> <span aria-hidden="true">›</span> <span aria-current="page">{{ \Illuminate\Support\Str::limit($post->title, 60) }}</span></nav>
+        <nav class="stay-breadcrumb" aria-label="Breadcrumb"><a href="{{ route('public-stays.index', $tenant->slug) }}">Home</a> <span aria-hidden="true">›</span> @if(($post->audience ?? 'guests') === 'owners')<a href="{{ route('public-stays.blog', [$tenant->slug, 'for' => 'owners']) }}">Guides for property owners</a>@else<a href="{{ route('public-stays.blog', $tenant->slug) }}">Travel tips &amp; guides</a>@endif <span aria-hidden="true">›</span> <span aria-current="page">{{ \Illuminate\Support\Str::limit($post->title, 60) }}</span></nav>
         <h1>{{ $post->title }}</h1>
         <p class="stay-blog-meta"><time datetime="{{ \Carbon\CarbonImmutable::parse($post->published_at)->toDateString() }}">{{ \Carbon\CarbonImmutable::parse($post->published_at)->format('j F Y') }}</time> &middot; {{ $post->reading_minutes }} min read{{ $authorName ? ' · By '.$authorName : '' }}</p>
         @if($post->excerpt)<p class="stay-post-lead">{{ $post->excerpt }}</p>@endif
@@ -13,7 +13,11 @@
             <nav class="stay-post-contents" aria-labelledby="post-contents-heading"><strong id="post-contents-heading">In this guide</strong><ol>@foreach($contents as $section)<li><a href="#{{ $section['id'] }}">{{ $section['title'] }}</a></li>@endforeach</ol></nav>
         @endif
         <div class="stay-post-body">{!! $html !!}</div>
+        @if(($post->audience ?? 'guests') === 'owners')
+        <aside class="stay-post-cta"><strong>Own a property in Kenya?</strong><p>We manage apartments and holiday homes end to end: listing, pricing, guests, cleaning and monthly reports. Tell us about your property and we'll call you.</p><div class="stay-track-actions"><a class="stay-button" href="{{ route('public-stays.owners', $tenant->slug) }}#owner-enquiry">Talk to us about your property &rarr;</a></div></aside>
+        @else
         <aside class="stay-post-cta"><strong>Planning a stay?</strong><p>Browse our serviced apartments and send an enquiry. Our team confirms your dates and price.</p><div class="stay-track-actions"><a class="stay-button" href="{{ route('public-stays.index', $tenant->slug) }}#find-stay">Find a stay &rarr;</a>@if(!empty($websiteContactLinks['whatsapp_url']))<a class="stay-button secondary" href="{{ $websiteContactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">WhatsApp us <span aria-hidden="true">&nearr;</span></a>@endif</div></aside>
+        @endif
     </div>
 </article>
 @if($related->isNotEmpty())

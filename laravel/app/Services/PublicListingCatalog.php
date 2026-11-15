@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 class PublicListingCatalog
 {
     /** Listing addresses that clash with other public pages under /stays/{company}/. */
-    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas', 'saved'];
+    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas', 'saved', 'list-your-property', 'owners'];
 
     /** @var array<string, string> */
     public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'maisonette' => 'Maisonette', 'penthouse' => 'Penthouse', 'cottage' => 'Cottage'];
@@ -285,6 +285,23 @@ class PublicListingCatalog
 
         return self::$publishedByTenant[$tenant->id] ??= collect(Cache::remember(self::cacheKey((int) $tenant->id), $seconds,
             fn (): array => $this->loadPublished($tenant)->all()));
+    }
+
+    /**
+     * Rebuild the cached catalogue ahead of visitors (see haven:warm-public-sites), so the first guest after the
+     * cache expires does not wait for the company database. Kept a little longer than the refresh interval.
+     */
+    public function refresh(Tenant $tenant): int
+    {
+        $seconds = (int) config('haven.public_catalogue_cache_seconds', 60);
+        if ($seconds <= 0) {
+            return 0;
+        }
+        $published = $this->loadPublished($tenant)->all();
+        Cache::put(self::cacheKey((int) $tenant->id), $published, $seconds + 120);
+        unset(self::$publishedByTenant[$tenant->id]);
+
+        return count($published);
     }
 
     /** Drop the cached catalogue for a company after its listings, photos, apartments or website change. */

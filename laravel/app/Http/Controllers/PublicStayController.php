@@ -8,6 +8,7 @@ use App\Services\HomepageLayout;
 use App\Services\ListingAvailability;
 use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
+use App\Services\OwnerEnquiries;
 use App\Services\PublicAboutPage;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicBlog;
@@ -16,6 +17,7 @@ use App\Services\PublicGuestInfo;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicReviews;
 use App\Services\PublicWebsiteLinks;
+use App\Support\PhoneNumber;
 use Carbon\CarbonImmutable;
 use DOMDocument;
 use DOMXPath;
@@ -24,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -128,7 +131,38 @@ class PublicStayController extends Controller
             'pageDescription' => $this->plainText($site->seo_description ?? '', 320) ?: $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
             'canonicalUrl' => $canonicalUrl, 'robotsContent' => $filtered ? 'noindex, follow' : 'index, follow, max-image-preview:large',
             'socialImage' => $this->socialImage($hero['photos'][0] ?? null),
+            'structuredData' => $filtered || $page > 1 ? null : $this->businessData($tenant, $site, $canonicalUrl, $hero, $stays->getCollection()),
         ]);
+    }
+
+    /**
+     * Who the company is, for Google: name, contacts, offices, social profiles, the areas served and the stays on
+     * the page. Ratings are not included: Google ignores ratings a business publishes about itself.
+     *
+     * @param  Collection<int, array<string, mixed>>  $stays
+     * @return array<string, mixed>
+     */
+    private function businessData(Tenant $tenant, object $site, string $url, ?array $hero, Collection $stays): array
+    {
+        $absolute = fn (?string $link): ?string => $link ? rtrim(config('app.url'), '/').parse_url($link, PHP_URL_PATH) : null;
+        $logo = ! empty($site->logo_path) ? $this->publicUrl('public-stays.logo', ['company' => $tenant->slug]) : null;
+        $offices = array_map(fn (string $office): array => ['@type' => 'PostalAddress', 'streetAddress' => $office, 'addressCountry' => 'KE'],
+            PublicWebsiteLinks::officeAddresses($site));
+        $phone = PhoneNumber::normalize($site->contact_phone ?? null);
+
+        return ['@context' => 'https://schema.org', '@graph' => [
+            array_filter(['@type' => 'LodgingBusiness', '@id' => $url.'#business', 'name' => $tenant->name, 'url' => $url,
+                'description' => $this->plainText(($site->seo_description ?? null) ?: ($site->tagline ?? ''), 300) ?: null,
+                'logo' => $logo, 'image' => $absolute($hero['photos'][0]['url'] ?? null) ?? $logo,
+                'telephone' => $phone, 'email' => ($site->contact_email ?? null) ?: null,
+                'address' => count($offices) === 1 ? $offices[0] : ($offices ?: null),
+                'areaServed' => $stays->pluck('city')->unique()->values()->map(fn (string $city): array => ['@type' => 'City', 'name' => $city])->all() ?: null,
+                'sameAs' => array_values(PublicWebsiteLinks::socialLinks($site)) ?: null, 'priceRange' => 'KES', 'currenciesAccepted' => $tenant->currency ?: 'KES']),
+            ['@type' => 'ItemList', 'name' => 'Stays with '.$tenant->name, 'itemListElement' => $stays->values()->map(fn (array $stay, int $index): array => [
+                '@type' => 'ListItem', 'position' => $index + 1, 'name' => $stay['title'],
+                'url' => $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $stay['slug']]),
+            ])->all()],
+        ]];
     }
 
     /** Short listing link such as /l/fh (the listing id in base 36), used in SMS to agents. */
@@ -233,6 +267,39 @@ class PublicStayController extends Controller
         ])->header('X-Robots-Tag', 'noindex, follow');
     }
 
+    /** "List your property with us": services for property owners and an enquiry form that goes to the sales pipeline. */
+    public function owners(string $company, PublicListingCatalog $catalog, PublicBlog $blog, OwnerEnquiries $enquiries): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $issuedAt = now()->timestamp;
+        $whatsapp = PhoneNumber::normalize($site->whatsapp_number ?? null);
+        $canonicalUrl = $this->publicUrl('public-stays.owners', ['company' => $tenant->slug]);
+
+        return $this->page('public_stays.owners', [
+            'tenant' => $tenant, 'site' => $site, 'guides' => $blog->published($tenant, 6, 'owners'),
+            'destinations' => PublicListingCatalog::groupDestinations($catalog->published($tenant)),
+            'formIssuedAt' => $issuedAt, 'formToken' => $enquiries->formToken($tenant, $issuedAt), 'sent' => session('owner_enquiry_sent', false),
+            'ownerWhatsapp' => $whatsapp ? 'https://wa.me/'.ltrim($whatsapp, '+').'?text='.rawurlencode('Hello '.$tenant->name.', I own a property and would like to talk about you managing it.') : null,
+            'pageTitle' => 'Property management for owners | List your property with '.$this->plainText($tenant->name, 100),
+            'pageDescription' => $this->plainText('Own an apartment or holiday home in Kenya? '.$tenant->name.' lists, prices, cleans and manages it for you, with monthly owner statements. Tell us about your property.', 320),
+            'canonicalUrl' => $canonicalUrl,
+            'structuredData' => ['@context' => 'https://schema.org', '@type' => 'Service', 'serviceType' => 'Short-term rental property management',
+                'name' => 'Property management by '.$tenant->name, 'url' => $canonicalUrl, 'areaServed' => ['@type' => 'Country', 'name' => 'Kenya'],
+                'provider' => ['@type' => 'Organization', 'name' => $tenant->name, 'url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])]],
+        ]);
+    }
+
+    public function ownerEnquiry(Request $request, string $company, PublicListingCatalog $catalog, OwnerEnquiries $enquiries): RedirectResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        if (filled($request->input('website'))) {
+            return redirect()->to(route('public-stays.owners', $tenant->slug).'#owner-enquiry')->with('owner_enquiry_sent', true);
+        }
+        $enquiries->create($tenant, $request);
+
+        return redirect()->to(route('public-stays.owners', $tenant->slug).'#owner-enquiry')->with('owner_enquiry_sent', true);
+    }
+
     public function faq(string $company, PublicListingCatalog $catalog): Response
     {
         [$tenant, $site] = $this->company($company, $catalog);
@@ -253,16 +320,23 @@ class PublicStayController extends Controller
     public function blog(Request $request, string $company, PublicListingCatalog $catalog, PublicBlog $blog): Response
     {
         [$tenant, $site] = $this->company($company, $catalog);
-        $posts = $blog->published($tenant);
+        $all = $blog->published($tenant);
+        $counts = ['guests' => $all->where('audience', 'guests')->count(), 'owners' => $all->where('audience', 'owners')->count()];
+        $audience = $request->query('for') === 'owners' && $counts['owners'] > 0 ? 'owners' : 'guests';
+        $posts = $counts[$audience] > 0 ? $all->where('audience', $audience)->values() : $all;
         $page = LengthAwarePaginator::resolveCurrentPage();
-        $paginator = new LengthAwarePaginator($posts->forPage($page, 9)->values(), $posts->count(), 9, $page, ['path' => route('public-stays.blog', $tenant->slug)]);
+        $query = $audience === 'owners' ? ['for' => 'owners'] : [];
+        $paginator = (new LengthAwarePaginator($posts->forPage($page, 9)->values(), $posts->count(), 9, $page, ['path' => route('public-stays.blog', $tenant->slug)]))->appends($query);
         abort_if($page > max(1, $paginator->lastPage()), 404);
+        $owners = $audience === 'owners';
 
         return $this->page('public_stays.blog', [
-            'tenant' => $tenant, 'site' => $site, 'posts' => $paginator,
-            'pageTitle' => 'Travel tips and guides | '.$this->plainText($tenant->name, 100).($page > 1 ? ' | Page '.$page : ''),
-            'pageDescription' => $this->plainText('Neighbourhood guides, travel tips and news from '.$tenant->name.' to help you plan your stay in Kenya.', 320),
-            'canonicalUrl' => $this->publicUrl('public-stays.blog', ['company' => $tenant->slug], $page > 1 ? ['page' => $page] : []),
+            'tenant' => $tenant, 'site' => $site, 'posts' => $paginator, 'audience' => $audience, 'audienceCounts' => $counts,
+            'pageTitle' => ($owners ? 'Guides for property owners and investors' : 'Travel tips and guides').' | '.$this->plainText($tenant->name, 100).($page > 1 ? ' | Page '.$page : ''),
+            'pageDescription' => $this->plainText($owners
+                ? 'Short-term rental advice for property owners in Kenya from '.$tenant->name.': income, regulations, taxes, pricing and professional management.'
+                : 'Neighbourhood guides, travel tips and news from '.$tenant->name.' to help you plan your stay in Kenya.', 320),
+            'canonicalUrl' => $this->publicUrl('public-stays.blog', ['company' => $tenant->slug], $query + ($page > 1 ? ['page' => $page] : [])),
             'socialImage' => ($first = $posts->first()) && $first->cover_url ? ['url' => $first->cover_url, 'caption' => $first->title] : null,
         ]);
     }
@@ -273,7 +347,9 @@ class PublicStayController extends Controller
         $post = $blog->find($tenant, $slug);
         abort_unless($post, 404);
         $canonicalUrl = $this->publicUrl('public-stays.blog.show', ['company' => $tenant->slug, 'slug' => $post->slug]);
-        $blogUrl = $this->publicUrl('public-stays.blog', ['company' => $tenant->slug]);
+        $forOwners = ($post->audience ?? 'guests') === 'owners';
+        $section = $forOwners ? 'Guides for property owners' : 'Travel tips & guides';
+        $blogUrl = $this->publicUrl('public-stays.blog', ['company' => $tenant->slug], $forOwners ? ['for' => 'owners'] : []);
         $homeUrl = $this->publicUrl('public-stays.index', ['company' => $tenant->slug]);
         $author = $post->author_id ? DB::table('users')->where('id', $post->author_id)->value('name') : null;
         $authorName = $author ? PublicReviews::displayName($author) : null;
@@ -290,7 +366,7 @@ class PublicStayController extends Controller
             'pageDescription' => $this->plainText($post->seo_description ?? '', 320) ?: $this->plainText($post->summary, 320),
             'canonicalUrl' => $canonicalUrl,
             'socialImage' => $image ? ['url' => $image, 'caption' => $post->cover_caption ?: $post->title] : null,
-            'article' => ['published' => $published, 'modified' => $modified, 'author' => $authorName ?? $tenant->name, 'reading_minutes' => $post->reading_minutes, 'section' => 'Travel tips & guides'],
+            'article' => ['published' => $published, 'modified' => $modified, 'author' => $authorName ?? $tenant->name, 'reading_minutes' => $post->reading_minutes, 'section' => $section],
             'structuredData' => ['@context' => 'https://schema.org', '@graph' => [
                 array_filter(['@type' => 'BlogPosting', 'headline' => $this->plainText($post->title, 110),
                     'description' => $this->plainText($post->seo_description ?: $post->summary, 300), 'url' => $canonicalUrl, 'mainEntityOfPage' => $canonicalUrl,
@@ -299,7 +375,7 @@ class PublicStayController extends Controller
                     'author' => $authorName ? ['@type' => 'Person', 'name' => $authorName] : $publisher, 'publisher' => $publisher]),
                 ['@type' => 'BreadcrumbList', 'itemListElement' => [
                     ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $homeUrl],
-                    ['@type' => 'ListItem', 'position' => 2, 'name' => 'Travel tips & guides', 'item' => $blogUrl],
+                    ['@type' => 'ListItem', 'position' => 2, 'name' => $section, 'item' => $blogUrl],
                     ['@type' => 'ListItem', 'position' => 3, 'name' => $this->plainText($post->title, 110), 'item' => $canonicalUrl],
                 ]],
             ]],
@@ -388,7 +464,7 @@ class PublicStayController extends Controller
     {
         [$tenant] = $this->company($company, $catalog);
         $entries = [['url' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])], ['url' => $this->publicUrl('public-stays.about', ['company' => $tenant->slug])],
-            ['url' => $this->publicUrl('public-stays.faq', ['company' => $tenant->slug])]];
+            ['url' => $this->publicUrl('public-stays.faq', ['company' => $tenant->slug])], ['url' => $this->publicUrl('public-stays.owners', ['company' => $tenant->slug])]];
         $published = $catalog->published($tenant);
         $guides = app(PublicAreaGuides::class);
         foreach (PublicListingCatalog::groupDestinations($published) as $destination) {
@@ -402,6 +478,9 @@ class PublicStayController extends Controller
         $posts = app(PublicBlog::class)->published($tenant);
         if ($posts->isNotEmpty()) {
             $entries[] = ['url' => $this->publicUrl('public-stays.blog', ['company' => $tenant->slug])];
+            if ($posts->contains('audience', 'owners')) {
+                $entries[] = ['url' => $this->publicUrl('public-stays.blog', ['company' => $tenant->slug], ['for' => 'owners'])];
+            }
             foreach ($posts as $post) {
                 $entries[] = ['url' => $this->publicUrl('public-stays.blog.show', ['company' => $tenant->slug, 'slug' => $post->slug]),
                     'lastmod' => CarbonImmutable::parse($post->updated_at, config('app.timezone'))->min(now())->toAtomString(),

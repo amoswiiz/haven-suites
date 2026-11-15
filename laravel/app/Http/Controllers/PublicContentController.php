@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\BlogSeoCheck;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicAreaGuides;
+use App\Services\PublicBlog;
 use App\Services\PublicImageEncoder;
 use App\Services\PublicListingCatalog;
 use Illuminate\Http\JsonResponse;
@@ -137,6 +138,7 @@ class PublicContentController extends Controller
             'cover_caption' => 'nullable|string|max:180', 'remove_cover' => 'sometimes|boolean',
             'seo_title' => 'nullable|string|max:180|not_regex:/[<>]/', 'seo_description' => 'nullable|string|max:320|not_regex:/[<>]/',
             'focus_keyword' => 'nullable|string|max:100|not_regex:/[<>]/',
+            'audience' => ['nullable', Rule::in(array_keys(PublicBlog::AUDIENCES))],
         ], ['slug.regex' => 'Use lowercase letters, numbers and hyphens for the web address.', 'body.min' => 'Write at least a short paragraph (50 characters).']);
         $newCover = null;
         if ($request->hasFile('cover')) {
@@ -145,6 +147,7 @@ class PublicContentController extends Controller
         }
         $changes = array_intersect_key($data, array_flip(['title', 'excerpt', 'slug', 'body', 'status', 'cover_caption', 'seo_title', 'seo_description', 'focus_keyword']))
             + ['excerpt' => null, 'cover_caption' => null, 'seo_title' => null, 'seo_description' => null, 'focus_keyword' => null];
+        $changes['audience'] = $data['audience'] ?? $before?->audience ?? PublicBlog::guessAudience($data['title'], $data['body']);
         $changes['published_at'] = $data['status'] === 'published' ? ($data['published_at'] ?? $before?->published_at ?? now()) : ($data['published_at'] ?? null);
         $oldCover = null;
         if ($newCover !== null) {

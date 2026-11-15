@@ -13,13 +13,38 @@ use Illuminate\Support\Str;
  */
 class PublicBlog
 {
+    /** Who a post is written for. Guest posts appear around the booking pages; owner posts on the owners page. */
+    public const AUDIENCES = ['guests' => 'Guests and travellers', 'owners' => 'Property owners and investors'];
+
+    /** Words that mark a post as written for property owners, hosts and investors rather than guests. */
+    private const OWNER_WORDS = ['investor', 'investors', 'investment', 'invest', 'landlord', 'landlords', 'host', 'hosts', 'hosting', 'superhost',
+        'property management', 'management company', 'letting agent', 'rental agent', 'yield', 'roi', 'cash flow', 'capital appreciation',
+        'occupancy', 'revenue', 'income', 'profitable', 'profit', 'tax', 'taxes', 'vat', 'license', 'licence', 'regulation', 'regulations',
+        'zoning', 'compliance', 'partnership', 'standard operating procedures', 'automate', 'inventory', 'asset management', 'pricing strategies',
+        'for sale', 'forecast', 'listing', 'setup checklist', 'tenants', 'property owners', 'your airbnb', 'guests look for', 'guest experience system', 'airbnb management', 'perform well',
+        'for corporate short-term rentals', 'for short-term rentals'];
+
     /** Published posts, newest first. A post scheduled for later is not shown until its date. */
-    public function published(Tenant $tenant, ?int $limit = null): Collection
+    public function published(Tenant $tenant, ?int $limit = null, ?string $audience = null): Collection
     {
         return DB::table('public_posts')->where('tenant_id', $tenant->id)->where('status', 'published')
             ->whereNotNull('published_at')->where('published_at', '<=', now())
+            ->when($audience, fn ($query) => $query->where('audience', $audience))
             ->orderByDesc('published_at')->orderByDesc('id')->when($limit, fn ($query) => $query->limit($limit))->get()
             ->map(fn (object $post): object => $this->present($tenant, $post));
+    }
+
+    /**
+     * Best guess at who a post is for, from its title (which counts most) and text. Staff can change it in the editor.
+     */
+    public static function guessAudience(string $title, string $body = ''): string
+    {
+        $score = fn (string $text): int => collect(self::OWNER_WORDS)
+            ->sum(fn (string $word): int => preg_match_all('/(?<![\p{L}])'.preg_quote($word, '/').'(?![\p{L}])/iu', $text));
+        $titleHits = $score($title);
+        $bodyHits = $score(Str::limit(strip_tags($body), 4000, ''));
+
+        return $titleHits > 0 || $bodyHits >= 15 ? 'owners' : 'guests';
     }
 
     public function hasPublished(Tenant $tenant): bool
@@ -92,7 +117,7 @@ class PublicBlog
     {
         $topic = self::topicWords($post->title.' '.($post->focus_keyword ?? ''));
 
-        return $this->published($tenant)->reject(fn (object $other): bool => $other->id === $post->id)
+        return $this->published($tenant, null, $post->audience ?? null)->reject(fn (object $other): bool => $other->id === $post->id)
             ->map(function (object $other) use ($topic): object {
                 $other->shared_words = count(array_intersect($topic, self::topicWords($other->title.' '.($other->focus_keyword ?? ''))));
 

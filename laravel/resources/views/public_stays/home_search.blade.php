@@ -18,9 +18,15 @@
     $moreAmenities = array_slice(\App\Services\PublicListingCatalog::AMENITIES, 8, null, true);
     $collectionUrl = fn (?string $key): string => request()->fullUrlWithQuery(['collection' => $key, 'page' => null]).'#find-stay';
 @endphp
-<div class="stay-home-band">
-    <h1>{{ $site->headline ?: 'Find a place that feels like yours.' }}</h1>
-    <p>{{ $site->tagline ?: 'Comfortable apartments, thoughtful hosting.' }}</p>
+<div class="stay-home-band{{ !empty($hero['photos'][0]) ? ' has-photo' : '' }}">
+    @if(!empty($hero['photos'][0]))
+        <img class="stay-home-band-photo" src="{{ $hero['photos'][0]['url'] }}?w=1200" srcset="{{ \App\Services\ListingPhotoVariants::srcset($hero['photos'][0]['url']) }}" sizes="100vw" alt="" width="1200" height="500" fetchpriority="high" decoding="async">
+    @endif
+    <div class="stay-home-band-copy">
+        <h1>{{ $site->headline ?: 'Find a place that feels like yours.' }}</h1>
+        <p>{{ $site->tagline ?: 'Comfortable apartments, thoughtful hosting.' }}</p>
+        @include('public_stays.google_rating')
+    </div>
 </div>
 <form class="stay-search stay-search-v2" id="stay-search-form" action="{{ route('public-stays.index', $tenant->slug) }}#find-stay" method="get" aria-label="Find accommodation">
     <input type="hidden" name="collection" value="{{ $filters['collection'] ?? '' }}">
