@@ -4,7 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\GuestMessageTemplates;
+use App\Services\HomepageLayout;
 use App\Services\ListingAvailability;
+use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
@@ -16,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class GuestTrustTest extends TestCase
@@ -125,6 +129,39 @@ class GuestTrustTest extends TestCase
         $this->get('/stays/trust-stays/sea-view')->assertOk()->assertDontSee('Spotless apartment');
     }
 
+    public function test_review_requests_send_guests_to_google_once_the_link_is_saved(): void
+    {
+        $settings = route('company.settings.update', $this->company->slug);
+        $this->staff()->post($settings, ['name' => 'Haven Suites', 'google_review_url' => 'https://evil.example/review'])->assertSessionHasErrors('google_review_url');
+        $this->post($settings, ['name' => 'Haven Suites', 'google_review_url' => 'http://g.page/r/haven/review'])->assertSessionHasErrors('google_review_url');
+        $this->assertNull($this->company->fresh()->google_review_url);
+        $this->post($settings, ['name' => 'Haven Suites', 'google_review_url' => ' https://share.google/gIhA3wxXBRoPNO1Ll '])->assertSessionHasNoErrors();
+        $this->assertSame('https://share.google/gIhA3wxXBRoPNO1Ll', $this->company->fresh()->google_review_url);
+        $this->company->refresh();
+        app()->instance('currentTenant', $this->company);
+
+        $this->get(route('public-listings.reviews', $this->company->slug))->assertOk()->assertSee('Send Google review link');
+        $this->post(route('public-listings.reviews.request', $this->company->slug), ['guest_name' => 'Grace Achieng', 'guest_phone' => '+254712345678', 'listing_id' => $this->listingId])
+            ->assertSessionHasNoErrors();
+        $link = session('review_link');
+        $this->assertSame('https://share.google/gIhA3wxXBRoPNO1Ll', $link['url']);
+        $this->assertTrue($link['google']);
+        $this->assertStringContainsString('review us on Google: https://share.google/gIhA3wxXBRoPNO1Ll', $link['message']);
+        $request = DB::table('public_reviews')->where('tenant_id', $this->company->id)->first();
+        $this->assertSame(['google', 'requested'], [$request->source, $request->status]);
+        $this->assertNull($request->token_hash, 'No website review form is opened by a Google request.');
+        $this->get(route('public-listings.reviews', [$this->company->slug, 'status' => 'requested']))->assertOk()->assertSee('Google review link sent');
+
+        $templates = new GuestMessageTemplates;
+        $this->assertSame('Review us: https://share.google/x', $templates->render('Review us: {{review_link}}', ['review_link' => 'https://share.google/x']));
+        try {
+            $templates->render('Review us: {{review_link}}', ['review_link' => null]);
+            $this->fail('A missing review link must stop the SMS.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('Company settings', $exception->errors()['body'][0]);
+        }
+    }
+
     public function test_expired_links_imported_reviews_and_staff_permissions(): void
     {
         $this->staff()->post(route('public-listings.reviews.request', $this->company->slug), ['guest_name' => 'Peter Otieno', 'guest_phone' => '+254 '])->assertSessionHasNoErrors();
@@ -217,6 +254,56 @@ class GuestTrustTest extends TestCase
         auth()->logout();
         $this->get('/stays/trust-stays/sea-view')->assertOk()->assertSee('Studio')->assertSee('1 bed ', false)->assertSee('2 bathrooms');
         $this->staff()->post(route('public-listings.update', [$this->company->slug, $this->listingId]), ['version' => 3, 'bedrooms' => 11, 'beds' => 0] + $payload)->assertSessionHasErrors(['bedrooms', 'beds']);
+    }
+
+    public function test_new_homepage_keeps_search_fields_addresses_enquiry_links_and_whatsapp_codes(): void
+    {
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['whatsapp_number' => '+254712345678']);
+        DB::table('public_listings')->where('id', $this->listingId)->update(['listing_code' => 'F5', 'collections' => json_encode(['sea_view', 'long_stay'])]);
+        $classic = $this->get('/stays/trust-stays')->assertOk()->assertSee('stay-hero', false)->assertDontSee('stay-pill', false)->getContent();
+
+        app(ListingAvailability::class)->shouldReceive('availabilityForListings')->andReturn([$this->listingId => ['available' => true, 'fresh' => false]]);
+        $query = '?layout=new&city=Mombasa&check_in='.now()->addDays(10)->toDateString().'&check_out='.now()->addDays(12)->toDateString().'&guests=2';
+        $new = $this->get('/stays/trust-stays'.$query)->assertOk();
+        $html = $new->getContent();
+        $new->assertSee('stay-pill', false)->assertSee('data-filter-drawer', false)->assertDontSee('class="stay-hero"', false)
+            ->assertSee('<link rel="canonical" href="http://localhost/stays/trust-stays">', false);
+        foreach (['name="city"', 'name="check_in"', 'name="check_out"', 'name="guests"', 'name="q"', 'name="area"', 'name="bedrooms"', 'name="min_price"', 'name="max_price"', 'name="amenities[]"', 'name="available_only"', 'name="collection"', 'id="stay-search-form"', '/stays/trust-stays#find-stay" method="get"'] as $field) {
+            $this->assertStringContainsString($field, $html, 'New search keeps '.$field);
+            $this->assertStringContainsString($field, $classic, 'Classic search has '.$field);
+        }
+        $this->assertStringContainsString('<input type="hidden" name="layout" value="new">', $html, 'Searching while previewing keeps the preview.');
+        // Cards still carry the dates to the listing, keep the WhatsApp message with the listing code, and show an estimate.
+        $this->assertMatchesRegularExpression('#class="stay-card-link" href="https?://[^/"]+/stays/trust-stays/sea-view\?(?=[^"]*check_in=[0-9-]+)(?=[^"]*check_out=[0-9-]+)(?=[^"]*guests=2)[^"]*"#', $html);
+        $this->assertSame(1, preg_match('#class="stay-card-wa" href="(https://wa\.me/254712345678\?text=[^"]+)"#', $html, $whatsapp), 'The card keeps its WhatsApp link.');
+        $this->assertStringContainsString('F5', urldecode(html_entity_decode($whatsapp[1])), 'The WhatsApp message still names the listing code.');
+        $new->assertSee('KES 25,500')->assertSee('est. total · 2 nights')->assertSee('We confirm your final price')->assertSee('Ask us to confirm dates');
+        $this->assertSame(['nights' => 2, 'total' => 25500.0], ListingDetails::estimate(['starting_price' => '12000', 'cleaning_fee' => 1500, 'weekly_discount' => 10],
+            now()->addDays(10)->toDateString(), now()->addDays(12)->toDateString()), 'Same estimate as the listing page: 2 × 12,000 + 1,500 cleaning.');
+        $this->get('/stays/trust-stays?layout=new&collection=long_stay')->assertOk()->assertSee('Long stays <small>1</small>', false);
+        $this->get('/stays/trust-stays?collection=long_stay')->assertOk()->assertSeeInOrder(['<span class="stay-tag">Long stays</span>', '<span class="stay-tag">Sea view</span>'], false);
+    }
+
+    public function test_homepage_steps_switch_on_independently_and_saved_stays_need_no_account(): void
+    {
+        DB::table('public_listings')->where('id', $this->listingId)->update(['latitude' => -4.043512, 'longitude' => 39.712345]);
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['homepage_layout' => HomepageLayout::encode(['search' => '1'])]);
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('stay-pill', false)->assertDontSee('stay-card is-v2', false)->assertDontSee('data-save-stay', false);
+        $this->get('/stays/trust-stays?layout=classic')->assertOk()->assertDontSee('stay-pill', false);
+
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['homepage_layout' => HomepageLayout::encode(['cards' => true, 'explore' => true])]);
+        $page = $this->get('/stays/trust-stays')->assertOk()->assertDontSee('stay-pill', false)->assertSee('stay-card is-v2', false)
+            ->assertSee('data-save-stay="sea-view"', false)->assertSee('data-map-lat="-4.045"', false)->assertSee('data-map-lng="39.71"', false)->assertSee('data-map-view', false);
+        $this->assertStringNotContainsString('43512', $page->getContent(), 'The map pin is rounded to the area.');
+        $this->get('/stays/trust-stays/sea-view')->assertOk()->assertSee('data-save-stay="sea-view"', false);
+
+        $this->get('/stays/trust-stays/saved?stays=sea-view,not-a-listing,BAD!')->assertOk()->assertHeader('X-Robots-Tag', 'noindex, follow')
+            ->assertSee('Saved stays')->assertSee('Sea View Retreat')->assertDontSee('not-a-listing');
+        $this->get('/stays/trust-stays/saved')->assertOk()->assertSee('No saved stays yet');
+        $this->assertContains('saved', PublicListingCatalog::RESERVED_SLUGS);
+
+        $this->staff()->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Homepage layout')->assertSee('?layout=new', false)
+            ->assertSee('name="homepage_layout[explore]" value="1" style="width:auto" checked', false);
     }
 
     /** @return array<string, mixed> */

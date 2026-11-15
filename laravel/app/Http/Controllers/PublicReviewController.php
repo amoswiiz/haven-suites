@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Services\GoogleReviewLink;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicReviews;
 use App\Services\PublicWebsiteLinks;
@@ -32,7 +33,8 @@ class PublicReviewController extends Controller
         return view('public_listings.reviews', [
             'reviews' => $reviews, 'status' => $status, 'counts' => $counts, 'listings' => $listings->keyBy('id'),
             'sources' => PublicReviews::SOURCES, 'smsAvailable' => $this->smsAvailable($tenant),
-            'newLink' => session('review_link'),
+            'newLink' => session('review_link'), 'googleReviewUrl' => GoogleReviewLink::for($tenant),
+            'canEditCompany' => $request->user()->inGroup('superadmin', 'admin'),
         ]);
     }
 
@@ -52,8 +54,11 @@ class PublicReviewController extends Controller
         if ($request->boolean('send_sms') && $phone === null) {
             throw ValidationException::withMessages(['guest_phone' => 'Add the guest mobile number to send the link by SMS.']);
         }
-        $link = $reviews->request($tenant, $data['listing_id'] ?? null, trim($data['guest_name']), $phone, $data['stayed_on'] ?? null, auth()->user());
-        $message = $reviews->invitation($tenant, $data['guest_name'], $link['url']);
+        $google = GoogleReviewLink::for($tenant);
+        $link = $google
+            ? ['id' => $reviews->requestOnGoogle($tenant, $data['listing_id'] ?? null, trim($data['guest_name']), $phone, $data['stayed_on'] ?? null, auth()->user()), 'url' => $google]
+            : $reviews->request($tenant, $data['listing_id'] ?? null, trim($data['guest_name']), $phone, $data['stayed_on'] ?? null, auth()->user());
+        $message = $reviews->invitation($tenant, $data['guest_name'], $link['url'], $google !== null);
         $smsStatus = null;
         if ($request->boolean('send_sms')) {
             $smsStatus = $this->sendSms($tenant, $phone, $message, $link['id']);
@@ -67,7 +72,7 @@ class PublicReviewController extends Controller
         };
 
         return redirect()->route('public-listings.reviews', $tenant->slug)->with('success', $notice)->with('review_link', [
-            'url' => $link['url'], 'message' => $message,
+            'url' => $link['url'], 'message' => $message, 'google' => $google !== null,
             'whatsapp_url' => $phone ? 'https://wa.me/'.substr($phone, 1).'?text='.rawurlencode($message) : 'https://wa.me/?text='.rawurlencode($message),
         ]);
     }

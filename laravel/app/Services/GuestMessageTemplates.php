@@ -8,14 +8,14 @@ class GuestMessageTemplates
 {
     public const PURPOSES = ['confirmation' => 'Booking confirmation', 'check_in' => 'Check-in instructions', 'checkout_reminder' => 'Checkout reminder', 'checkout' => 'Checkout thanks', 'review' => 'Ask for a review', 'upcoming' => 'Upcoming stay reminder', 'custom' => 'Custom message'];
 
-    public const FIELDS = ['guest_name', 'company_name', 'apartment', 'property_name', 'check_in', 'check_out', 'reservation_id'];
+    public const FIELDS = ['guest_name', 'company_name', 'apartment', 'property_name', 'check_in', 'check_out', 'reservation_id', 'review_link'];
 
     public const STARTERS = [
         'confirmation' => 'Hi {{guest_name}}, your booking with {{company_name}} is confirmed for {{check_in}} to {{check_out}}. We look forward to welcoming you!',
         'check_in' => 'Welcome to {{company_name}}, {{guest_name}}! Your apartment is {{apartment}} at {{property_name}}. Check-in: {{check_in}}. We look forward to hosting you!',
         'checkout' => 'Thank you for staying with {{company_name}}, {{guest_name}}! We hope you enjoyed your stay at {{apartment}} and look forward to welcoming you again.',
         'checkout_reminder' => 'Hi {{guest_name}}, we hope you enjoyed your stay with {{company_name}}. Your checkout date is {{check_out}}. Please let us know your expected departure time.',
-        'review' => 'Hi {{guest_name}}, thank you for choosing {{company_name}}! We would love to hear about your stay. Please share your feedback with us.',
+        'review' => 'Hi {{guest_name}}, thank you for choosing {{company_name}}! We would love to hear about your stay. Please leave us a review on Google: {{review_link}}',
         'upcoming' => 'Hi {{guest_name}}, we look forward to welcoming you to {{company_name}} on {{check_in}}. Your stay at {{apartment}} is from {{check_in}} to {{check_out}}. Please let us know your expected arrival time.',
         'custom' => 'Hello {{guest_name}}, ',
     ];
@@ -35,7 +35,9 @@ class GuestMessageTemplates
         $this->validateBody($body);
         $text = preg_replace_callback('/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/', function (array $match) use ($context): string {
             if (! isset($context[$match[1]]) || trim((string) $context[$match[1]]) === '') {
-                throw ValidationException::withMessages(['body' => 'Missing '.$match[1].'. Choose a booking/apartment or replace that placeholder with text.']);
+                throw ValidationException::withMessages(['body' => $match[1] === 'review_link'
+                    ? 'Missing review_link. Add your Google review link in Company settings, or remove that placeholder.'
+                    : 'Missing '.$match[1].'. Choose a booking/apartment or replace that placeholder with text.']);
             }
 
             return (string) $context[$match[1]];

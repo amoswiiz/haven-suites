@@ -125,6 +125,10 @@ Route::post('reservations/{id}/kyc-link', [KycLinks::class, 'generate'])->middle
     1 => 'tenant.member',
     2 => 'permission:finance.manage',
 ])->whereNumber('id');
+Route::post('staff/kyc/common-link', [GuestKycInvitations::class, 'commonLink'])
+    ->middleware(['auth', 'tenant.member', 'permission:finance.manage', 'throttle:10,1']);
+Route::get('kyc/join/{code}', [Kyc::class, 'joinForm'])->where('code', '[A-Za-z0-9]{20}')->middleware(['throttle:30,1']);
+Route::post('kyc/join/{code}', [Kyc::class, 'joinSubmit'])->where('code', '[A-Za-z0-9]{20}')->middleware(['throttle:10,1']);
 Route::get('kyc/thank-you', [Kyc::class, 'thankYou']);
 Route::get('kyc/invalid', [Kyc::class, 'invalid']);
 Route::get('kyc/{token}', [Kyc::class, 'form']);

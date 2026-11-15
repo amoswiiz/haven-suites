@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\BookingCommunications;
+use App\Services\GoogleReviewLink;
 use App\Services\GuestMessageTemplates;
 use App\Services\RoyceTalkSms;
 use Illuminate\Database\Query\Builder;
@@ -145,6 +146,7 @@ class GuestCommunicationController extends Controller
             'apartment' => $unit?->unit_number ?? ($partner?->unit_number ?: $partner?->apartment_name),
             'property_name' => $unit?->property_name ?? ($partner?->building_name ?: $partner?->apartment_name),
             'check_in' => $booking?->check_in, 'check_out' => $booking?->check_out,
+            'review_link' => GoogleReviewLink::for(app('currentTenant')),
         ]);
 
         return view('communications.preview', ['body' => $body, 'phone' => $phone, 'booking' => $booking, 'template' => $template,

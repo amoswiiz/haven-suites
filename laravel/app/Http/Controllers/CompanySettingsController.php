@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Services\CompanyMail;
+use App\Services\GoogleReviewLink;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -33,7 +34,15 @@ class CompanySettingsController extends Controller
             'report_primary_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'report_accent_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'reference_prefix' => ['nullable', 'string', 'regex:/^\s*[A-Za-z]{2,5}\s*$/D'],
+            'google_review_url' => ['nullable', 'string', 'max:500', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! GoogleReviewLink::isGoogle((string) $value)) {
+                    $fail('Paste the review link from your Google Business Profile, starting with https:// (for example https://g.page/r/... or https://share.google/...).');
+                }
+            }],
         ], ['reference_prefix.regex' => 'Use 2 to 5 letters for the enquiry reference prefix, such as HS.']);
+        if (array_key_exists('google_review_url', $data)) {
+            $data['google_review_url'] = $data['google_review_url'] === null ? null : trim($data['google_review_url']);
+        }
         if (array_key_exists('reference_prefix', $data)) {
             $data['reference_prefix'] = $data['reference_prefix'] === null ? null : strtoupper(trim($data['reference_prefix']));
         }

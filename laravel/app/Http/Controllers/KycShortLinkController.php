@@ -15,6 +15,19 @@ class KycShortLinkController extends Controller
             ->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
     }
 
+    /** The company's shared registration link: a short address that opens its KYC form for any guest. */
+    public function join(string $code)
+    {
+        $tenant = preg_match('/^[A-Za-z0-9]{20}$/D', $code) ? Tenant::where('kyc_join_code', $code)->where('active', true)->first() : null;
+        if (! $tenant || ! hash_equals((string) $tenant->kyc_join_code, $code)) {
+            return response('This registration link is no longer active. Please ask us for a new link.', 404)
+                ->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
+        }
+
+        return redirect(rtrim(config('app.url'), '/').'/t/'.rawurlencode($tenant->slug).'/kyc/join/'.$code)
+            ->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
+    }
+
     public function show(string $code)
     {
         if (! preg_match('/^[A-Za-z0-9_-]{16}$/D', $code)) return $this->invalid();

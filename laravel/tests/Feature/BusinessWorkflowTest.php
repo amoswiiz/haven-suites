@@ -436,4 +436,52 @@ class BusinessWorkflowTest extends TestCase
             }
         }
     }
+
+    public function test_shared_kyc_link_registers_any_guest_until_replaced_or_turned_off(): void
+    {
+        $this->get('/t/workflow/staff/kyc/invite')->assertOk()->assertSee('Create shared link');
+        $this->post('/t/workflow/staff/kyc/common-link', ['action' => 'create'])->assertSessionHas('success');
+        $code = Tenant::where('slug', 'workflow')->value('kyc_join_code');
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{20}$/D', $code);
+        $appUrl = rtrim(config('app.url'), '/');
+        $this->get('/t/workflow/staff/kyc/invite')->assertOk()->assertSee($appUrl.'/j/'.$code)->assertSee('Share on WhatsApp');
+
+        $this->get('/j/'.$code)->assertRedirect($appUrl.'/t/workflow/kyc/join/'.$code);
+        $before = DB::connection('tenant')->table('customer_kyc')->count();
+        $this->get('/t/workflow/kyc/join/'.$code)->assertOk()->assertSee('Pre-booking guest registration')->assertSee('/t/workflow/kyc/join/'.$code, false);
+        $this->assertSame($before, DB::connection('tenant')->table('customer_kyc')->count(), 'Opening the link, e.g. for a WhatsApp preview, stores nothing.');
+
+        $keys = [];
+        try {
+            foreach (['First Shared Guest', 'Second Shared Guest'] as $name) {
+                $this->post('/t/workflow/kyc/join/'.$code, [
+                    'full_name' => $name, 'primary_phone' => '0700000000', 'consent' => '1',
+                    'document_type' => 'passport', 'identity_document' => UploadedFile::fake()->image('identity.png', 10, 10),
+                ])->assertRedirect('/t/workflow/kyc/thank-you');
+            }
+            $records = DB::connection('tenant')->table('customer_kyc')->orderBy('id')->get()->slice($before)->values();
+            $keys = $records->pluck('document_storage_key')->all();
+            $this->assertCount(2, $records);
+            $this->assertSame(['pending', 'pending'], $records->pluck('status')->all());
+            $this->assertNull($records[0]->reservation_id);
+            $this->assertNotSame($records[0]->customer_id, $records[1]->customer_id, 'Guests sharing a phone number are never merged.');
+            $this->assertSame('Second Shared Guest', DB::connection('tenant')->table('customers')->where('id', $records[1]->customer_id)->value('full_name'));
+            $this->post('/t/workflow/kyc/join/'.$code, ['full_name' => 'No Consent', 'primary_phone' => '0700000000', 'document_type' => 'passport'])
+                ->assertSessionHas('kyc_errors');
+            $this->assertSame($before + 2, DB::connection('tenant')->table('customer_kyc')->count());
+        } finally {
+            foreach ($keys as $key) {
+                if ($key && preg_match('/^[a-f0-9]{48}\.png$/D', $key) && is_file(haven_private_path().'private/kyc/'.$key)) {
+                    unlink(haven_private_path().'private/kyc/'.$key);
+                }
+            }
+        }
+
+        $this->post('/t/workflow/staff/kyc/common-link', ['action' => 'create'])->assertSessionHas('success');
+        $this->get('/j/'.$code)->assertNotFound();
+        $this->get('/t/workflow/kyc/join/'.$code)->assertNotFound();
+        $this->post('/t/workflow/staff/kyc/common-link', ['action' => 'turn_off'])->assertSessionHas('success');
+        $this->assertNull(Tenant::where('slug', 'workflow')->value('kyc_join_code'));
+        $this->get('/t/workflow/staff/kyc/invite')->assertOk()->assertSee('Create shared link');
+    }
 }

@@ -9,7 +9,7 @@
 @foreach($purposes as $key=>$label)
     <a href="{{ route('communications.templates.create',['tenant'=>app('currentTenant')->slug,'purpose'=>$key]) }}">{{ $label }}</a>
 @endforeach
-</div><p>For review requests, add your actual review link. For check-in messages, add the correct arrival instructions and apartment conditions before saving.</p></section>
+</div><p>For review requests, use <code>@{{review_link}}</code>: it becomes the Google review link saved in Company settings. For check-in messages, add the correct arrival instructions and apartment conditions before saving.</p></section>
 @endif
 <section class="card"><div class="table-wrap"><table>
 <thead><tr><th>Name</th><th>Purpose</th><th>Apartment</th><th>Status</th><th></th></tr></thead><tbody>

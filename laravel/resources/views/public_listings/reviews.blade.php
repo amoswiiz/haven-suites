@@ -11,7 +11,8 @@
 @if($newLink)
     <section class="card" aria-labelledby="new-link-heading" style="border-color:#1f4ba8">
         <h2 id="new-link-heading">Share this review link</h2>
-        <p class="muted">The link works once and expires in {{ \App\Services\PublicReviews::LINK_DAYS }} days. It is shown only now.</p>
+        @if(!empty($newLink['google']))<p class="muted">This is your Google review link. The guest's review appears on your Google page.</p>
+        @else<p class="muted">The link works once and expires in {{ \App\Services\PublicReviews::LINK_DAYS }} days. It is shown only now.</p>@endif
         <label for="review-link">Review link</label><input id="review-link" readonly value="{{ $newLink['url'] }}" onclick="this.select()">
         <label for="review-message">Message</label><textarea id="review-message" rows="3" readonly onclick="this.select()">{{ $newLink['message'] }}</textarea>
         <div class="actions"><a class="button" href="{{ $newLink['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Send on WhatsApp</a></div>
@@ -21,7 +22,11 @@
 <div class="grid">
     <section class="card" aria-labelledby="request-heading">
         <h2 id="request-heading">Ask a guest for a review</h2>
-        <p class="muted">Send after check-out. The guest gets a private link and their review is marked "Verified stay".</p>
+        @if($googleReviewUrl)
+            <p class="muted">Send after check-out. The guest gets your <a href="{{ $googleReviewUrl }}" target="_blank" rel="noopener noreferrer">Google review link</a> and reviews you on Google.@if($canEditCompany) <a href="{{ route('company.settings', $tenantSlug) }}">Change the link</a>.@endif</p>
+        @else
+            <p class="muted">Send after check-out. The guest gets a private link and their review is marked "Verified stay".@if($canEditCompany) To send guests to Google instead, <a href="{{ route('company.settings', $tenantSlug) }}">add your Google review link</a>.@endif</p>
+        @endif
         <form method="post" action="{{ route('public-listings.reviews.request', $tenantSlug) }}">
             @csrf
             <label for="request-listing">Apartment</label><select id="request-listing" name="listing_id"><option value="">General (not one apartment)</option>@foreach($listings as $listing)<option value="{{ $listing->id }}" @selected((int) old('listing_id') === (int) $listing->id)>{{ $listing->title }}{{ $listing->listing_code ? ' ('.$listing->listing_code.')' : '' }}</option>@endforeach</select>
@@ -29,7 +34,7 @@
             <label for="request-phone">Guest mobile <small class="muted">for SMS or WhatsApp</small></label><input id="request-phone" name="guest_phone" type="tel" inputmode="tel" maxlength="40" placeholder="+254 712 345 678" value="{{ old('guest_phone', \App\Support\PhoneNumber::DEFAULT_PREFIX.' ') }}">
             <label for="request-stayed">Check-out date <small class="muted">optional</small></label><input id="request-stayed" name="stayed_on" type="date" max="{{ now()->toDateString() }}" value="{{ old('stayed_on') }}">
             <label><input type="checkbox" name="send_sms" value="1" style="width:auto" @checked(old('send_sms', $smsAvailable)) @disabled(!$smsAvailable)> Send the link by SMS @unless($smsAvailable)<small class="muted">(SMS is not set up: share on WhatsApp instead)</small>@endunless</label>
-            <button type="submit">Create review link</button>
+            <button type="submit">{{ $googleReviewUrl ? 'Send Google review link' : 'Create review link' }}</button>
         </form>
     </section>
     <section class="card" aria-labelledby="manual-heading">
@@ -57,12 +62,12 @@
             <p style="margin:0"><strong>{{ $review->guest_name }}</strong> &middot; <span class="muted">{{ $review->listing_id ? ($listings[$review->listing_id]->title ?? 'Removed listing') : 'General' }}</span> &middot; <span class="pill">{{ $sources[$review->source] ?? $review->source }}</span>
                 @if($review->rating) &middot; <span aria-label="{{ $review->rating }} out of 5" style="color:#e28d57">{{ str_repeat('★', (int) $review->rating) }}<span style="color:#cbd5e1">{{ str_repeat('★', 5 - (int) $review->rating) }}</span></span>@endif</p>
             @if($review->comment)<p style="white-space:pre-line">{{ $review->comment }}</p>@endif
-            @if($status === 'requested')<p class="muted">Link sent {{ \Illuminate\Support\Carbon::parse($review->created_at)->diffForHumans() }}{{ $review->sms_status ? ' · SMS '.$review->sms_status : '' }} · expires {{ \Illuminate\Support\Carbon::parse($review->expires_at)->format('j M Y') }}</p>@endif
+            @if($status === 'requested')<p class="muted">{{ $review->source === 'google' ? 'Google review link sent' : 'Link sent' }} {{ \Illuminate\Support\Carbon::parse($review->created_at)->diffForHumans() }}{{ $review->sms_status ? ' · SMS '.$review->sms_status : '' }}@if($review->source !== 'google') · expires {{ \Illuminate\Support\Carbon::parse($review->expires_at)->format('j M Y') }}@endif</p>@endif
             @if($review->reply)<p class="muted"><strong>Your reply:</strong> {{ $review->reply }}</p>@endif
             <div class="actions">
                 @if(in_array($status, ['pending', 'hidden'], true))<form method="post" action="{{ route('public-listings.reviews.moderate', [$tenantSlug, $review->id]) }}">@csrf<input type="hidden" name="action" value="approve"><button type="submit">Approve</button></form>@endif
                 @if(in_array($status, ['pending', 'approved'], true))<form method="post" action="{{ route('public-listings.reviews.moderate', [$tenantSlug, $review->id]) }}">@csrf<input type="hidden" name="action" value="hide"><button type="submit" class="secondary">Hide</button></form>@endif
-                <form method="post" action="{{ route('public-listings.reviews.moderate', [$tenantSlug, $review->id]) }}" onsubmit="return confirm('Delete this review permanently?')">@csrf<input type="hidden" name="action" value="delete"><button type="submit" class="secondary">{{ $status === 'requested' ? 'Cancel link' : 'Delete' }}</button></form>
+                <form method="post" action="{{ route('public-listings.reviews.moderate', [$tenantSlug, $review->id]) }}" onsubmit="return confirm('Delete this review permanently?')">@csrf<input type="hidden" name="action" value="delete"><button type="submit" class="secondary">{{ $status === 'requested' ? ($review->source === 'google' ? 'Remove' : 'Cancel link') : 'Delete' }}</button></form>
             </div>
             @if($status !== 'requested')
                 <details><summary>{{ $review->reply ? 'Edit reply' : 'Reply publicly' }}</summary>

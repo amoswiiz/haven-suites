@@ -74,6 +74,19 @@ class PublicReviews
         return ['id' => $id, 'url' => rtrim(config('app.url'), '/').route('public-stays.review', ['company' => $tenant->slug, 'token' => $token], false)];
     }
 
+    /**
+     * Record that a guest was sent the company's Google review link, so staff can see who has been asked.
+     * Nothing is stored that opens the website's review form: the guest reviews on Google.
+     */
+    public function requestOnGoogle(Tenant $tenant, ?int $listingId, string $guestName, ?string $phone, ?string $stayedOn, User $actor): int
+    {
+        return DB::table('public_reviews')->insertGetId([
+            'tenant_id' => $tenant->id, 'listing_id' => $listingId, 'token_hash' => null, 'source' => 'google', 'status' => 'requested',
+            'guest_name' => $guestName, 'guest_phone' => $phone, 'stayed_on' => $stayedOn, 'requested_by' => $actor->id,
+            'expires_at' => now()->addDays(self::LINK_DAYS), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
     /** The open review request for a link, or null when it is unknown, used or expired. */
     public function findRequest(Tenant $tenant, string $token): ?object
     {
@@ -82,11 +95,12 @@ class PublicReviews
     }
 
     /** Short guest-friendly SMS or WhatsApp text inviting the guest to review. */
-    public function invitation(Tenant $tenant, string $guestName, string $url): string
+    public function invitation(Tenant $tenant, string $guestName, string $url, bool $onGoogle = false): string
     {
         $first = Str::of($guestName)->trim()->explode(' ')->first() ?: 'there';
 
-        return 'Hi '.$first.', thank you for staying with '.$tenant->name.'. Please take a minute to rate your stay: '.$url;
+        return 'Hi '.$first.', thank you for staying with '.$tenant->name.'. '
+            .($onGoogle ? 'Please take a minute to review us on Google: ' : 'Please take a minute to rate your stay: ').$url;
     }
 
     /** Public name: first name and last initial, e.g. "Grace A.". */

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Haven;
 
+use App\Services\KycJoinLink;
 use Illuminate\Http\RedirectResponse;
 
 /**
@@ -53,6 +54,103 @@ class Kyc extends BaseController
             return redirect()->to(site_url('kyc/invalid'));
         }
 
+        $db = db_connect();
+        $reservation = ! empty($submission['reservation_id'])
+            ? $db->table('reservations')->where('id', $submission['reservation_id'])->get()->getRowArray()
+            : null;
+        if (! empty($submission['reservation_id']) && ! $reservation) {
+            return redirect()->back()->with('kyc_errors', ['reservation' => 'Reservation no longer exists.']);
+        }
+
+        $document = $this->receiveDocument();
+        if ($document instanceof RedirectResponse) {
+            return $document;
+        }
+        ['storageName' => $storageName, 'originalName' => $originalName, 'mime' => $mime, 'path' => $path] = $document;
+        $now = date('Y-m-d H:i:s');
+        $name = trim((string) $this->request->getPost('full_name'));
+        $phone = trim((string) $this->request->getPost('primary_phone'));
+        $email = trim((string) $this->request->getPost('email'));
+        $alternative = trim((string) $this->request->getPost('alternative_contact'));
+
+        return $this->saveInvitedSubmission($db, $submission, $token, $storageName, $originalName, $mime, $path, $now, $name, $phone, $email, $alternative);
+    }
+
+    /** Registration form opened from the company's shared link. Opening it stores nothing. */
+    public function joinForm(string $code)
+    {
+        if (! app(KycJoinLink::class)->matches(app('currentTenant'), $code)) {
+            return $this->response->setStatusCode(404)->setContent('This registration link is no longer active. Please ask us for a new link.');
+        }
+
+        return haven_view('kyc/form', [
+            'token' => '',
+            'action' => site_url('kyc/join/'.$code),
+            'reservation' => null,
+            'validationErrors' => haven_session()->getFlashdata('kyc_errors') ?? [],
+        ]);
+    }
+
+    /** Each shared-link submission becomes a new customer with a pending KYC record for staff to review. */
+    public function joinSubmit(string $code): RedirectResponse
+    {
+        if (! app(KycJoinLink::class)->matches(app('currentTenant'), $code)) {
+            return redirect()->to(site_url('kyc/invalid'));
+        }
+        $document = $this->receiveDocument();
+        if ($document instanceof RedirectResponse) {
+            return $document;
+        }
+        $now = date('Y-m-d H:i:s');
+        $email = trim((string) $this->request->getPost('email'));
+        $alternative = trim((string) $this->request->getPost('alternative_contact'));
+        $db = db_connect();
+        try {
+            $db->transBegin();
+            // A new customer every time: never merge guest identities based only on an unverified phone number.
+            $db->table('customers')->insert([
+                'full_name' => trim((string) $this->request->getPost('full_name')),
+                'primary_phone' => trim((string) $this->request->getPost('primary_phone')),
+                'email' => $email !== '' ? $email : null,
+                'alternative_contact' => $alternative !== '' ? $alternative : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $db->table('customer_kyc')->insert([
+                'customer_id' => (int) $db->insertID(),
+                'reservation_id' => null,
+                'submission_token_hash' => null,
+                'document_type' => $this->request->getPost('document_type'),
+                'document_storage_key' => $document['storageName'],
+                'document_original_name' => $document['originalName'],
+                'document_mime_type' => $document['mime'],
+                'status' => 'pending',
+                'submitted_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Database transaction failed');
+            }
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            @unlink($document['path']);
+            log_message('error', 'Shared-link KYC submission could not be saved.');
+
+            return redirect()->back()->with('kyc_errors', ['general' => 'We could not save your details. Please contact Haven Suites.']);
+        }
+
+        return redirect()->to(site_url('kyc/thank-you'));
+    }
+
+    /**
+     * Check the consent, fields and upload, then move the document into private storage.
+     *
+     * @return array{storageName: string, originalName: string, mime: string, path: string}|RedirectResponse
+     */
+    private function receiveDocument(): array|RedirectResponse
+    {
         if ((string) $this->request->getPost('consent') !== '1') {
             return redirect()->back()->withInput()->with('kyc_errors', ['consent' => 'Please confirm the information and its stated use.']);
         }
@@ -75,14 +173,6 @@ class Kyc extends BaseController
             return redirect()->back()->withInput()->with('kyc_errors', ['identity_document' => 'Please upload a valid identification document.']);
         }
 
-        $db = db_connect();
-        $reservation = ! empty($submission['reservation_id'])
-            ? $db->table('reservations')->where('id', $submission['reservation_id'])->get()->getRowArray()
-            : null;
-        if (! empty($submission['reservation_id']) && ! $reservation) {
-            return redirect()->back()->with('kyc_errors', ['reservation' => 'Reservation no longer exists.']);
-        }
-
         $storageDir = haven_private_path() . 'private/kyc';
         if (! is_dir($storageDir) && ! mkdir($storageDir, 0700, true) && ! is_dir($storageDir)) {
             return redirect()->back()->with('kyc_errors', ['identity_document' => 'Secure storage is unavailable. Please try again later.']);
@@ -100,12 +190,15 @@ class Kyc extends BaseController
 
         $path = $storageDir . DIRECTORY_SEPARATOR . $storageName;
         @chmod($path, 0600);
-        $now = date('Y-m-d H:i:s');
-        $name = trim((string) $this->request->getPost('full_name'));
-        $phone = trim((string) $this->request->getPost('primary_phone'));
-        $email = trim((string) $this->request->getPost('email'));
-        $alternative = trim((string) $this->request->getPost('alternative_contact'));
 
+        return ['storageName' => $storageName, 'originalName' => $originalName, 'mime' => (string) $mime, 'path' => $path];
+    }
+
+    /** Use up a one-time invitation: update the customer, the KYC record and any linked reservation. */
+    private function saveInvitedSubmission(
+        object $db, array $submission, string $token, string $storageName, string $originalName, string $mime, string $path,
+        string $now, string $name, string $phone, string $email, string $alternative,
+    ): RedirectResponse {
         try {
             $db->transBegin();
             // Serialize token consumption before changing customer details.

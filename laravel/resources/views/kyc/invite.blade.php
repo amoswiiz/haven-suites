@@ -1,5 +1,23 @@
 @extends('layouts/main')
 @section('content')
+<div class="card p-4 mb-4" style="max-width:800px">
+    <h1 class="h3">Shared registration link</h1>
+    <p>One link you can send to every guest, or pin in WhatsApp. Each guest who fills it in appears in <a href="{{ site_url('staff/kyc') }}">guest registrations</a> for review. The link does not expire.</p>
+    @if($commonLink)
+        <label for="commonKycLink" class="form-label">Link for all guests</label>
+        <input id="commonKycLink" class="form-control" readonly value="{{ $commonLink }}" onclick="this.select()">
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="const field = document.getElementById('commonKycLink'); field.select(); if (navigator.clipboard) { navigator.clipboard.writeText(field.value).then(() => { document.getElementById('copyCommonStatus').textContent = 'Link copied.'; }).catch(() => { document.getElementById('copyCommonStatus').textContent = 'Press Ctrl+C to copy the selected link.'; }); } else { document.getElementById('copyCommonStatus').textContent = 'Press Ctrl+C to copy the selected link.'; }">Copy Link</button>
+            <a class="btn btn-outline-secondary" href="https://wa.me/?text={{ rawurlencode('Welcome to '.app('currentTenant')->name.'! Please register here before your stay: '.$commonLink) }}" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a>
+            <form method="post" action="{{ site_url('staff/kyc/common-link') }}" onsubmit="return confirm('Create a new link? The current link will stop working.')">@csrf<input type="hidden" name="action" value="create"><button type="submit" class="btn btn-outline-secondary">Replace link</button></form>
+            <form method="post" action="{{ site_url('staff/kyc/common-link') }}" onsubmit="return confirm('Turn off the shared link? Guests who open it will be asked for a new link.')">@csrf<input type="hidden" name="action" value="turn_off"><button type="submit" class="btn btn-outline-danger">Turn off</button></form>
+        </div>
+        <span id="copyCommonStatus" role="status"></span>
+        <p class="small text-muted mt-2">Anyone with this link can submit a registration, so check each one before approving it. Replace the link if it is shared somewhere it should not be.</p>
+    @else
+        <form method="post" action="{{ site_url('staff/kyc/common-link') }}">@csrf<input type="hidden" name="action" value="create"><button type="submit" class="btn btn-primary">Create shared link</button></form>
+    @endif
+</div>
 <div class="card p-4" style="max-width:800px">
     <h1 class="h3">Guest KYC invitation</h1>
     <p>Invite a guest to register before booking. Links expire {{ $hours }} hours after creation and can be submitted once.</p>

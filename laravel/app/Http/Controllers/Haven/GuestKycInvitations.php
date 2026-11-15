@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Haven;
 
 use App\Services\KycInvitationValidity;
+use App\Services\KycJoinLink;
 use App\Services\RoyceTalkSms;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,7 +33,27 @@ class GuestKycInvitations extends BaseController
             'smsReady' => auth()->user()->can('messaging.manage')
                 && config('services.roycetalk.manual_live') && app(RoyceTalkSms::class)->configured(),
             'hours' => KycInvitationValidity::HOURS,
+            'commonLink' => app(KycJoinLink::class)->url(app('currentTenant')),
         ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
+    }
+
+    /** Create, replace or turn off the company's shared registration link. */
+    public function commonLink()
+    {
+        $this->authorizeInvitation();
+        $action = request()->validate(['action' => ['required', 'in:create,turn_off']])['action'];
+        $links = app(KycJoinLink::class);
+        if ($action === 'turn_off') {
+            $links->turnOff(app('currentTenant'));
+
+            return redirect()->to(site_url('staff/kyc/invite'))->with('success', 'Shared registration link turned off. Guests who open it will be asked for a new link.');
+        }
+        $replaced = (bool) app('currentTenant')->kyc_join_code;
+        $links->replace(app('currentTenant'));
+
+        return redirect()->to(site_url('staff/kyc/invite'))->with('success', $replaced
+            ? 'New shared registration link created. The old link no longer works.'
+            : 'Shared registration link created. Send it to any guest.');
     }
 
     public function generate()
