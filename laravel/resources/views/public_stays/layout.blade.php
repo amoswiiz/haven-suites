@@ -118,7 +118,7 @@
             @endif
             <div><strong>Explore</strong><nav class="stay-footer-nav" aria-label="Footer navigation">@foreach($footerLinks as $menuItem)<a href="{{ $menuItem['url'] }}">{{ $menuItem['label'] }}</a>@endforeach</nav></div>
             @if($footerPosts->isNotEmpty())
-                <div><strong>Latest guides</strong><nav class="stay-footer-nav" aria-label="Latest guides">@foreach($footerPosts as $footerPost)<a href="{{ route('public-stays.blog.show', [$tenant->slug, $footerPost->slug]) }}">{{ \Illuminate\Support\Str::limit($footerPost->title, 60) }}</a>@endforeach</nav></div>
+                <div><strong>Latest guides</strong><nav class="stay-footer-nav" aria-label="Latest guides">@foreach($footerPosts as $footerPost)<a href="{{ route('public-stays.blog.show', [$tenant->slug, $footerPost->slug]) }}">{{ $footerPost->title }}</a>@endforeach</nav></div>
             @endif
             <div><strong>Contact us</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif
                 @if($offices !== [])<address class="stay-footer-offices">@foreach($offices as $office)<p>{{ $office }}</p>@endforeach</address>@endif
