@@ -113,9 +113,6 @@
     @endphp
     <footer class="stay-footer" id="stay-contact">
         <div class="stay-container stay-footer-columns">
-            <div class="stay-footer-intro"><span class="stay-eyebrow">Make yourself at home</span><strong>{{ $tenant->name }}</strong><p>Comfortable spaces for your next chapter, whether you're here for a short break or a longer stay.</p><a href="{{ $contactLinks['enquiry_url'] ?? $publicBrowseUrl.'#find-stay' }}">Find a stay and enquire &rarr;</a>
-                @if($socialLinks !== [])<nav class="stay-footer-social" aria-label="Social media">@foreach($socialLinks as $network => $url)<a href="{{ $url }}" target="_blank" rel="noopener noreferrer me">{{ $network }}</a>@endforeach</nav>@endif
-            </div>
             @if(count($menuDestinations) > 0)
                 <div><strong>Destinations</strong><nav class="stay-footer-nav" aria-label="Destinations">@foreach(array_slice($menuDestinations, 0, 8) as $destination)<a href="{{ $areaLinks->url($tenant, $destination['city']) }}">Stays in {{ $destination['city'] }}</a>@endforeach</nav></div>
             @endif
@@ -123,8 +120,9 @@
             @if($footerPosts->isNotEmpty())
                 <div><strong>Latest guides</strong><nav class="stay-footer-nav" aria-label="Latest guides">@foreach($footerPosts as $footerPost)<a href="{{ route('public-stays.blog.show', [$tenant->slug, $footerPost->slug]) }}">{{ \Illuminate\Support\Str::limit($footerPost->title, 60) }}</a>@endforeach</nav></div>
             @endif
-            <div><strong>Let's plan your stay</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif
+            <div><strong>Contact us</strong>@if(!empty($site->contact_email))<p><a href="mailto:{{ $site->contact_email }}">{{ $site->contact_email }}</a></p>@endif @if(!empty($site->contact_phone))<p><a href="tel:{{ preg_replace('/[^+0-9]/', '', $site->contact_phone) }}">{{ $site->contact_phone }}</a></p>@endif @if(!empty($contactLinks['whatsapp_url']))<p><a class="stay-footer-whatsapp" href="{{ $contactLinks['whatsapp_url'] }}" target="_blank" rel="noopener noreferrer">Chat with us on WhatsApp &nearr;</a></p>@endif
                 @if($offices !== [])<address class="stay-footer-offices">@foreach($offices as $office)<p>{{ $office }}</p>@endforeach</address>@endif
+                @if($socialLinks !== [])<nav class="stay-footer-social" aria-label="Social media">@foreach($socialLinks as $network => $url)<a href="{{ $url }}" target="_blank" rel="noopener noreferrer me">{{ $network }}</a>@endforeach</nav>@endif
                 <p class="stay-contact-note">We use your contact details to respond to your enquiry and help arrange your stay.</p></div>
         </div>
         <div class="stay-container stay-footer-bottom"><span>&copy; {{ date('Y') }} {{ $tenant->name }}</span><span>Serviced apartments &amp; short stays in Kenya</span><a class="stay-staff-link" href="{{ route('login') }}">Staff sign in</a></div>
