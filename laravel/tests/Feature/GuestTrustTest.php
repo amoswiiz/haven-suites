@@ -430,6 +430,48 @@ class GuestTrustTest extends TestCase
         $this->get('/stays/other-company/blog/images/'.basename($url))->assertNotFound();
     }
 
+    public function test_blog_search_checklist_scores_posts_live_and_shows_progress(): void
+    {
+        $slug = $this->company->slug;
+        $paragraph = 'Nyali beach apartments put you minutes from the ocean. Families enjoy quiet mornings. Business guests like the fast WiFi. ';
+        $body = $paragraph."\n\n## Why Nyali beach apartments suit families\n\n".str_repeat($paragraph, 4)
+            ."\n\n## Getting around\n\nRead our [restaurant guide](".url('/stays/'.$slug.'/blog/nyali-restaurants').') and the [county rules](https://www.mombasa.go.ke).'
+            ."\n\n## Where to eat\n\n".str_repeat($paragraph, 3);
+        $this->staff()->get(route('public-listings.blog.create', $slug))->assertOk()->assertSee('Search optimisation')->assertSee('Search score')->assertSee('Add the phrase guests would type');
+
+        $check = $this->postJson(route('public-listings.blog.check', $slug), ['title' => 'Nyali beach apartments: a family guide', 'body' => $body,
+            'focus_keyword' => 'Nyali beach apartments', 'seo_description' => 'Compare Nyali beach apartments for families: what to expect, getting around and where to eat near the ocean.'])
+            ->assertOk();
+        $this->assertGreaterThan(40, $check->json('score'));
+        $this->assertStringContainsString('Keyword in title', $check->json('html'));
+        $this->assertStringContainsString('nyali-beach-apartments-a-family-guide', $check->json('html'), 'The Google preview shows the web address.');
+        $this->assertSame(0, DB::table('public_posts')->count(), 'Checking saves nothing.');
+
+        $this->post(route('public-listings.blog.store', $slug), ['title' => 'Nyali restaurants near the beach', 'slug' => 'nyali-restaurants',
+            'body' => 'Our favourite places to eat in Nyali, from seafood by the beach to coffee shops for remote work.', 'status' => 'published', 'published_at' => '2026-01-01 09:00'])->assertSessionHasNoErrors();
+        $this->post(route('public-listings.blog.store', $slug), ['title' => 'Business travel in Westlands', 'body' => 'Where to stay in Westlands for meetings, with fast WiFi and quiet rooms for calls.',
+            'status' => 'published', 'published_at' => '2026-02-01 09:00'])->assertSessionHasNoErrors();
+        $this->post(route('public-listings.blog.store', $slug), ['title' => 'Nyali beach apartments: a family guide', 'body' => $body, 'focus_keyword' => 'Nyali beach apartments',
+            'status' => 'published', 'published_at' => '2026-03-01 09:00'])->assertSessionHasNoErrors();
+        $this->assertSame('Nyali beach apartments', DB::table('public_posts')->where('slug', 'nyali-beach-apartments-a-family-guide')->value('focus_keyword'));
+
+        $this->get(route('public-listings.blog', $slug))->assertOk()->assertSee('Search progress')->assertSee('Keyword: Nyali beach apartments')->assertSee('linked from 1 post');
+
+        $page = $this->get('/stays/'.$slug.'/blog/nyali-beach-apartments-a-family-guide')->assertOk()
+            ->assertSee('<meta property="og:type" content="article">', false)->assertSee('article:published_time', false)->assertSee('twitter:label2', false)
+            ->assertSee('In this guide')->assertSee('<h2 id="why-nyali-beach-apartments-suit-families">', false)->assertSee('href="#getting-around"', false)
+            ->assertSee('Edit this article')->assertSee('Search score')->assertSee('All articles')
+            ->assertSee('Latest guides');
+        $html = $page->getContent();
+        $this->assertStringContainsString('"@type":"BreadcrumbList"', $html);
+        $this->assertStringContainsString('"keywords":"Nyali beach apartments"', $html);
+        $this->assertMatchesRegularExpression('/"wordCount":\d{3}/', $html);
+        $this->assertLessThan(strpos($html, 'Business travel in Westlands', strpos($html, 'More guides')), strpos($html, 'Nyali restaurants near the beach', strpos($html, 'More guides')), 'Related guides on the same topic come first.');
+
+        auth()->logout();
+        $this->get('/stays/'.$slug.'/blog/nyali-beach-apartments-a-family-guide')->assertOk()->assertDontSee('Edit this article')->assertDontSee('Search score');
+    }
+
     public function test_cached_catalogue_is_cleared_by_staff_saves_and_photos_use_smaller_copies(): void
     {
         Storage::fake('local');
@@ -485,7 +527,7 @@ class GuestTrustTest extends TestCase
         ])->assertSessionHasNoErrors();
         auth()->logout();
         $page = $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi')->assertOk();
-        $page->assertSee('<h2>Getting around</h2>', false)->assertSee('<strong>Avoid</strong>', false)->assertSee('href="https://example.com/stays"', false)
+        $page->assertSee('<h2 id="getting-around">Getting around</h2>', false)->assertSee('<strong>Avoid</strong>', false)->assertSee('href="https://example.com/stays"', false)
             ->assertDontSee("<script>alert('x')</script>", false)->assertDontSee('javascript:alert', false)
             ->assertSee('"@type":"BlogPosting"', false)->assertSee('By Amos M.')->assertSee('Kilimani at sunset');
         $this->get('/stays/trust-stays/blog/best-areas-to-stay-in-nairobi/cover')->assertOk()->assertHeader('Content-Type', 'image/jpeg');

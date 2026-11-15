@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PublicWebsiteLinks;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -293,5 +294,26 @@ class PublicWebsiteSettingsTest extends TestCase
         $this->assertSame('Diani and Watamu too.', $site->about_other_areas);
         $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 1, 'about_main_locations' => str_repeat('a', 300)]))
             ->assertSessionHasErrors('about_main_locations');
+    }
+
+    public function test_footer_offices_and_social_links_are_validated_and_saved(): void
+    {
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Footer: offices and social media')->assertSee('name="social_links[tiktok]"', false);
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['social_links' => ['facebook' => 'https://evil.example/havenholidayhomes']]))
+            ->assertSessionHasErrors('social_links.facebook');
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['social_links' => ['instagram' => 'http://www.instagram.com/havensuites.bnb/']]))
+            ->assertSessionHasErrors('social_links.instagram');
+        $this->assertNull($this->site());
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload([
+            'office_addresses' => "Westlands Arcade, First Floor, Nairobi\nThird Avenue Beach Apartments, Nyali\n\n",
+            'social_links' => ['facebook' => 'https://web.facebook.com/havenholidayhomes', 'tiktok' => 'https://www.tiktok.com/@haven.suitesbnb', 'x' => '', 'youtube' => 'https://www.youtube.com/@havensuitesbnb'],
+        ]))->assertSessionHasNoErrors();
+        $site = $this->site();
+        $this->assertSame(['facebook' => 'https://web.facebook.com/havenholidayhomes', 'tiktok' => 'https://www.tiktok.com/@haven.suitesbnb', 'youtube' => 'https://www.youtube.com/@havensuitesbnb'],
+            json_decode($site->social_links, true));
+        $this->assertSame(['Facebook' => 'https://web.facebook.com/havenholidayhomes', 'TikTok' => 'https://www.tiktok.com/@haven.suitesbnb', 'YouTube' => 'https://www.youtube.com/@havensuitesbnb'],
+            PublicWebsiteLinks::socialLinks($site));
+        $this->assertSame(['Westlands Arcade, First Floor, Nairobi', 'Third Avenue Beach Apartments, Nyali'], PublicWebsiteLinks::officeAddresses($site));
     }
 }

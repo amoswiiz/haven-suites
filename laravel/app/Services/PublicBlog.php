@@ -44,7 +44,7 @@ class PublicBlog
     {
         $html = Str::markdown($body, ['html_input' => 'strip', 'allow_unsafe_links' => false, 'max_nesting_level' => 10]);
 
-        return preg_replace_callback('#<img src="([^"]+)"([^>]*?)\s*/?>#', function (array $match): string {
+        $html = preg_replace_callback('#<img src="([^"]+)"([^>]*?)\s*/?>#', function (array $match): string {
             $src = html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $sized = '';
             if (preg_match('#/blog/images/[A-Za-z0-9]{32}$#D', (string) parse_url($src, PHP_URL_PATH)) && parse_url($src, PHP_URL_QUERY) === null) {
@@ -54,6 +54,61 @@ class PublicBlog
 
             return '<img src="'.e($src).'"'.$match[2].$sized.' loading="lazy" decoding="async">';
         }, $html) ?? $html;
+        $used = [];
+
+        // Section headings get an anchor so the table of contents and search results can link straight to them.
+        return preg_replace_callback('#<h([23])>(.*?)</h\1>#s', function (array $match) use (&$used): string {
+            $id = Str::slug(html_entity_decode(strip_tags($match[2]), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?: 'section';
+            $unique = $id;
+            for ($number = 2; isset($used[$unique]); $number++) {
+                $unique = $id.'-'.$number;
+            }
+            $used[$unique] = true;
+
+            return '<h'.$match[1].' id="'.$unique.'">'.$match[2].'</h'.$match[1].'>';
+        }, $html) ?? $html;
+    }
+
+    /**
+     * "In this guide" links to each main section, for posts with at least three sections.
+     *
+     * @return list<array{id: string, title: string}>
+     */
+    public function contents(string $html): array
+    {
+        preg_match_all('#<h2 id="([^"]+)">(.*?)</h2>#s', $html, $matches, PREG_SET_ORDER);
+        $sections = array_map(fn (array $match): array => ['id' => $match[1], 'title' => trim(html_entity_decode(strip_tags($match[2]), ENT_QUOTES | ENT_HTML5, 'UTF-8'))], $matches);
+
+        return count($sections) >= 3 ? $sections : [];
+    }
+
+    /**
+     * Other published posts on the same topic: most shared title and focus-keyword words first, then the newest.
+     * Linking related guides together helps readers and search engines find more of the site.
+     *
+     * @return Collection<int, object>
+     */
+    public function related(Tenant $tenant, object $post, int $limit = 3): Collection
+    {
+        $topic = self::topicWords($post->title.' '.($post->focus_keyword ?? ''));
+
+        return $this->published($tenant)->reject(fn (object $other): bool => $other->id === $post->id)
+            ->map(function (object $other) use ($topic): object {
+                $other->shared_words = count(array_intersect($topic, self::topicWords($other->title.' '.($other->focus_keyword ?? ''))));
+
+                return $other;
+            })
+            ->sortByDesc(fn (object $other): string => sprintf('%03d|%s', $other->shared_words, $other->published_at))->take($limit)->values();
+    }
+
+    /** @return list<string> Meaningful lowercase words, without common words such as "the" or "in". */
+    public static function topicWords(string $text): array
+    {
+        $stop = array_flip(['a', 'an', 'and', 'are', 'as', 'at', 'be', 'best', 'by', 'can', 'do', 'for', 'from', 'guide', 'how', 'in', 'is', 'it', 'of', 'on', 'or',
+            'should', 'the', 'to', 'vs', 'what', 'which', 'why', 'with', 'you', 'your', 'complete', 'ultimate', 'smart', 'kenya']);
+        $words = preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return array_values(array_unique(array_filter($words, fn (string $word): bool => mb_strlen($word) > 2 && ! isset($stop[$word]))));
     }
 
     /** A blog photo address asking for its smaller copy, e.g. "...?v=1&w=480". */
@@ -72,7 +127,8 @@ class PublicBlog
     {
         $plain = trim(preg_replace('/\s+/u', ' ', strip_tags($this->html($post->body))) ?? '');
         $post->summary = $post->excerpt ?: Str::limit($plain, 180, '…');
-        $post->reading_minutes = max(1, (int) ceil(str_word_count($plain) / 200));
+        $post->word_count = BlogSeoCheck::countWords($plain);
+        $post->reading_minutes = max(1, (int) ceil($post->word_count / 200));
         $post->cover_url = $post->cover_path ? route('public-stays.blog.cover', ['company' => $tenant->slug, 'slug' => $post->slug]).'?v='.strtotime((string) $post->updated_at) : null;
 
         return $post;

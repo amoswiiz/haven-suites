@@ -74,7 +74,11 @@
     });
 
     let changed = false;
-    editor.on('change', () => { changed = true; });
+    window.havenPostEditor = editor;
+    editor.on('change', () => {
+        changed = true;
+        document.dispatchEvent(new CustomEvent('post-editor-change'));
+    });
     window.addEventListener('beforeunload', (event) => {
         if (changed && !saving) {
             event.preventDefault();

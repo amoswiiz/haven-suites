@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Services\BlogSeoCheck;
 use App\Services\HomepageLayout;
 use App\Services\ListingAvailability;
 use App\Services\ListingDetails;
@@ -272,21 +273,36 @@ class PublicStayController extends Controller
         $post = $blog->find($tenant, $slug);
         abort_unless($post, 404);
         $canonicalUrl = $this->publicUrl('public-stays.blog.show', ['company' => $tenant->slug, 'slug' => $post->slug]);
-        $related = $blog->published($tenant, 4)->reject(fn (object $other): bool => $other->id === $post->id)->take(3)->values();
+        $blogUrl = $this->publicUrl('public-stays.blog', ['company' => $tenant->slug]);
+        $homeUrl = $this->publicUrl('public-stays.index', ['company' => $tenant->slug]);
         $author = $post->author_id ? DB::table('users')->where('id', $post->author_id)->value('name') : null;
+        $authorName = $author ? PublicReviews::displayName($author) : null;
+        $html = $blog->html($post->body);
+        $image = $post->cover_url ? rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH) : null;
+        $publisher = array_filter(['@type' => 'Organization', 'name' => $tenant->name, 'url' => $homeUrl, 'sameAs' => array_values(PublicWebsiteLinks::socialLinks($site)) ?: null]);
+        $published = CarbonImmutable::parse($post->published_at)->toAtomString();
+        $modified = CarbonImmutable::parse($post->updated_at)->max(CarbonImmutable::parse($post->published_at))->toAtomString();
 
         return $this->page('public_stays.post', [
-            'tenant' => $tenant, 'site' => $site, 'post' => $post, 'html' => $blog->html($post->body), 'related' => $related,
-            'authorName' => $author ? PublicReviews::displayName($author) : null,
+            'tenant' => $tenant, 'site' => $site, 'post' => $post, 'html' => $html, 'contents' => $blog->contents($html), 'related' => $blog->related($tenant, $post),
+            'authorName' => $authorName,
             'pageTitle' => $this->plainText($post->seo_title ?? '', 180) ?: $this->plainText($post->title, 180).' | '.$this->plainText($tenant->name, 100),
             'pageDescription' => $this->plainText($post->seo_description ?? '', 320) ?: $this->plainText($post->summary, 320),
             'canonicalUrl' => $canonicalUrl,
-            'socialImage' => $post->cover_url ? ['url' => rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH), 'caption' => $post->cover_caption ?: $post->title] : null,
-            'structuredData' => array_filter(['@context' => 'https://schema.org', '@type' => 'BlogPosting', 'headline' => $this->plainText($post->title, 110),
-                'description' => $this->plainText($post->summary, 300), 'url' => $canonicalUrl, 'mainEntityOfPage' => $canonicalUrl,
-                'datePublished' => CarbonImmutable::parse($post->published_at)->toAtomString(), 'dateModified' => CarbonImmutable::parse($post->updated_at)->toAtomString(),
-                'image' => $post->cover_url ? rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH) : null,
-                'author' => ['@type' => 'Organization', 'name' => $tenant->name], 'publisher' => ['@type' => 'Organization', 'name' => $tenant->name]]),
+            'socialImage' => $image ? ['url' => $image, 'caption' => $post->cover_caption ?: $post->title] : null,
+            'article' => ['published' => $published, 'modified' => $modified, 'author' => $authorName ?? $tenant->name, 'reading_minutes' => $post->reading_minutes, 'section' => 'Travel tips & guides'],
+            'structuredData' => ['@context' => 'https://schema.org', '@graph' => [
+                array_filter(['@type' => 'BlogPosting', 'headline' => $this->plainText($post->title, 110),
+                    'description' => $this->plainText($post->seo_description ?: $post->summary, 300), 'url' => $canonicalUrl, 'mainEntityOfPage' => $canonicalUrl,
+                    'datePublished' => $published, 'dateModified' => $modified, 'image' => $image, 'wordCount' => $post->word_count,
+                    'keywords' => $post->focus_keyword ?: null, 'inLanguage' => 'en',
+                    'author' => $authorName ? ['@type' => 'Person', 'name' => $authorName] : $publisher, 'publisher' => $publisher]),
+                ['@type' => 'BreadcrumbList', 'itemListElement' => [
+                    ['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $homeUrl],
+                    ['@type' => 'ListItem', 'position' => 2, 'name' => 'Travel tips & guides', 'item' => $blogUrl],
+                    ['@type' => 'ListItem', 'position' => 3, 'name' => $this->plainText($post->title, 110), 'item' => $canonicalUrl],
+                ]],
+            ]],
         ]);
     }
 
@@ -568,11 +584,24 @@ class PublicStayController extends Controller
      * @param  array<string, mixed>|null  $listing
      * @return array{edit_url: ?string, listings_url: string, settings_url: string, dashboard_url: string, status: ?string}|null
      */
-    private function staffTools(Tenant $tenant, ?array $listing): ?array
+    private function staffTools(Tenant $tenant, ?array $listing, ?object $post = null, bool $blogPage = false): ?array
     {
         $catalog = app(PublicListingCatalog::class);
         if (! $catalog->canManage(auth()->user(), $tenant)) {
             return null;
+        }
+        $articleTools = $blogPage || $post ? ['blog_url' => route('public-listings.blog', $tenant->slug), 'new_post_url' => route('public-listings.blog.create', $tenant->slug)] : [];
+        if ($post) {
+            $seo = app(BlogSeoCheck::class)->analyse($tenant, ['id' => $post->id, 'title' => $post->title, 'slug' => $post->slug, 'body' => $post->body,
+                'excerpt' => $post->excerpt, 'seo_title' => $post->seo_title, 'seo_description' => $post->seo_description,
+                'focus_keyword' => $post->focus_keyword ?? null, 'has_cover' => ! empty($post->cover_path)]);
+
+            return $articleTools + [
+                'owner' => null, 'caller_enquiry_url' => null, 'seo' => $seo['score'],
+                'edit_url' => route('public-listings.blog.edit', ['tenant' => $tenant->slug, 'id' => $post->id]), 'edit_label' => 'Edit this article',
+                'listings_url' => route('public-listings.index', $tenant->slug), 'settings_url' => route('public-listings.settings', $tenant->slug),
+                'dashboard_url' => url('/t/'.rawurlencode($tenant->slug).'/dashboard'), 'status' => 'Published article',
+            ];
         }
         $callerEnquiry = null;
         if (isset($listing['id']) && $catalog->allows(auth()->user(), $tenant, 'sales.manage', 'sales')) {
@@ -585,7 +614,7 @@ class PublicStayController extends Controller
                 $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]));
         }
 
-        return [
+        return $articleTools + [
             'owner' => $owner,
             'caller_enquiry_url' => $callerEnquiry,
             'edit_url' => isset($listing['id']) ? route('public-listings.edit', ['tenant' => $tenant->slug, 'id' => $listing['id']]) : null,
@@ -602,7 +631,9 @@ class PublicStayController extends Controller
             $links = app(PublicWebsiteLinks::class);
             $data += ['websiteMenu' => $links->menu($data['tenant'], $data['site'] ?? null),
                 'websiteContactLinks' => $links->forSite($data['tenant'], $data['site'] ?? null)];
-            $data['staffTools'] = ! $preview && auth()->check() ? $this->staffTools($data['tenant'], $data['listing'] ?? null) : null;
+            $data['staffTools'] = ! $preview && auth()->check()
+                ? $this->staffTools($data['tenant'], $data['listing'] ?? null, $view === 'public_stays.post' ? ($data['post'] ?? null) : null, $view === 'public_stays.blog')
+                : null;
         }
         $response = response()->view($view, $data)->header('Cache-Control', 'private, no-store')
             ->header('Referrer-Policy', 'strict-origin-when-cross-origin')->header('X-Content-Type-Options', 'nosniff');

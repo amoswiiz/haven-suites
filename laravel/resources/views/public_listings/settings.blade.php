@@ -21,6 +21,17 @@
         @if(!empty($site?->logo_path))<p><img src="{{ route('public-stays.logo', $tenantSlug) }}?v={{ strtotime((string) $site->logo_updated_at) }}" alt="Current logo" style="max-height:64px;width:auto;background:#fff;border:1px solid #e2e7e9;border-radius:8px;padding:8px"></p><label><input type="checkbox" name="remove_logo" value="1" style="width:auto"> Remove the logo and show the company name instead</label>@endif
         <div><label for="logo">{{ !empty($site?->logo_path) ? 'Replace logo' : 'Upload logo' }}</label><input id="logo" name="logo" type="file" accept="image/webp,image/png"></div>
     </section>
+    @php($savedSocial = json_decode((string) ($site->social_links ?? ''), true) ?: [])
+    <section class="card" aria-labelledby="site-footer-heading"><h2 id="site-footer-heading">Footer: offices and social media</h2>
+        <p class="muted">Shown at the bottom of every page. Consistent addresses and social profiles help guests trust you and help Google show your business.</p>
+        <label for="office_addresses">Office addresses <small class="muted">one per line, up to 4</small></label>
+        <textarea id="office_addresses" name="office_addresses" rows="3" maxlength="600" placeholder="Westlands Arcade, First Floor, Nairobi&#10;Third Avenue Beach Apartments, Nyali, Mombasa">{{ old('office_addresses', $site->office_addresses ?? '') }}</textarea>
+        <div class="grid">
+            @foreach(\App\Services\PublicWebsiteLinks::SOCIAL_NETWORKS as $network => $details)
+                <div><label for="social-{{ $network }}">{{ $details['label'] }}</label><input id="social-{{ $network }}" name="social_links[{{ $network }}]" type="url" maxlength="300" value="{{ old('social_links.'.$network, $savedSocial[$network] ?? '') }}" placeholder="https://{{ $details['hosts'][0] }}/…"></div>
+            @endforeach
+        </div>
+    </section>
     <section class="card" aria-labelledby="site-layout-heading"><h2 id="site-layout-heading">Homepage layout</h2>
     <p class="muted">Turn on the new homepage one step at a time. Searches, addresses, enquiries and WhatsApp messages work the same in both layouts, so you can switch a step off again at any time.</p>
     <p class="muted">Preview before switching on: <a href="{{ route('public-stays.index', $tenantSlug) }}?layout=new" target="_blank" rel="noopener">new layout</a> &middot; <a href="{{ route('public-stays.index', $tenantSlug) }}?layout=classic" target="_blank" rel="noopener">current layout</a></p>

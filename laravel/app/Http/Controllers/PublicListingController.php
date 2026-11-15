@@ -137,12 +137,17 @@ class PublicListingController extends Controller
             'cancellation_policy' => 'nullable|string|max:3000', 'payment_policy' => 'nullable|string|max:3000', 'faq' => 'nullable|string|max:15000',
             'host_intro' => 'nullable|string|max:1500', 'host_reply_time' => 'nullable|string|max:80|not_regex:/[<>]/', 'host_languages' => 'nullable|string|max:120|not_regex:/[<>]/',
             'homepage_layout' => 'sometimes|array', 'homepage_layout.*' => 'boolean',
+            'social_links' => 'sometimes|array', 'social_links.*' => 'nullable|string|max:300',
+            'office_addresses' => ['nullable', 'string', 'max:600', 'not_regex:/[<>]/'],
         ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
         }
         if (array_key_exists('homepage_layout', $data)) {
             $data['homepage_layout'] = HomepageLayout::encode($data['homepage_layout']);
+        }
+        if (array_key_exists('social_links', $data)) {
+            $data['social_links'] = PublicWebsiteLinks::encodeSocialLinks($data['social_links']);
         }
         $data['enabled'] = $request->boolean('enabled');
         if ($data['enabled'] && (empty($data['enquiry_assignee_id']) || ($tenant->modules['sales'] ?? true) === false)) {

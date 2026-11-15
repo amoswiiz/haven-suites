@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\BlogSeoCheck;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicImageEncoder;
@@ -19,25 +20,52 @@ use Illuminate\View\View;
 /** Staff write blog posts and neighbourhood introductions for the public website. */
 class PublicContentController extends Controller
 {
-    public function posts(): View
+    public function posts(BlogSeoCheck $seo): View
     {
         $tenant = app('currentTenant');
+        $posts = DB::table('public_posts')->where('tenant_id', $tenant->id)->orderByRaw("CASE WHEN status = 'draft' THEN 0 ELSE 1 END")
+            ->orderByDesc('published_at')->orderByDesc('id')->paginate(25);
+        $inbound = $seo->inboundLinks($tenant);
+        $checks = $posts->getCollection()->mapWithKeys(fn (object $post): array => [$post->id => $seo->analyse($tenant, $this->seoInput($post), $inbound)]);
 
         return view('public_listings.blog', [
-            'posts' => DB::table('public_posts')->where('tenant_id', $tenant->id)->orderByRaw("CASE WHEN status = 'draft' THEN 0 ELSE 1 END")
-                ->orderByDesc('published_at')->orderByDesc('id')->paginate(25),
-            'site' => app(PublicListingCatalog::class)->settings($tenant),
+            'posts' => $posts, 'checks' => $checks, 'site' => app(PublicListingCatalog::class)->settings($tenant),
+            'orphans' => DB::table('public_posts')->where('tenant_id', $tenant->id)->where('status', 'published')->get(['slug'])
+                ->filter(fn (object $post): bool => empty($inbound[$post->slug]))->count(),
         ]);
     }
 
-    public function create(): View
+    public function create(BlogSeoCheck $seo): View
     {
-        return view('public_listings.post_form', ['post' => null]);
+        return view('public_listings.post_form', ['post' => null, 'seo' => $seo->analyse(app('currentTenant'), [])]);
     }
 
-    public function edit(string $tenant, int $id): View
+    public function edit(string $tenant, int $id, BlogSeoCheck $seo): View
     {
-        return view('public_listings.post_form', ['post' => $this->post($id)]);
+        $post = $this->post($id);
+
+        return view('public_listings.post_form', ['post' => $post, 'seo' => $seo->analyse(app('currentTenant'), $this->seoInput($post))]);
+    }
+
+    /** Live search checklist for the editor, using the text as typed (nothing is saved). */
+    public function check(Request $request, BlogSeoCheck $seo): JsonResponse
+    {
+        $data = $request->validate([
+            'id' => 'nullable|integer', 'title' => 'nullable|string|max:180', 'slug' => 'nullable|string|max:160', 'body' => 'nullable|string|max:60000',
+            'excerpt' => 'nullable|string|max:320', 'seo_title' => 'nullable|string|max:180', 'seo_description' => 'nullable|string|max:320',
+            'focus_keyword' => 'nullable|string|max:100', 'has_cover' => 'sometimes|boolean',
+        ]);
+        $result = $seo->analyse(app('currentTenant'), ['has_cover' => $request->boolean('has_cover')] + $data);
+
+        return response()->json(['score' => $result['score'], 'html' => view('public_listings._seo_panel', ['seo' => $result])->render()]);
+    }
+
+    /** @return array<string, mixed> */
+    private function seoInput(object $post): array
+    {
+        return ['id' => $post->id, 'title' => $post->title, 'slug' => $post->slug, 'body' => $post->body, 'excerpt' => $post->excerpt,
+            'seo_title' => $post->seo_title, 'seo_description' => $post->seo_description, 'focus_keyword' => $post->focus_keyword ?? null,
+            'has_cover' => ! empty($post->cover_path)];
     }
 
     public function store(Request $request): RedirectResponse
@@ -108,13 +136,15 @@ class PublicContentController extends Controller
             'published_at' => 'nullable|date', 'cover' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:5120',
             'cover_caption' => 'nullable|string|max:180', 'remove_cover' => 'sometimes|boolean',
             'seo_title' => 'nullable|string|max:180|not_regex:/[<>]/', 'seo_description' => 'nullable|string|max:320|not_regex:/[<>]/',
+            'focus_keyword' => 'nullable|string|max:100|not_regex:/[<>]/',
         ], ['slug.regex' => 'Use lowercase letters, numbers and hyphens for the web address.', 'body.min' => 'Write at least a short paragraph (50 characters).']);
         $newCover = null;
         if ($request->hasFile('cover')) {
             $newCover = 'public-posts/'.$tenant->id.'/'.Str::random(32).'.jpg';
             Storage::disk('local')->put($newCover, app(PublicImageEncoder::class)->jpeg($request->file('cover'), 'cover'));
         }
-        $changes = array_intersect_key($data, array_flip(['title', 'excerpt', 'slug', 'body', 'status', 'cover_caption', 'seo_title', 'seo_description'])) + ['excerpt' => null, 'cover_caption' => null, 'seo_title' => null, 'seo_description' => null];
+        $changes = array_intersect_key($data, array_flip(['title', 'excerpt', 'slug', 'body', 'status', 'cover_caption', 'seo_title', 'seo_description', 'focus_keyword']))
+            + ['excerpt' => null, 'cover_caption' => null, 'seo_title' => null, 'seo_description' => null, 'focus_keyword' => null];
         $changes['published_at'] = $data['status'] === 'published' ? ($data['published_at'] ?? $before?->published_at ?? now()) : ($data['published_at'] ?? null);
         $oldCover = null;
         if ($newCover !== null) {

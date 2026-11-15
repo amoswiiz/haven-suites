@@ -22,6 +22,68 @@ class PublicWebsiteLinks
     /** Menu destinations and their labels in the Website settings menu editor. */
     public const TARGETS = ['home' => 'Home', 'stays' => 'Find a stay', 'about' => 'About us', 'blog' => 'Blog', 'faq' => 'FAQ', 'contact' => 'Contact', 'track' => 'Track my enquiry'];
 
+    /** Social profiles shown in the footer, with the website addresses each one may use. */
+    public const SOCIAL_NETWORKS = [
+        'facebook' => ['label' => 'Facebook', 'hosts' => ['facebook.com', 'fb.com']],
+        'instagram' => ['label' => 'Instagram', 'hosts' => ['instagram.com']],
+        'tiktok' => ['label' => 'TikTok', 'hosts' => ['tiktok.com']],
+        'x' => ['label' => 'X (Twitter)', 'hosts' => ['x.com', 'twitter.com']],
+        'linkedin' => ['label' => 'LinkedIn', 'hosts' => ['linkedin.com']],
+        'youtube' => ['label' => 'YouTube', 'hosts' => ['youtube.com', 'youtu.be']],
+    ];
+
+    /** @return array<string, string> Saved social profile links keyed by network label, in a fixed order. */
+    public static function socialLinks(?object $site): array
+    {
+        $saved = json_decode((string) ($site->social_links ?? ''), true);
+        $links = [];
+        foreach (self::SOCIAL_NETWORKS as $key => $network) {
+            $url = is_array($saved) ? ($saved[$key] ?? null) : null;
+            if (is_string($url) && self::isSocialUrl($key, $url)) {
+                $links[$network['label']] = $url;
+            }
+        }
+
+        return $links;
+    }
+
+    public static function isSocialUrl(string $network, string $url): bool
+    {
+        $parts = parse_url($url);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+
+        return is_array($parts) && ($parts['scheme'] ?? '') === 'https' && ! isset($parts['user'], $parts['pass']) && collect(self::SOCIAL_NETWORKS[$network]['hosts'] ?? [])
+            ->contains(fn (string $allowed): bool => $host === $allowed || str_ends_with($host, '.'.$allowed));
+    }
+
+    /**
+     * Validate social profile links from Website settings and return them as stored JSON.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public static function encodeSocialLinks(array $input): ?string
+    {
+        $links = [];
+        foreach (self::SOCIAL_NETWORKS as $key => $network) {
+            $url = trim((string) ($input[$key] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            if (! self::isSocialUrl($key, $url)) {
+                throw ValidationException::withMessages(['social_links.'.$key => 'Paste the full '.$network['label'].' address starting with https://.']);
+            }
+            $links[$key] = $url;
+        }
+
+        return $links === [] ? null : json_encode($links, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** @return list<string> Office addresses for the footer, one per saved line. */
+    public static function officeAddresses(?object $site): array
+    {
+        return array_slice(array_values(array_filter(array_map('trim', preg_split('/\R/u', (string) ($site->office_addresses ?? '')) ?: []))), 0, 4);
+    }
+
     /**
      * WhatsApp link for staff to ask an apartment owner about availability, with the apartment and any stay details.
      *
