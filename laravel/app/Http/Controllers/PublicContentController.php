@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ListingPhotoVariants;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicImageEncoder;
 use App\Services\PublicListingCatalog;
@@ -65,6 +66,7 @@ class PublicContentController extends Controller
         $request->validate(['image' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120']);
         $name = Str::random(32);
         Storage::disk('local')->put('public-posts/'.$tenant->id.'/inline/'.$name.'.jpg', app(PublicImageEncoder::class)->jpeg($request->file('image'), 'image', 1600));
+        app(ListingPhotoVariants::class)->make('public-posts/'.$tenant->id.'/inline/'.$name.'.jpg');
 
         return response()->json(['url' => route('public-stays.blog.image', [$tenant->slug, $name])]);
     }
@@ -141,6 +143,9 @@ class PublicContentController extends Controller
             throw $exception;
         }
         $this->deleteCover($oldCover);
+        if ($newCover !== null) {
+            app(ListingPhotoVariants::class)->make($newCover);
+        }
 
         return redirect()->route('public-listings.blog.edit', [$tenant->slug, $postId])
             ->with('success', $data['status'] === 'published' ? 'Post saved and published.' : 'Draft saved. It is not visible on the website yet.');
@@ -155,6 +160,7 @@ class PublicContentController extends Controller
     {
         if ($path && str_starts_with($path, 'public-posts/'.app('currentTenant')->id.'/')) {
             Storage::disk('local')->delete($path);
+            app(ListingPhotoVariants::class)->delete($path);
         }
     }
 }

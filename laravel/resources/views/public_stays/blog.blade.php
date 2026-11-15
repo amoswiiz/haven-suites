@@ -12,7 +12,7 @@
         <div class="stay-blog-grid">
             @foreach($posts as $post)
                 <article class="stay-blog-card">
-                    <a class="stay-blog-image" href="{{ route('public-stays.blog.show', [$tenant->slug, $post->slug]) }}" tabindex="-1" aria-hidden="true">@if($post->cover_url)<img src="{{ $post->cover_url }}" alt="" loading="lazy" width="640" height="360">@else<span>{{ mb_substr($post->title, 0, 1) }}</span>@endif</a>
+                    <a class="stay-blog-image" href="{{ route('public-stays.blog.show', [$tenant->slug, $post->slug]) }}" tabindex="-1" aria-hidden="true">@if($post->cover_url)<img src="{{ \App\Services\PublicBlog::sized($post->cover_url, 480) }}" srcset="{{ \App\Services\PublicBlog::srcset($post->cover_url) }}" sizes="(max-width: 700px) 100vw, 400px" alt="" loading="lazy" decoding="async" width="640" height="360">@else<span>{{ mb_substr($post->title, 0, 1) }}</span>@endif</a>
                     <div class="stay-blog-body">
                         <p class="stay-blog-meta"><time datetime="{{ \Carbon\CarbonImmutable::parse($post->published_at)->toDateString() }}">{{ \Carbon\CarbonImmutable::parse($post->published_at)->format('j M Y') }}</time> &middot; {{ $post->reading_minutes }} min read</p>
                         <h2><a href="{{ route('public-stays.blog.show', [$tenant->slug, $post->slug]) }}">{{ $post->title }}</a></h2>

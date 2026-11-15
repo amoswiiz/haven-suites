@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Tenant;
 use App\Services\BlogHtmlToMarkdown;
+use App\Services\ListingPhotoVariants;
 use App\Services\PublicImageEncoder;
 use App\Services\WebsiteBlogSource;
 use Carbon\CarbonImmutable;
@@ -166,6 +167,11 @@ class ImportWebsiteBlog extends Command
         }
         Storage::disk('local')->put($path, $jpeg);
         $this->newFiles[] = $path;
+        if (app(ListingPhotoVariants::class)->make($path) > 0) {
+            foreach (ListingPhotoVariants::WIDTHS as $width) {
+                $this->newFiles[] = ListingPhotoVariants::key($path, $width);
+            }
+        }
 
         return $path;
     }

@@ -405,8 +405,27 @@ class GuestTrustTest extends TestCase
         $body = "Our favourite beach walk.\n\n![Nyali beach at sunrise]({$url})\n\n| Area | Distance |\n| --- | --- |\n| Nyali | 5 min |";
         $this->post(route('public-listings.blog.store', $this->company->slug), ['title' => 'Walks near Nyali', 'body' => $body, 'status' => 'published'])->assertSessionHasNoErrors();
         auth()->logout();
-        $this->get('/stays/trust-stays/blog/walks-near-nyali')->assertOk()->assertSee('<img src="'.$url.'" alt="Nyali beach at sunrise"', false)->assertSee('<table>', false);
+        $this->get('/stays/trust-stays/blog/walks-near-nyali')->assertOk()->assertSee('<table>', false)
+            ->assertSee('<img src="'.$url.'?w=1200" alt="Nyali beach at sunrise" srcset="'.$url.'?w=480 480w, '.$url.'?w=1200 1200w" sizes="(max-width: 800px) 100vw, 760px" loading="lazy" decoding="async">', false);
         $this->get(parse_url($url, PHP_URL_PATH))->assertOk()->assertHeader('Content-Type', 'image/jpeg')->assertHeader('Cache-Control', 'immutable, max-age=31536000, public');
+        $inline = 'public-posts/'.$this->company->id.'/inline/'.basename($url).'.jpg';
+        Storage::disk('local')->assertExists([ListingPhotoVariants::key($inline, 480), ListingPhotoVariants::key($inline, 1200)]);
+        $small = $this->get(parse_url($url, PHP_URL_PATH).'?w=480')->assertOk()->assertHeader('Content-Type', 'image/webp')->assertHeader('Cache-Control', 'immutable, max-age=31536000, public');
+        $this->assertSame(480, getimagesizefromstring((string) file_get_contents($small->baseResponse->getFile()->getPathname()))[0]);
+        Storage::disk('local')->delete(ListingPhotoVariants::key($inline, 1200));
+        $this->get(parse_url($url, PHP_URL_PATH).'?w=1200')->assertOk()->assertHeader('Content-Type', 'image/jpeg')->assertHeader('Cache-Control', 'max-age=3600, public');
+        $this->artisan('haven:listing-photo-variants')->assertSuccessful();
+        Storage::disk('local')->assertExists(ListingPhotoVariants::key($inline, 1200));
+
+        $this->staff()->post(route('public-listings.blog.store', $this->company->slug), ['title' => 'Sunset at Nyali', 'body' => 'An evening walk along the beach with the family, then dinner by the water.', 'status' => 'published',
+            'cover' => UploadedFile::fake()->image('cover.jpg', 1600, 900)])->assertSessionHasNoErrors();
+        $cover = DB::table('public_posts')->where('slug', 'sunset-at-nyali')->value('cover_path');
+        Storage::disk('local')->assertExists(ListingPhotoVariants::key($cover, 480));
+        auth()->logout();
+        $this->get('/stays/trust-stays/blog')->assertOk()->assertSee('&amp;w=480 480w', false);
+        $coverPage = $this->get('/stays/trust-stays/blog/sunset-at-nyali')->assertOk()->assertSee('&amp;w=1200" srcset=', false);
+        preg_match('#src="([^"]+/cover\?v=\d+)&amp;w=1200"#', $coverPage->getContent(), $coverUrl);
+        $this->get(parse_url($coverUrl[1], PHP_URL_PATH).'?w=480')->assertOk()->assertHeader('Content-Type', 'image/webp');
         $this->get('/stays/trust-stays/blog/images/'.str_repeat('a', 32))->assertNotFound();
         $this->get('/stays/other-company/blog/images/'.basename($url))->assertNotFound();
     }

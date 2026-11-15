@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\ListingPhotoVariants;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +82,10 @@ class ImportWebsiteBlogTest extends TestCase
         Storage::disk('local')->assertExists('public-posts/'.$this->company->id.'/inline/'.$image[1].'.jpg');
         $this->assertMatchesRegularExpression('#^public-posts/'.$this->company->id.'/[A-Za-z0-9]{32}\.jpg$#', $post->cover_path);
         Storage::disk('local')->assertExists($post->cover_path);
+        foreach (ListingPhotoVariants::WIDTHS as $width) {
+            Storage::disk('local')->assertExists(ListingPhotoVariants::key($post->cover_path, $width));
+            Storage::disk('local')->assertExists(ListingPhotoVariants::key('public-posts/'.$this->company->id.'/inline/'.$image[1].'.jpg', $width));
+        }
 
         $this->artisan('haven:import-website-blog', ['tenant' => 'blog-stays'])
             ->expectsOutputToContain('Imported 0 of 3 posts. 3 already in the blog.')->assertSuccessful();

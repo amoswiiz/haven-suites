@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Services\HomepageLayout;
 use App\Services\ListingAvailability;
 use App\Services\ListingDetails;
+use App\Services\ListingPhotoVariants;
 use App\Services\PublicAboutPage;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicBlog;
@@ -289,24 +290,40 @@ class PublicStayController extends Controller
         ]);
     }
 
-    public function blogCover(string $company, string $slug, PublicListingCatalog $catalog, PublicBlog $blog): BinaryFileResponse
+    /** Blog cover photo. "?w=480" or "?w=1200" returns the smaller WebP copy when it exists. */
+    public function blogCover(Request $request, string $company, string $slug, PublicListingCatalog $catalog, PublicBlog $blog): BinaryFileResponse
     {
         [$tenant] = $this->company($company, $catalog);
         $post = $blog->find($tenant, $slug);
         $path = $post?->cover_path;
         abort_unless($path && preg_match('#^public-posts/'.(int) $tenant->id.'/[A-Za-z0-9]{32}\.jpg$#D', $path) && Storage::disk('local')->exists($path), 404);
 
-        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=86400']);
+        return $this->blogPhoto($request, $path, 'public, max-age=86400');
     }
 
-    /** Image placed inside a blog post with the editor. File names are random and never reused, so they cache for a year. */
-    public function blogImage(string $company, string $name, PublicListingCatalog $catalog): BinaryFileResponse
+    /** Image placed inside a blog post. File names are random and never reused, so they cache for a year. */
+    public function blogImage(Request $request, string $company, string $name, PublicListingCatalog $catalog): BinaryFileResponse
     {
         [$tenant] = $this->company($company, $catalog);
         $path = 'public-posts/'.(int) $tenant->id.'/inline/'.$name.'.jpg';
         abort_unless(Storage::disk('local')->exists($path), 404);
 
-        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=31536000, immutable']);
+        return $this->blogPhoto($request, $path, 'public, max-age=31536000, immutable');
+    }
+
+    /** Serve the WebP copy for the requested width, or the original JPEG (cached briefly) until the copy is made. */
+    private function blogPhoto(Request $request, string $path, string $cache): BinaryFileResponse
+    {
+        $width = $request->integer('w');
+        if (in_array($width, ListingPhotoVariants::WIDTHS, true)) {
+            $variant = ListingPhotoVariants::key($path, $width);
+            if (Storage::disk('local')->exists($variant)) {
+                return response()->file(Storage::disk('local')->path($variant), ['Content-Type' => 'image/webp', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => $cache]);
+            }
+            $cache = 'public, max-age=3600';
+        }
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => $cache]);
     }
 
     public function area(Request $request, string $company, string $city, PublicListingCatalog $catalog, PublicAreaGuides $guides, ?string $area = null): Response
