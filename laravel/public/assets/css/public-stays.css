@@ -394,3 +394,22 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-range-foot button{padding:0 16px}.stay-range-foot .is-primary{background:#1f4ba8;border-color:#1f4ba8;color:#fff}
 @media(max-width:700px){.stay-range-months{grid-template-columns:1fr}.stay-range-month+.stay-range-month{display:none}.stay-range-picker{left:0;transform:none;width:100%;border-radius:18px;padding:16px}}
 #find-stay .stay-pill-field .stay-date-trigger{display:block;width:100%;margin-top:1px;line-height:1.4;min-height:0}
+/* Classic cards, 4 across: same details, one size smaller */
+.stay-grid:not(.is-compact){grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 18px}
+@media(max-width:1180px){.stay-grid:not(.is-compact){grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.stay-grid:not(.is-compact){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.stay-grid:not(.is-compact){grid-template-columns:1fr}}
+.stay-card:not(.is-v2) .stay-card-image{aspect-ratio:1.4}
+.stay-card:not(.is-v2) .stay-card-media{left:10px;bottom:10px;padding:4px 8px;font-size:.66rem}
+.stay-card:not(.is-v2) .stay-card-body{padding:12px 14px 14px}
+.stay-card:not(.is-v2) .stay-location{font-size:.72rem}
+.stay-card:not(.is-v2) h3{font-size:1rem;line-height:1.3;margin:0 0 6px}
+.stay-card:not(.is-v2) .stay-card-tags{gap:4px;margin:0 0 6px}
+.stay-card:not(.is-v2) .stay-tag{padding:2px 8px;font-size:.66rem}
+.stay-card:not(.is-v2) .stay-facts{font-size:.72rem;gap:2px 10px;padding-bottom:8px}
+.stay-card:not(.is-v2) .stay-card-bottom{margin-top:8px;gap:8px}
+.stay-card:not(.is-v2) .stay-price strong{font-size:.98rem}
+.stay-card:not(.is-v2) .stay-price small{font-size:.68rem}
+.stay-card:not(.is-v2) .stay-card-bottom a{font-size:.72rem}
+.stay-card:not(.is-v2) .stay-card-actions{margin-top:8px;gap:6px}
+.stay-card:not(.is-v2) .stay-card-actions .stay-button{min-height:36px;padding:6px 8px;font-size:.74rem}
