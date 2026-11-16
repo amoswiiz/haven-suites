@@ -38,7 +38,7 @@
     const endButton = makeTrigger(endInput, 'end');
 
     const panel = document.createElement('div');
-    panel.className = 'stay-calendar';
+    panel.className = 'stay-range-picker';
     panel.hidden = true;
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-label', 'Choose your dates');
@@ -62,11 +62,11 @@
 
     const month = (first) => {
         const wrapper = document.createElement('div');
-        wrapper.className = 'stay-calendar-month';
+        wrapper.className = 'stay-range-month';
         const title = document.createElement('h4');
         title.textContent = monthName(first);
         const grid = document.createElement('div');
-        grid.className = 'stay-calendar-grid';
+        grid.className = 'stay-range-grid';
         ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].forEach((day) => {
             const head = document.createElement('abbr');
             head.textContent = day;
@@ -103,12 +103,12 @@
             : (picking === 'start' ? 'Select your check-in date' : 'Select your check-out date');
         panel.innerHTML = '';
         const head = document.createElement('div');
-        head.className = 'stay-calendar-head';
+        head.className = 'stay-range-head';
         const title = document.createElement('strong');
         title.textContent = summary;
         title.setAttribute('aria-live', 'polite');
         const nav = document.createElement('div');
-        nav.className = 'stay-calendar-nav';
+        nav.className = 'stay-range-nav';
         const previous = document.createElement('button');
         previous.type = 'button';
         previous.innerHTML = '&#8249;';
@@ -123,10 +123,10 @@
         nav.append(previous, next);
         head.append(title, nav);
         const months = document.createElement('div');
-        months.className = 'stay-calendar-months';
+        months.className = 'stay-range-months';
         months.append(month(view), month(second));
         const foot = document.createElement('div');
-        foot.className = 'stay-calendar-foot';
+        foot.className = 'stay-range-foot';
         const clear = document.createElement('button');
         clear.type = 'button';
         clear.textContent = 'Clear dates';

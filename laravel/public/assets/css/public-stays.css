@@ -375,21 +375,21 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-date-trigger{border:0;background:transparent;padding:0;font:inherit;font-size:.92rem;font-weight:600;color:#1e293b;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stay-date-trigger.is-empty{color:#64748b;font-weight:400}
 .stay-pill{position:relative}
-.stay-calendar{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);z-index:30;width:min(720px,calc(100vw - 32px));padding:20px 22px;border-radius:24px;background:#fff;box-shadow:0 12px 40px rgba(15,23,42,.18);border:1px solid var(--line);text-align:left}
-.stay-calendar[hidden]{display:none}
-.stay-calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.stay-calendar-head strong{font-size:1rem}
-.stay-calendar-nav{display:flex;gap:6px}.stay-calendar-nav button,.stay-calendar-foot button{border:1px solid var(--line);background:#fff;border-radius:999px;min-width:36px;height:36px;cursor:pointer;font:inherit}
-.stay-calendar-nav button:disabled{opacity:.35;cursor:default}
-.stay-calendar-months{display:grid;grid-template-columns:1fr 1fr;gap:28px}
-.stay-calendar-month h4{text-align:center;margin:0 0 10px;font-size:.95rem}
-.stay-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0;text-align:center}
-.stay-calendar-grid abbr{font-size:.72rem;color:#64748b;text-decoration:none;padding-bottom:6px}
-.stay-calendar-grid button{aspect-ratio:1;border:0;background:transparent;border-radius:999px;font:inherit;font-size:.88rem;cursor:pointer;color:#1e293b}
-.stay-calendar-grid button:hover:not(:disabled){outline:1px solid #1e293b}
-.stay-calendar-grid button:disabled{color:#c3cad4;text-decoration:line-through;cursor:default}
-.stay-calendar-grid button.is-today{font-weight:800}
-.stay-calendar-grid button.is-between{background:#eef3fb;border-radius:0}
-.stay-calendar-grid button.is-start,.stay-calendar-grid button.is-end{background:#1f4ba8;color:#fff}
-.stay-calendar-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
-.stay-calendar-foot button{padding:0 16px}.stay-calendar-foot .is-primary{background:#1f4ba8;border-color:#1f4ba8;color:#fff}
-@media(max-width:700px){.stay-calendar-months{grid-template-columns:1fr}.stay-calendar-month+.stay-calendar-month{display:none}.stay-calendar{left:0;transform:none;width:100%;border-radius:18px;padding:16px}}
+.stay-range-picker{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);z-index:30;width:min(720px,calc(100vw - 32px));padding:20px 22px;border-radius:24px;background:#fff;box-shadow:0 12px 40px rgba(15,23,42,.18);border:1px solid var(--line);text-align:left}
+.stay-range-picker[hidden]{display:none}
+.stay-range-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.stay-range-head strong{font-size:1rem}
+.stay-range-nav{display:flex;gap:6px}.stay-range-nav button,.stay-range-foot button{border:1px solid var(--line);background:#fff;border-radius:999px;min-width:36px;height:36px;cursor:pointer;font:inherit}
+.stay-range-nav button:disabled{opacity:.35;cursor:default}
+.stay-range-months{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.stay-range-month h4{text-align:center;margin:0 0 10px;font-size:.95rem}
+.stay-range-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0;text-align:center}
+.stay-range-grid abbr{font-size:.72rem;color:#64748b;text-decoration:none;padding-bottom:6px}
+.stay-range-grid button{aspect-ratio:1;border:0;background:transparent;border-radius:999px;font:inherit;font-size:.88rem;cursor:pointer;color:#1e293b}
+.stay-range-grid button:hover:not(:disabled){outline:1px solid #1e293b}
+.stay-range-grid button:disabled{color:#c3cad4;text-decoration:line-through;cursor:default}
+.stay-range-grid button.is-today{font-weight:800}
+.stay-range-grid button.is-between{background:#eef3fb;border-radius:0}
+.stay-range-grid button.is-start,.stay-range-grid button.is-end{background:#1f4ba8;color:#fff}
+.stay-range-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.stay-range-foot button{padding:0 16px}.stay-range-foot .is-primary{background:#1f4ba8;border-color:#1f4ba8;color:#fff}
+@media(max-width:700px){.stay-range-months{grid-template-columns:1fr}.stay-range-month+.stay-range-month{display:none}.stay-range-picker{left:0;transform:none;width:100%;border-radius:18px;padding:16px}}
