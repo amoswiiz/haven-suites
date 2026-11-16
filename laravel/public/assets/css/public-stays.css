@@ -393,3 +393,4 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-range-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .stay-range-foot button{padding:0 16px}.stay-range-foot .is-primary{background:#1f4ba8;border-color:#1f4ba8;color:#fff}
 @media(max-width:700px){.stay-range-months{grid-template-columns:1fr}.stay-range-month+.stay-range-month{display:none}.stay-range-picker{left:0;transform:none;width:100%;border-radius:18px;padding:16px}}
+#find-stay .stay-pill-field .stay-date-trigger{display:block;width:100%;margin-top:1px;line-height:1.4;min-height:0}
