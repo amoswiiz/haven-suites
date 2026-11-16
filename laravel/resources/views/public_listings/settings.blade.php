@@ -49,6 +49,10 @@
         <input type="hidden" name="homepage_layout[{{ $layoutStep }}]" value="0">
         <label><input type="checkbox" name="homepage_layout[{{ $layoutStep }}]" value="1" style="width:auto" @checked(old('homepage_layout.'.$layoutStep, $layoutSteps[$layoutStep]))> Step {{ $loop->iteration }}: {{ $layoutLabel }}</label>
     @endforeach
+    <h3 style="margin-top:20px">Homepage photo</h3>
+    <p class="muted">The wide photo behind the homepage headline. Choose your most inviting shot: a sea view, balcony or bright living room, never a bathroom. Landscape, at least 1,600 pixels wide; JPG, PNG or WebP up to 8 MB. Without one, the first photo of your first stay is used.</p>
+    @if(!empty($site?->hero_photo_path))<p><img src="{{ route('public-stays.hero-photo', $tenantSlug) }}?v={{ strtotime((string) $site->hero_photo_updated_at) }}&amp;w=480" alt="Current homepage photo" style="max-width:320px;width:100%;border-radius:8px"></p><label><input type="checkbox" name="remove_hero_photo" value="1" style="width:auto"> Remove the homepage photo</label>@endif
+    <div><label for="hero_photo">{{ !empty($site?->hero_photo_path) ? 'Replace homepage photo' : 'Upload homepage photo' }}</label><input id="hero_photo" name="hero_photo" type="file" accept="image/jpeg,image/png,image/webp"></div>
 </section>
 <section class="card" aria-labelledby="site-seo-heading"><h2 id="site-seo-heading">Search appearance</h2><p class="muted">Use a clear website title and introduction for search engines and shared links. Leave these blank to use your company name and website introduction. Individual apartments can have their own search details.</p><div class="grid">
         <div><label for="seo_title">Website search title</label><input id="seo_title" name="seo_title" maxlength="180" value="{{ old('seo_title', $site->seo_title ?? '') }}"><small class="muted">Aim for about 50–60 characters. Maximum 180.</small></div>

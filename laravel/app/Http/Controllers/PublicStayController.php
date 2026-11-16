@@ -130,7 +130,8 @@ class PublicStayController extends Controller
             'pageTitle' => ($this->plainText($site->seo_title ?? '', 180) ?: $this->plainText($tenant->name, 100).' | Find your next stay').($page > 1 ? ' | Page '.$page : ''),
             'pageDescription' => $this->plainText($site->seo_description ?? '', 320) ?: $this->plainText($site->tagline ?: 'Discover comfortable stays, explore availability and enquire directly with '.$tenant->name.'.', 160),
             'canonicalUrl' => $canonicalUrl, 'robotsContent' => $filtered ? 'noindex, follow' : 'index, follow, max-image-preview:large',
-            'socialImage' => $this->socialImage($hero['photos'][0] ?? null),
+            'homePhoto' => $homePhoto = $this->homePhoto($tenant, $site, $hero),
+            'socialImage' => $homePhoto ? ['url' => $homePhoto['social'], 'caption' => $this->plainText($homePhoto['caption'], 180)] : null,
             'structuredData' => $filtered || $page > 1 ? null : $this->businessData($tenant, $site, $canonicalUrl, $hero, $stays->getCollection()),
         ]);
     }
@@ -458,6 +459,33 @@ class PublicStayController extends Controller
 
         return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/webp', 'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'public, max-age=31536000, immutable']);
+    }
+
+    /** Homepage photo chosen in Website settings. "?w=480" or "?w=1200" returns the smaller WebP copy. */
+    public function heroPhoto(Request $request, string $company, PublicListingCatalog $catalog): BinaryFileResponse
+    {
+        $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
+        $path = $catalog->settings($tenant)?->hero_photo_path ?? null;
+        abort_unless($path && str_starts_with($path, 'public-sites/'.$tenant->id.'/') && Storage::disk('local')->exists($path), 404);
+
+        return $this->blogPhoto($request, $path, 'public, max-age=31536000, immutable');
+    }
+
+    /**
+     * The photo at the top of the homepage: the one chosen in Website settings, otherwise the cover of the first stay.
+     *
+     * @return array{url: string, caption: string, srcset: string, social: string}|null
+     */
+    private function homePhoto(Tenant $tenant, object $site, ?array $hero): ?array
+    {
+        if (! empty($site->hero_photo_path)) {
+            $url = route('public-stays.hero-photo', $tenant->slug).'?v='.strtotime((string) $site->hero_photo_updated_at);
+
+            return ['url' => PublicBlog::sized($url, 1200), 'caption' => $tenant->name, 'srcset' => PublicBlog::srcset($url), 'social' => $url];
+        }
+        $photo = $hero['photos'][0] ?? null;
+
+        return $photo ? ['url' => $photo['url'].'?w=1200', 'caption' => $photo['caption'], 'srcset' => ListingPhotoVariants::srcset($photo['url']), 'social' => $photo['url']] : null;
     }
 
     /** Website icon for browser tabs and phone home screens. File names change on every upload, so it caches for a year. */

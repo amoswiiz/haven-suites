@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\ListingPhotoVariants;
 use App\Services\PublicWebsiteLinks;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -319,6 +320,25 @@ class PublicWebsiteSettingsTest extends TestCase
         $this->assertNull($this->site()->favicon_path);
         Storage::disk('local')->assertMissing($replaced);
         $this->get(route('public-stays.favicon', $this->company->slug))->assertNotFound();
+    }
+
+    public function test_homepage_photo_is_saved_with_smaller_copies_and_can_be_removed(): void
+    {
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Homepage photo');
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['hero_photo' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf')]))
+            ->assertSessionHasErrors('hero_photo');
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['hero_photo' => UploadedFile::fake()->image('sea-view.jpg', 2400, 1200)]))
+            ->assertSessionHasNoErrors();
+        $path = $this->site()->hero_photo_path;
+        $this->assertMatchesRegularExpression('#^public-sites/'.$this->company->id.'/hero-[A-Za-z0-9]{16}\.jpg$#', $path);
+        Storage::disk('local')->assertExists([$path, ListingPhotoVariants::key($path, 480), ListingPhotoVariants::key($path, 1200)]);
+        $this->get(route('public-stays.hero-photo', $this->company->slug).'?w=480')->assertOk()->assertHeader('Content-Type', 'image/webp');
+        $this->get(route('public-stays.hero-photo', $this->company->slug))->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 1, 'remove_hero_photo' => 1]))->assertSessionHasNoErrors();
+        $this->assertNull($this->site()->hero_photo_path);
+        Storage::disk('local')->assertMissing([$path, ListingPhotoVariants::key($path, 480)]);
+        $this->get(route('public-stays.hero-photo', $this->company->slug))->assertNotFound();
     }
 
     public function test_footer_offices_and_social_links_are_validated_and_saved(): void

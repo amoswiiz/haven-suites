@@ -7,6 +7,7 @@ use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicAboutPage;
 use App\Services\PublicGuestInfo;
+use App\Services\PublicImageEncoder;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicWebsiteLinks;
 use App\Services\YouTubeListingVideos;
@@ -133,6 +134,7 @@ class PublicListingController extends Controller
             'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(array_keys(PublicWebsiteLinks::TARGETS))],
             'logo' => 'nullable|file|mimes:webp,png|max:2048', 'remove_logo' => 'sometimes|boolean',
             'favicon' => 'nullable|file|mimes:png,webp,jpg,jpeg|max:1024', 'remove_favicon' => 'sometimes|boolean',
+            'hero_photo' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:8192', 'remove_hero_photo' => 'sometimes|boolean',
             'about_intro' => 'nullable|string|max:5000', 'about_how' => 'nullable|string|max:3000',
             'about_main_locations' => 'nullable|string|max:255', 'about_other_areas' => 'nullable|string|max:2000',
             'cancellation_policy' => 'nullable|string|max:3000', 'payment_policy' => 'nullable|string|max:3000', 'faq' => 'nullable|string|max:15000',
@@ -176,7 +178,19 @@ class PublicListingController extends Controller
             $data['favicon_path'] = null;
             $data['favicon_updated_at'] = now();
         }
-        unset($data['settings_page'], $data['logo'], $data['remove_logo'], $data['favicon'], $data['remove_favicon']);
+        $previousHero = DB::table('public_sites')->where('tenant_id', $tenant->id)->value('hero_photo_path');
+        $newHero = null;
+        if ($request->hasFile('hero_photo')) {
+            $newHero = 'public-sites/'.$tenant->id.'/hero-'.Str::random(16).'.jpg';
+            Storage::disk('local')->put($newHero, app(PublicImageEncoder::class)->jpeg($request->file('hero_photo'), 'hero_photo', 2000));
+            app(ListingPhotoVariants::class)->make($newHero);
+            $data['hero_photo_path'] = $newHero;
+            $data['hero_photo_updated_at'] = now();
+        } elseif ($request->boolean('remove_hero_photo')) {
+            $data['hero_photo_path'] = null;
+            $data['hero_photo_updated_at'] = now();
+        }
+        unset($data['settings_page'], $data['logo'], $data['remove_logo'], $data['favicon'], $data['remove_favicon'], $data['hero_photo'], $data['remove_hero_photo']);
         $data = $this->normalizePhones($data, ['whatsapp_number']);
         $data = $this->normalizePhones($data, ['contact_phone'], mobileOnly: false);
         try {
@@ -204,7 +218,15 @@ class PublicListingController extends Controller
             if ($newFavicon !== null) {
                 Storage::disk('local')->delete($newFavicon);
             }
+            if ($newHero !== null) {
+                Storage::disk('local')->delete($newHero);
+                app(ListingPhotoVariants::class)->delete($newHero);
+            }
             throw $exception;
+        }
+        if (array_key_exists('hero_photo_path', $data) && $previousHero && str_starts_with($previousHero, 'public-sites/'.$tenant->id.'/')) {
+            Storage::disk('local')->delete($previousHero);
+            app(ListingPhotoVariants::class)->delete($previousHero);
         }
         if ($previousLogo !== null && str_starts_with($previousLogo, 'public-sites/'.$tenant->id.'/')) {
             Storage::disk('local')->delete($previousLogo);

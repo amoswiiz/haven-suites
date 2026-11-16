@@ -357,3 +357,39 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-card:not(.is-v2) .stay-price strong{font-size:1.1rem}
 .stay-card:not(.is-v2) .stay-card-actions{margin-top:10px;gap:8px}
 .stay-card:not(.is-v2) .stay-card-actions .stay-button{min-height:40px;padding:7px 10px}
+/* Slimmer homepage band: search comes first */
+.stay-home-band.has-photo{min-height:190px;margin-bottom:14px}.stay-home-band.has-photo .stay-home-band-copy{padding:22px 26px}.stay-home-band.has-photo h1{font-size:clamp(1.5rem,3vw,2.1rem);margin:0 0 4px}
+@media(max-width:700px){.stay-home-band.has-photo{min-height:150px}.stay-home-band.has-photo .stay-home-band-copy{padding:16px}}
+/* Compact results head */
+.stay-section.is-compact-head .stay-results-head{align-items:center;margin:0 0 16px}.stay-section.is-compact-head .stay-results-head h2{font-size:1.25rem;margin:0 0 2px}.stay-section.is-compact-head .stay-results-head p{font-size:.82rem}
+.stay-section.is-compact-head .stay-results-head label{font-size:.75rem}
+/* Photo-first grid for the simpler cards: 4 across on wide screens, near-square photos, no card frame */
+.stay-grid.is-compact{grid-template-columns:repeat(4,minmax(0,1fr));gap:30px 20px}
+.stay-grid.is-compact .stay-card{border:0;box-shadow:none;background:transparent;border-radius:0}
+.stay-grid.is-compact .stay-card-image{aspect-ratio:1/0.95}
+.stay-grid.is-compact .stay-card-image img{width:100%;height:100%;object-fit:cover}
+@media(max-width:1180px){.stay-grid.is-compact{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.stay-grid.is-compact{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.stay-grid.is-compact{grid-template-columns:1fr}}
+/* Date range picker for the homepage search */
+.stay-date-trigger{border:0;background:transparent;padding:0;font:inherit;font-size:.92rem;font-weight:600;color:#1e293b;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stay-date-trigger.is-empty{color:#64748b;font-weight:400}
+.stay-pill{position:relative}
+.stay-calendar{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);z-index:30;width:min(720px,calc(100vw - 32px));padding:20px 22px;border-radius:24px;background:#fff;box-shadow:0 12px 40px rgba(15,23,42,.18);border:1px solid var(--line);text-align:left}
+.stay-calendar[hidden]{display:none}
+.stay-calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.stay-calendar-head strong{font-size:1rem}
+.stay-calendar-nav{display:flex;gap:6px}.stay-calendar-nav button,.stay-calendar-foot button{border:1px solid var(--line);background:#fff;border-radius:999px;min-width:36px;height:36px;cursor:pointer;font:inherit}
+.stay-calendar-nav button:disabled{opacity:.35;cursor:default}
+.stay-calendar-months{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.stay-calendar-month h4{text-align:center;margin:0 0 10px;font-size:.95rem}
+.stay-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0;text-align:center}
+.stay-calendar-grid abbr{font-size:.72rem;color:#64748b;text-decoration:none;padding-bottom:6px}
+.stay-calendar-grid button{aspect-ratio:1;border:0;background:transparent;border-radius:999px;font:inherit;font-size:.88rem;cursor:pointer;color:#1e293b}
+.stay-calendar-grid button:hover:not(:disabled){outline:1px solid #1e293b}
+.stay-calendar-grid button:disabled{color:#c3cad4;text-decoration:line-through;cursor:default}
+.stay-calendar-grid button.is-today{font-weight:800}
+.stay-calendar-grid button.is-between{background:#eef3fb;border-radius:0}
+.stay-calendar-grid button.is-start,.stay-calendar-grid button.is-end{background:#1f4ba8;color:#fff}
+.stay-calendar-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.stay-calendar-foot button{padding:0 16px}.stay-calendar-foot .is-primary{background:#1f4ba8;border-color:#1f4ba8;color:#fff}
+@media(max-width:700px){.stay-calendar-months{grid-template-columns:1fr}.stay-calendar-month+.stay-calendar-month{display:none}.stay-calendar{left:0;transform:none;width:100%;border-radius:18px;padding:16px}}

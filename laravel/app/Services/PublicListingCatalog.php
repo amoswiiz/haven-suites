@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 class PublicListingCatalog
 {
     /** Listing addresses that clash with other public pages under /stays/{company}/. */
-    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas', 'saved', 'list-your-property', 'owners'];
+    public const RESERVED_SLUGS = ['track', 'enquiries', 'sitemap', 'in', 'collections', 'search', 'contact', 'logo', 'about', 'faq', 'review', 'reviews', 'blog', 'areas', 'saved', 'list-your-property', 'owners', 'homepage-photo'];
 
     /** @var array<string, string> */
     public const PROPERTY_TYPES = ['apartment' => 'Apartment', 'studio' => 'Studio', 'villa' => 'Villa', 'townhouse' => 'Townhouse', 'maisonette' => 'Maisonette', 'penthouse' => 'Penthouse', 'cottage' => 'Cottage'];

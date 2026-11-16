@@ -18,9 +18,9 @@
     $moreAmenities = array_slice(\App\Services\PublicListingCatalog::AMENITIES, 8, null, true);
     $collectionUrl = fn (?string $key): string => request()->fullUrlWithQuery(['collection' => $key, 'page' => null]).'#find-stay';
 @endphp
-<div class="stay-home-band{{ !empty($hero['photos'][0]) ? ' has-photo' : '' }}">
-    @if(!empty($hero['photos'][0]))
-        <img class="stay-home-band-photo" src="{{ $hero['photos'][0]['url'] }}?w=1200" srcset="{{ \App\Services\ListingPhotoVariants::srcset($hero['photos'][0]['url']) }}" sizes="100vw" alt="" width="1200" height="500" fetchpriority="high" decoding="async">
+<div class="stay-home-band{{ !empty($homePhoto) ? ' has-photo' : '' }}">
+    @if(!empty($homePhoto))
+        <img class="stay-home-band-photo" src="{{ $homePhoto['url'] }}" srcset="{{ $homePhoto['srcset'] }}" sizes="100vw" alt="" width="1200" height="400" fetchpriority="high" decoding="async">
     @endif
     <div class="stay-home-band-copy">
         <h1>{{ $site->headline ?: 'Find a place that feels like yours.' }}</h1>
@@ -31,10 +31,10 @@
 <form class="stay-search stay-search-v2" id="stay-search-form" action="{{ route('public-stays.index', $tenant->slug) }}#find-stay" method="get" aria-label="Find accommodation">
     <input type="hidden" name="collection" value="{{ $filters['collection'] ?? '' }}">
     @if(in_array(request()->query('layout'), ['new', 'classic'], true))<input type="hidden" name="layout" value="{{ request()->query('layout') }}">@endif
-    <div class="stay-pill" role="group" aria-label="Where, when and who">
+    <div class="stay-pill" role="group" aria-label="Where, when and who" data-date-range>
         <label class="stay-pill-field"><span>Where</span><select name="city" id="stay-city"><option value="">Anywhere</option>@foreach($destinations as $destination)<option value="{{ $destination['city'] }}" @selected(($filters['city'] ?? '') === $destination['city'])>{{ $destination['city'] }} ({{ $destination['count'] }})</option>@endforeach</select></label>
-        <label class="stay-pill-field"><span>Check-in</span><input name="check_in" id="search-check-in" type="date" min="{{ $today }}" value="{{ $filters['check_in'] ?? '' }}"></label>
-        <label class="stay-pill-field"><span>Check-out</span><input name="check_out" id="search-check-out" type="date" min="{{ $today }}" value="{{ $filters['check_out'] ?? '' }}"></label>
+        <label class="stay-pill-field"><span>Check-in</span><input name="check_in" id="search-check-in" type="date" min="{{ $today }}" value="{{ $filters['check_in'] ?? '' }}" data-range="start"></label>
+        <label class="stay-pill-field"><span>Check-out</span><input name="check_out" id="search-check-out" type="date" min="{{ $today }}" value="{{ $filters['check_out'] ?? '' }}" data-range="end"></label>
         <label class="stay-pill-field"><span>Guests</span><input name="guests" id="stay-guests" type="number" min="1" max="100" placeholder="Add guests" value="{{ $filters['guests'] ?? '' }}"></label>
         <button class="stay-pill-submit" type="submit"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search</span></button>
     </div>
@@ -44,6 +44,7 @@
             <a class="stay-category{{ empty($filters['collection']) ? ' is-active' : '' }}" href="{{ $collectionUrl(null) }}" @if(empty($filters['collection'])) aria-current="true" @endif><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>All stays</span></a>
             @foreach($collectionCounts as $collectionKey => $collection)
                 @php($isActiveCollection = ($filters['collection'] ?? null) === $collectionKey)
+                @continue($collection['count'] < 2 && !$isActiveCollection)
                 <a class="stay-category{{ $isActiveCollection ? ' is-active' : '' }}" href="{{ $collectionUrl($isActiveCollection ? null : $collectionKey) }}" @if($isActiveCollection) aria-current="true" @endif><svg viewBox="0 0 24 24" aria-hidden="true">{!! $collectionIcons[$collectionKey] ?? $collectionIcons['guest_favourite'] !!}</svg><span>{{ $collection['label'] }} <small>{{ $collection['count'] }}</small></span></a>
             @endforeach
         </nav>
@@ -90,3 +91,4 @@
         <div class="stay-active-filters" aria-label="Active filters"><span>Showing:</span>@foreach($activeFilters as $activeFilter)<a class="stay-chip is-active" href="{{ $activeFilter['url'] }}">{{ $activeFilter['label'] }} <span aria-hidden="true">&times;</span><span class="stay-visually-hidden">Remove filter</span></a>@endforeach</div>
     @endif
 </form>
+<script src="{{ \App\Support\AssetVersion::url('assets/js/date-range.js') }}" defer></script>

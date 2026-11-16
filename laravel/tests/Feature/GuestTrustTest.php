@@ -550,6 +550,24 @@ class GuestTrustTest extends TestCase
             'response_hours' => 2, 'google_rating' => '6'])->assertSessionHasErrors('google_rating');
     }
 
+    public function test_new_homepage_is_photo_first_with_a_date_picker_and_chosen_photo(): void
+    {
+        DB::table('public_listings')->where('id', $this->listingId)->update(['collections' => json_encode(['sea_view'])]);
+        $html = $this->get('/stays/trust-stays?layout=new')->assertOk()
+            ->assertSee('data-date-range', false)->assertSee('data-range="start"', false)->assertSee('data-range="end"', false)
+            ->assertSee('assets/js/date-range.js', false)
+            ->assertSee('class="stay-grid is-compact"', false)
+            ->assertSee('<h2 id="stays-heading">1 stay</h2>', false)
+            ->assertDontSee('Sea view <small>1</small>', false)
+            ->assertDontSee('class="stay-code"', false)
+            ->getContent();
+        $this->assertStringContainsString('/sea-view/photos/', explode('</h1>', $html)[0], 'Without a chosen photo, the first stay\'s cover is used.');
+
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['hero_photo_path' => 'public-sites/'.$this->company->id.'/hero-'.str_repeat('a', 16).'.jpg', 'hero_photo_updated_at' => now()]);
+        $html = $this->get('/stays/trust-stays?layout=new')->assertOk()->getContent();
+        $this->assertStringContainsString('/stays/trust-stays/homepage-photo?v=', explode('</h1>', $html)[0]);
+    }
+
     public function test_warm_command_prepares_the_stays_list_ahead_of_visitors(): void
     {
         config(['haven.public_catalogue_cache_seconds' => 60]);
