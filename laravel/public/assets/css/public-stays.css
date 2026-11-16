@@ -462,3 +462,9 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
   .stay-post-aside{margin:0;align-content:start}
   .stay-aside-contents{display:block;position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
 }
+
+/* Every blog cover uses the same frame: tall photos are cropped to fit, never stretch the card. */
+.stay-blog-image{flex:0 0 auto;overflow:hidden;min-height:0;text-decoration:none}
+.stay-blog-image img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+.stay-blog-image span{text-decoration:none}
+.stay-post-cover img{width:100%;object-fit:cover}
