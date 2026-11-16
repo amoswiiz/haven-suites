@@ -414,3 +414,11 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-card:not(.is-v2) .stay-card-actions{margin-top:8px;gap:6px}
 .stay-card:not(.is-v2) .stay-card-actions .stay-button{min-height:36px;padding:6px 8px;font-size:.74rem}
 .stay-home-band.has-photo,.stay-home-band.has-photo .stay-home-band-copy{text-align:left}.stay-home-band.has-photo p{margin:0;max-width:640px}.stay-home-band.has-photo .stay-google-rating{margin-left:0}
+/* Buttons: lighter tint of the logo orange (#E28D57); the exact logo orange on hover */
+.stay-button:not(.secondary){background:#e8a479;border-color:#e8a479}
+.stay-button:not(.secondary):hover{background:var(--accent);border-color:var(--accent)}
+/* Equal-height cards: price, divider and buttons sit at the bottom of every card in a row */
+.stay-grid:not(.is-compact) .stay-card{display:flex;flex-direction:column}
+.stay-card:not(.is-v2) .stay-card-body{flex:1;display:flex;flex-direction:column}
+.stay-card:not(.is-v2) .stay-facts{border-bottom:0;padding-bottom:0;margin-bottom:10px}
+.stay-card:not(.is-v2) .stay-card-bottom{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
