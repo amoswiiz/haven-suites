@@ -413,3 +413,4 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-card:not(.is-v2) .stay-card-bottom a{font-size:.72rem}
 .stay-card:not(.is-v2) .stay-card-actions{margin-top:8px;gap:6px}
 .stay-card:not(.is-v2) .stay-card-actions .stay-button{min-height:36px;padding:6px 8px;font-size:.74rem}
+.stay-home-band.has-photo,.stay-home-band.has-photo .stay-home-band-copy{text-align:left}.stay-home-band.has-photo p{margin:0;max-width:640px}.stay-home-band.has-photo .stay-google-rating{margin-left:0}
