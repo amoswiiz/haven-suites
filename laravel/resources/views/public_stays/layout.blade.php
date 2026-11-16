@@ -43,7 +43,11 @@
         <meta name="twitter:image:alt" content="{{ $socialImage['caption'] ?? $pageTitle }}">
     @endif
     <meta name="theme-color" content="#1f4ba8">
-    @if($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
+    @if(!empty($site?->favicon_path))
+        @php $faviconUrl = route('public-stays.favicon', $tenant->slug).'?v='.strtotime((string) $site->favicon_updated_at); @endphp
+        <link rel="icon" type="image/png" sizes="192x192" href="{{ $faviconUrl }}">
+        <link rel="apple-touch-icon" href="{{ $faviconUrl }}">
+    @elseif($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
     <link rel="stylesheet" href="{{ \App\Support\AssetVersion::url('assets/css/public-stays.css') }}">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
 </head>

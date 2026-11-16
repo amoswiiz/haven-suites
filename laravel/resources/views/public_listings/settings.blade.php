@@ -20,6 +20,10 @@
     <section class="card" aria-labelledby="site-logo-heading"><h2 id="site-logo-heading">Logo</h2><p class="muted">Shown in the website header and as the browser tab icon. Use a version that is easy to read on a white background. WebP or PNG, up to 2 MB; transparent backgrounds are kept.</p>
         @if(!empty($site?->logo_path))<p><img src="{{ route('public-stays.logo', $tenantSlug) }}?v={{ strtotime((string) $site->logo_updated_at) }}" alt="Current logo" style="max-height:64px;width:auto;background:#fff;border:1px solid #e2e7e9;border-radius:8px;padding:8px"></p><label><input type="checkbox" name="remove_logo" value="1" style="width:auto"> Remove the logo and show the company name instead</label>@endif
         <div><label for="logo">{{ !empty($site?->logo_path) ? 'Replace logo' : 'Upload logo' }}</label><input id="logo" name="logo" type="file" accept="image/webp,image/png"></div>
+        <h3 style="margin-top:20px">Favicon (browser tab icon)</h3>
+        <p class="muted">The small square icon in browser tabs, bookmarks and phone home screens. Upload a square image, ideally 512 × 512 pixels: your logo mark or initials on a solid colour reads best at small sizes. PNG, WebP or JPG up to 1 MB. Without one, the logo is used.</p>
+        @if(!empty($site?->favicon_path))<p><img src="{{ route('public-stays.favicon', $tenantSlug) }}?v={{ strtotime((string) $site->favicon_updated_at) }}" alt="Current favicon" width="48" height="48" style="border:1px solid #e2e7e9;border-radius:8px;background:#fff"></p><label><input type="checkbox" name="remove_favicon" value="1" style="width:auto"> Remove the favicon</label>@endif
+        <div><label for="favicon">{{ !empty($site?->favicon_path) ? 'Replace favicon' : 'Upload favicon' }}</label><input id="favicon" name="favicon" type="file" accept="image/png,image/webp,image/jpeg"></div>
     </section>
     @php($savedSocial = json_decode((string) ($site->social_links ?? ''), true) ?: [])
     <section class="card" aria-labelledby="site-footer-heading"><h2 id="site-footer-heading">Footer: offices and social media</h2>

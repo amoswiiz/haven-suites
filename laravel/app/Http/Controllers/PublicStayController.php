@@ -460,6 +460,17 @@ class PublicStayController extends Controller
             'Cache-Control' => 'public, max-age=31536000, immutable']);
     }
 
+    /** Website icon for browser tabs and phone home screens. File names change on every upload, so it caches for a year. */
+    public function favicon(string $company, PublicListingCatalog $catalog): BinaryFileResponse
+    {
+        $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
+        $path = $catalog->settings($tenant)?->favicon_path ?? null;
+        abort_unless($path && str_starts_with($path, 'public-sites/'.$tenant->id.'/') && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/png', 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'public, max-age=31536000, immutable']);
+    }
+
     public function sitemap(string $company, PublicListingCatalog $catalog): Response
     {
         [$tenant] = $this->company($company, $catalog);

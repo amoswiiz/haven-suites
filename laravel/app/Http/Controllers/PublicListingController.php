@@ -132,6 +132,7 @@ class PublicListingController extends Controller
             'navigation_links' => 'sometimes|array|max:8', 'navigation_links.*' => 'required|array:label,target',
             'navigation_links.*.label' => 'nullable|string|max:60', 'navigation_links.*.target' => ['nullable', Rule::in(array_keys(PublicWebsiteLinks::TARGETS))],
             'logo' => 'nullable|file|mimes:webp,png|max:2048', 'remove_logo' => 'sometimes|boolean',
+            'favicon' => 'nullable|file|mimes:png,webp,jpg,jpeg|max:1024', 'remove_favicon' => 'sometimes|boolean',
             'about_intro' => 'nullable|string|max:5000', 'about_how' => 'nullable|string|max:3000',
             'about_main_locations' => 'nullable|string|max:255', 'about_other_areas' => 'nullable|string|max:2000',
             'cancellation_policy' => 'nullable|string|max:3000', 'payment_policy' => 'nullable|string|max:3000', 'faq' => 'nullable|string|max:15000',
@@ -164,7 +165,18 @@ class PublicListingController extends Controller
             $data['logo_path'] = null;
             $data['logo_updated_at'] = now();
         }
-        unset($data['settings_page'], $data['logo'], $data['remove_logo']);
+        $previousFavicon = DB::table('public_sites')->where('tenant_id', $tenant->id)->value('favicon_path');
+        $newFavicon = null;
+        if ($request->hasFile('favicon')) {
+            $newFavicon = 'public-sites/'.$tenant->id.'/favicon-'.Str::random(16).'.png';
+            Storage::disk('local')->put($newFavicon, $this->encodeFavicon($request->file('favicon')));
+            $data['favicon_path'] = $newFavicon;
+            $data['favicon_updated_at'] = now();
+        } elseif ($request->boolean('remove_favicon')) {
+            $data['favicon_path'] = null;
+            $data['favicon_updated_at'] = now();
+        }
+        unset($data['settings_page'], $data['logo'], $data['remove_logo'], $data['favicon'], $data['remove_favicon']);
         $data = $this->normalizePhones($data, ['whatsapp_number']);
         $data = $this->normalizePhones($data, ['contact_phone'], mobileOnly: false);
         try {
@@ -189,10 +201,16 @@ class PublicListingController extends Controller
             if ($newLogo !== null) {
                 Storage::disk('local')->delete($newLogo);
             }
+            if ($newFavicon !== null) {
+                Storage::disk('local')->delete($newFavicon);
+            }
             throw $exception;
         }
         if ($previousLogo !== null && str_starts_with($previousLogo, 'public-sites/'.$tenant->id.'/')) {
             Storage::disk('local')->delete($previousLogo);
+        }
+        if (array_key_exists('favicon_path', $data) && $previousFavicon && str_starts_with($previousFavicon, 'public-sites/'.$tenant->id.'/')) {
+            Storage::disk('local')->delete($previousFavicon);
         }
 
         return $this->saved($request, route($request->boolean('settings_page') ? 'public-listings.settings' : 'public-listings.index', $tenant->slug), 'Public site settings saved.');
@@ -522,6 +540,45 @@ class PublicListingController extends Controller
     }
 
     /** Re-encode an uploaded logo as WebP, keeping transparency and fitting it within 800 × 400 pixels. */
+    /** Square 192px PNG with transparency kept: the image is fitted inside the square without cropping. */
+    private function encodeFavicon(UploadedFile $file): string
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagepng')) {
+            throw ValidationException::withMessages(['favicon' => 'Image processing is unavailable. Ask an administrator to enable the PHP GD extension.']);
+        }
+        $dimensions = @getimagesize($file->getPathname());
+        if (! $dimensions || $dimensions[0] < 32 || $dimensions[1] < 32 || $dimensions[0] > 2000 || $dimensions[1] > 2000) {
+            throw ValidationException::withMessages(['favicon' => 'Use a square image between 32 and 2,000 pixels per side, ideally 512 × 512.']);
+        }
+        $image = @imagecreatefromstring((string) file_get_contents($file->getPathname()));
+        if (! $image) {
+            throw ValidationException::withMessages(['favicon' => 'The icon could not be read. Upload a PNG, WebP or JPG image.']);
+        }
+        try {
+            $size = 192;
+            $ratio = min($size / imagesx($image), $size / imagesy($image));
+            $width = max(1, (int) round(imagesx($image) * $ratio));
+            $height = max(1, (int) round(imagesy($image) * $ratio));
+            $canvas = imagecreatetruecolor($size, $size);
+            imagealphablending($canvas, false);
+            imagesavealpha($canvas, true);
+            imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 0, 0, 0, 127));
+            imagealphablending($canvas, true);
+            imagecopyresampled($canvas, $image, (int) (($size - $width) / 2), (int) (($size - $height) / 2), 0, 0, $width, $height, imagesx($image), imagesy($image));
+            ob_start();
+            $written = imagepng($canvas, null, 9);
+            $encoded = (string) ob_get_clean();
+            imagedestroy($canvas);
+            if (! $written || $encoded === '') {
+                throw ValidationException::withMessages(['favicon' => 'The icon could not be processed. Try another image.']);
+            }
+
+            return $encoded;
+        } finally {
+            imagedestroy($image);
+        }
+    }
+
     private function encodeLogo(UploadedFile $file): string
     {
         if (! function_exists('imagecreatefromstring') || ! function_exists('imagewebp')) {

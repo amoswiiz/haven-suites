@@ -65,16 +65,16 @@
         </div>
     @else
         <div class="stay-card-body">
-            <p class="stay-location">{{ $stay['neighbourhood'] ? $stay['neighbourhood'].' · ' : '' }}{{ $stay['city'] }}</p>
+            <p class="stay-location"><span>{{ $stay['neighbourhood'] ? $stay['neighbourhood'].' · ' : '' }}{{ $stay['city'] }}</span>@if(!empty($stay['listing_code']))<span class="stay-location-code">Code {{ $stay['listing_code'] }}</span>@endif</p>
             <h3><a href="{{ $stayUrl }}">{{ $stay['title'] }}</a></h3>
             @if(!empty($stay['rating']['count']))<p class="stay-card-rating">@include('public_stays.stars', ['rating' => $stay['rating']['average']]) <strong>{{ number_format($stay['rating']['average'], 1) }}</strong> <span class="stay-card-count">({{ $stay['rating']['count'] }})</span></p>@endif
-            @if(!empty($tagLabels) || !empty($stay['listing_code']) || !empty($stay['weekly_discount']) || !empty($stay['monthly_discount']))<p class="stay-card-tags">@foreach(array_slice($tagLabels, 0, 2) as $collectionLabel)<span class="stay-tag">{{ $collectionLabel }}</span>@endforeach @if(!empty($stay['monthly_discount']) || !empty($stay['weekly_discount']))<span class="stay-tag is-offer">{{ max((int) ($stay['weekly_discount'] ?? 0), (int) ($stay['monthly_discount'] ?? 0)) }}% off long stays</span>@endif @if(!empty($stay['listing_code']))<span class="stay-code">Code {{ $stay['listing_code'] }}</span>@endif</p>@endif
+            @if(!empty($tagLabels) || !empty($stay['weekly_discount']) || !empty($stay['monthly_discount']))<p class="stay-card-tags">@foreach(array_slice($tagLabels, 0, 2) as $collectionLabel)<span class="stay-tag">{{ $collectionLabel }}</span>@endforeach @if(!empty($stay['monthly_discount']) || !empty($stay['weekly_discount']))<span class="stay-tag is-offer">{{ max((int) ($stay['weekly_discount'] ?? 0), (int) ($stay['monthly_discount'] ?? 0)) }}% off long stays</span>@endif</p>@endif
             @if(!empty($stay['availability']))
                 <span class="stay-pill {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
             @endif
             <div class="stay-facts"><span>{{ $bedroomLabel }}</span>@if($bedLabel)<span>{{ $bedLabel }}</span>@endif<span>{{ $bathroomLabel }}</span><span>Up to {{ $stay['max_guests'] }} guests</span></div>
             <div class="stay-card-bottom"><div class="stay-price">
-                @if($price > 0)<small>From</small><strong>{{ $money($price) }}</strong><small>per night</small>@else<strong>Price on request</strong>@endif
+                @if($price > 0)<small>From</small> <strong>{{ $money($price) }}</strong> <small>/ night</small>@else<strong>Price on request</strong>@endif
             </div><a href="{{ $stayUrl }}">View details &rarr;</a></div>
             <div class="stay-card-actions">
                 <a class="stay-button" href="{{ $quickLinks['enquiry_url'] ?? $stayUrl.'#enquire' }}" aria-label="Enquire about {{ $stay['title'] }}">Enquire</a>

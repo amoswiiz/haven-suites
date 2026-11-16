@@ -296,6 +296,31 @@ class PublicWebsiteSettingsTest extends TestCase
             ->assertSessionHasErrors('about_main_locations');
     }
 
+    public function test_favicon_is_resized_to_a_square_icon_and_used_in_page_heads(): void
+    {
+        $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Favicon (browser tab icon)');
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['favicon' => UploadedFile::fake()->create('icon.svg', 2, 'image/svg+xml')]))
+            ->assertSessionHasErrors('favicon');
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['favicon' => UploadedFile::fake()->image('tiny.png', 16, 16)]))
+            ->assertSessionHasErrors('favicon');
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['favicon' => UploadedFile::fake()->image('icon.png', 600, 300)]))
+            ->assertSessionHasNoErrors();
+        $path = $this->site()->favicon_path;
+        $this->assertMatchesRegularExpression('#^public-sites/'.$this->company->id.'/favicon-[A-Za-z0-9]{16}\.png$#', $path);
+        $this->assertSame([192, 192], array_slice(getimagesizefromstring(Storage::disk('local')->get($path)), 0, 2), 'Wide images are fitted into a square without cropping.');
+        $this->get(route('public-stays.favicon', $this->company->slug))->assertOk()->assertHeader('Content-Type', 'image/png');
+
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 1, 'favicon' => UploadedFile::fake()->image('new.png', 512, 512)]))
+            ->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($path);
+        $replaced = $this->site()->favicon_path;
+        $this->post(route('public-listings.site.update', $this->company->slug), $this->sitePayload(['version' => 2, 'remove_favicon' => 1]))->assertSessionHasNoErrors();
+        $this->assertNull($this->site()->favicon_path);
+        Storage::disk('local')->assertMissing($replaced);
+        $this->get(route('public-stays.favicon', $this->company->slug))->assertNotFound();
+    }
+
     public function test_footer_offices_and_social_links_are_validated_and_saved(): void
     {
         $this->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Footer: offices and social media')->assertSee('name="social_links[tiktok]"', false);
