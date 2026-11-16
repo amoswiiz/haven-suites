@@ -525,6 +525,38 @@ class GuestTrustTest extends TestCase
         $this->assertSame('owners', DB::table('public_posts')->where('slug', 'airbnb-taxes-in-kenya-for-investors')->value('audience'));
     }
 
+    public function test_article_sidebar_shows_matching_stays_or_a_short_owner_form(): void
+    {
+        $slug = $this->company->slug;
+        DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['whatsapp_number' => '+254702898694', 'contact_phone' => '+254702898694']);
+        $this->staff()->post(route('public-listings.blog.store', $slug), ['title' => 'A weekend in Nyali', 'body' => "## Beaches\n\nNyali has calm water and seafood by the ocean for families.\n\n## Where to eat\n\nFresh fish and coffee by the beach.\n\n## Getting around\n\nTuk-tuks and taxis are easy to find.",
+            'status' => 'published', 'published_at' => '2026-01-01 09:00'])->assertSessionHasNoErrors();
+        $this->post(route('public-listings.blog.store', $slug), ['title' => 'Business trips to Kisumu', 'body' => 'Meetings by the lake, quiet hotels and where to work from in the city centre.',
+            'status' => 'published', 'published_at' => '2026-01-02 09:00'])->assertSessionHasNoErrors();
+        $this->post(route('public-listings.blog.store', $slug), ['title' => 'Airbnb taxes in Kenya for investors', 'body' => 'VAT, withholding tax and county levies explained for property owners who host.',
+            'status' => 'published', 'published_at' => '2026-02-01 09:00'])->assertSessionHasNoErrors();
+        auth()->logout();
+
+        $guest = $this->get('/stays/'.$slug.'/blog/a-weekend-in-nyali')->assertOk()
+            ->assertSee('Stay in Nyali')->assertSee('Sea View Retreat')->assertSee('Questions about a stay?')->assertSee('tel:+254702898694', false)
+            ->assertSee('data-post-contents', false)->assertDontSee('Get your property assessed');
+        $this->assertStringContainsString('href="'.route('public-stays.show', [$slug, 'sea-view']).'"', $guest->getContent());
+        $this->get('/stays/'.$slug.'/blog/business-trips-to-kisumu')->assertOk()->assertSee('Stays you might like')->assertSee('Sea View Retreat');
+
+        $owner = $this->get('/stays/'.$slug.'/blog/airbnb-taxes-in-kenya-for-investors')->assertOk()->assertSee('Get your property assessed')->assertSee('Talk to our team')->assertDontSee('Stays you might like');
+        preg_match('/name="form_issued_at" value="(\d+)"/', $owner->getContent(), $issued);
+        preg_match('/name="form_token" value="([a-f0-9]{64})"/', $owner->getContent(), $token);
+        $this->travel(5)->seconds();
+        $this->post('/stays/'.$slug.'/list-your-property', ['full_name' => 'Otieno Achieng', 'phone' => '0722 000 111', 'location' => 'Kilimani, Nairobi', 'property_type' => 'apartment',
+            'consent' => 1, 'article' => 'airbnb-taxes-in-kenya-for-investors', 'form_issued_at' => $issued[1], 'form_token' => $token[1]])
+            ->assertRedirect('/stays/'.$slug.'/blog/airbnb-taxes-in-kenya-for-investors#owner-quick');
+        $lead = DB::table('sales_leads')->first();
+        $this->assertSame('Owner: Apartment, in Kilimani, Nairobi', $lead->unit_preference);
+        $this->assertStringContainsString('Currently: not given.', $lead->notes);
+        $this->assertStringContainsString('Sent from the guide: Airbnb taxes in Kenya for investors', $lead->notes);
+        $this->get('/stays/'.$slug.'/blog/airbnb-taxes-in-kenya-for-investors')->assertOk()->assertSee('We have your details');
+    }
+
     public function test_homepage_shows_business_data_google_rating_long_stays_and_mobile_whatsapp(): void
     {
         DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['google_rating' => 4.8, 'google_review_count' => 126, 'whatsapp_number' => '+254702898694',

@@ -29,12 +29,13 @@ class OwnerEnquiries
         return hash_hmac('sha256', 'owner-enquiry:'.$tenant->id.':'.$issuedAt, (string) config('app.key'));
     }
 
-    public function create(Tenant $tenant, Request $request): int
+    /** The short form beside an owner guide leaves out bedrooms and current use, and passes the guide's title. */
+    public function create(Tenant $tenant, Request $request, ?string $fromArticle = null): int
     {
         $data = $request->validate([
             'full_name' => 'required|string|min:2|max:150', 'phone' => 'required|string|max:50', 'email' => 'nullable|email|max:180',
             'location' => 'required|string|min:2|max:150', 'property_type' => ['required', Rule::in(array_keys(self::PROPERTY_TYPES))],
-            'bedrooms' => 'required|integer|min:0|max:20', 'current_use' => ['required', Rule::in(array_keys(self::CURRENT_USE))],
+            'bedrooms' => 'nullable|integer|min:0|max:20', 'current_use' => ['nullable', Rule::in(array_keys(self::CURRENT_USE))],
             'message' => 'nullable|string|max:2000', 'consent' => 'accepted', 'website' => 'nullable|string|max:0',
             'form_issued_at' => 'required|integer', 'form_token' => 'required|string|size:64',
         ], ['consent.accepted' => 'Tick the box so we can contact you about your property.', 'website.max' => 'Please submit the form again.']);
@@ -54,7 +55,7 @@ class OwnerEnquiries
         RateLimiter::hit($phoneKey, 86400);
         RateLimiter::hit($ipKey, 3600);
 
-        return DB::transaction(function () use ($tenant, $data, $phone): int {
+        return DB::transaction(function () use ($tenant, $data, $phone, $fromArticle): int {
             $site = DB::table('public_sites')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
             abort_unless($tenant->active && $site?->enabled && ($tenant->modules['sales'] ?? true), 404);
             $assignee = app(PublicListingCatalog::class)->assignees($tenant)->firstWhere('id', (int) ($site->enquiry_assignee_id ?? 0));
@@ -62,11 +63,16 @@ class OwnerEnquiries
                 throw ValidationException::withMessages(['owner_enquiry' => 'Online enquiries are temporarily unavailable. Please contact us on WhatsApp or by phone.']);
             }
             $deadline = now()->addHours(max(1, min(168, (int) ($site->response_hours ?? 24))));
-            $bedrooms = (int) $data['bedrooms'] === 0 ? 'studio' : $data['bedrooms'].' bedroom'.((int) $data['bedrooms'] === 1 ? '' : 's');
-            $property = self::PROPERTY_TYPES[$data['property_type']].', '.$bedrooms.', in '.trim($data['location']);
+            $bedrooms = match (true) {
+                ! isset($data['bedrooms']) => null,
+                (int) $data['bedrooms'] === 0 => 'studio',
+                default => $data['bedrooms'].' bedroom'.((int) $data['bedrooms'] === 1 ? '' : 's'),
+            };
+            $property = self::PROPERTY_TYPES[$data['property_type']].($bedrooms ? ', '.$bedrooms : '').', in '.trim($data['location']);
             $notes = 'Property owner enquiry from the website: wants '.$tenant->name.' to manage their property.'
                 ."\nProperty: ".$property.'.'
-                ."\nCurrently: ".self::CURRENT_USE[$data['current_use']].'.'
+                ."\nCurrently: ".(isset($data['current_use']) ? self::CURRENT_USE[$data['current_use']] : 'not given').'.'
+                .($fromArticle ? "\nSent from the guide: ".$fromArticle : '')
                 .(! empty($data['message']) ? "\nOwner's message: ".trim($data['message']) : '');
             $id = DB::table('sales_leads')->insertGetId([
                 'tenant_id' => $tenant->id, 'name' => trim($data['full_name']), 'phone' => $phone, 'phone_normalized' => ltrim($phone, '+'),

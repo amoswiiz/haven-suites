@@ -291,15 +291,20 @@ class PublicStayController extends Controller
         ]);
     }
 
-    public function ownerEnquiry(Request $request, string $company, PublicListingCatalog $catalog, OwnerEnquiries $enquiries): RedirectResponse
+    /** Owner enquiries come from the owners page or from the short form beside an owner guide, and return there. */
+    public function ownerEnquiry(Request $request, string $company, PublicListingCatalog $catalog, OwnerEnquiries $enquiries, PublicBlog $blog): RedirectResponse
     {
         [$tenant] = $this->company($company, $catalog);
+        $article = is_string($request->input('article')) && preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $request->input('article'))
+            ? $blog->find($tenant, $request->input('article')) : null;
+        $article = ($article?->audience ?? null) === 'owners' ? $article : null;
+        $back = $article ? route('public-stays.blog.show', [$tenant->slug, $article->slug]).'#owner-quick' : route('public-stays.owners', $tenant->slug).'#owner-enquiry';
         if (filled($request->input('website'))) {
-            return redirect()->to(route('public-stays.owners', $tenant->slug).'#owner-enquiry')->with('owner_enquiry_sent', true);
+            return redirect()->to($back)->with('owner_enquiry_sent', true);
         }
-        $enquiries->create($tenant, $request);
+        $enquiries->create($tenant, $request, $article?->title);
 
-        return redirect()->to(route('public-stays.owners', $tenant->slug).'#owner-enquiry')->with('owner_enquiry_sent', true);
+        return redirect()->to($back)->with('owner_enquiry_sent', true);
     }
 
     public function faq(string $company, PublicListingCatalog $catalog): Response
@@ -343,7 +348,7 @@ class PublicStayController extends Controller
         ]);
     }
 
-    public function post(string $company, string $slug, PublicListingCatalog $catalog, PublicBlog $blog): Response
+    public function post(string $company, string $slug, PublicListingCatalog $catalog, PublicBlog $blog, OwnerEnquiries $enquiries): Response
     {
         [$tenant, $site] = $this->company($company, $catalog);
         $post = $blog->find($tenant, $slug);
@@ -360,10 +365,16 @@ class PublicStayController extends Controller
         $publisher = array_filter(['@type' => 'Organization', 'name' => $tenant->name, 'url' => $homeUrl, 'sameAs' => array_values(PublicWebsiteLinks::socialLinks($site)) ?: null]);
         $published = CarbonImmutable::parse($post->published_at)->toAtomString();
         $modified = CarbonImmutable::parse($post->updated_at)->max(CarbonImmutable::parse($post->published_at))->toAtomString();
+        $related = $blog->related($tenant, $post);
+        $issuedAt = now()->timestamp;
+        $moreGuides = $blog->published($tenant, null, $forOwners ? 'owners' : 'guests')
+            ->reject(fn (object $other): bool => $other->slug === $post->slug || $related->contains('slug', $other->slug))->take(5)->values();
 
         return $this->page('public_stays.post', [
-            'tenant' => $tenant, 'site' => $site, 'post' => $post, 'html' => $html, 'contents' => $blog->contents($html), 'related' => $blog->related($tenant, $post),
-            'authorName' => $authorName,
+            'tenant' => $tenant, 'site' => $site, 'post' => $post, 'html' => $html, 'contents' => $blog->contents($html), 'related' => $related,
+            'authorName' => $authorName, 'moreGuides' => $moreGuides,
+            'articleStays' => $forOwners ? null : $this->articleStays($catalog->published($tenant), $post->title.' '.$post->body),
+            'ownerForm' => $forOwners ? ['issued_at' => $issuedAt, 'token' => $enquiries->formToken($tenant, $issuedAt), 'sent' => session('owner_enquiry_sent', false)] : null,
             'pageTitle' => $this->plainText($post->seo_title ?? '', 180) ?: $this->plainText($post->title, 180).' | '.$this->plainText($tenant->name, 100),
             'pageDescription' => $this->plainText($post->seo_description ?? '', 320) ?: $this->plainText($post->summary, 320),
             'canonicalUrl' => $canonicalUrl,
@@ -382,6 +393,32 @@ class PublicStayController extends Controller
                 ]],
             ]],
         ]);
+    }
+
+    /**
+     * Up to three stays for a guest article's sidebar: stays in the areas the article mentions first (an area
+     * counts more than a city), otherwise the first stays in the catalogue.
+     *
+     * @param  Collection<int, array<string, mixed>>  $listings
+     * @return array{matched: bool, areas: list<string>, stays: list<array<string, mixed>>}|null
+     */
+    private function articleStays(Collection $listings, string $text): ?array
+    {
+        if ($listings->isEmpty()) {
+            return null;
+        }
+        $text = mb_strtolower(strip_tags($text));
+        $mentions = fn (?string $place): bool => filled($place) && preg_match('/(?<![\pL\pN])'.preg_quote(mb_strtolower(trim($place)), '/').'(?![\pL\pN])/u', $text) === 1;
+        $matches = $listings->map(function (array $listing) use ($mentions): array {
+            $inArea = $mentions($listing['neighbourhood'] ?? null);
+            $inCity = $mentions($listing['city'] ?? null);
+
+            return ['listing' => $listing, 'place' => $inArea ? $listing['neighbourhood'] : $listing['city'], 'score' => ($inArea ? 2 : 0) + ($inCity ? 1 : 0)];
+        })->filter(fn (array $row): bool => $row['score'] > 0)->sortByDesc('score')->take(3)->values();
+
+        return $matches->isEmpty()
+            ? ['matched' => false, 'areas' => [], 'stays' => $listings->take(3)->values()->all()]
+            : ['matched' => true, 'areas' => $matches->pluck('place')->unique()->values()->all(), 'stays' => $matches->pluck('listing')->all()];
     }
 
     /** Blog cover photo. "?w=480" or "?w=1200" returns the smaller WebP copy when it exists. */

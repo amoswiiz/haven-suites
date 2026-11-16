@@ -425,3 +425,40 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 /* About page: why choose us and team */
 .stay-about-why{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:16px}.stay-about-why>div{padding:18px;border:1px solid var(--line);border-radius:14px;background:#fff}.stay-about-why p{color:var(--muted);margin-top:6px}
 .stay-about-team{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:22px;margin-top:18px}.stay-about-team article{text-align:center}.stay-about-team img,.stay-about-initial{width:132px;height:132px;border-radius:50%;object-fit:cover;margin:0 auto 12px;display:block}.stay-about-initial{display:grid;place-items:center;background:#eef3fb;color:#1f4ba8;font-size:2.4rem;font-weight:700}.stay-about-team h3{margin:0;font-size:1.05rem}.stay-about-role{color:#e28d57;font-weight:700;font-size:.85rem;margin:2px 0 8px}.stay-about-team p{color:var(--muted);font-size:.88rem}
+
+/* Article sidebar: stays or owner form, contact, more guides and contents that follow the reader (desktop). */
+.stay-post-aside{display:grid;gap:18px;margin:36px auto 0;max-width:760px}
+.stay-aside-card{border:1px solid var(--line);border-radius:14px;padding:18px;background:#fff}
+.stay-aside-card h2{font-family:var(--font);font-size:1rem;font-weight:750;margin:0 0 12px;color:var(--navy)}
+.stay-aside-card p{font-size:.88rem;color:var(--muted);margin:0 0 12px}
+.stay-aside-stays{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.stay-aside-stays a{display:flex;gap:12px;align-items:center;text-decoration:none;color:var(--ink)}
+.stay-aside-stays img{width:96px;height:72px;object-fit:cover;border-radius:9px;flex:0 0 auto}
+.stay-aside-stays span{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.stay-aside-stays strong{font-size:.88rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.stay-aside-stays small{font-size:.75rem;color:var(--muted);margin-top:2px}
+.stay-aside-stays em{font-style:normal;font-size:.78rem;font-weight:700;margin-top:3px}
+.stay-aside-stays a:hover strong{color:var(--navy);text-decoration:underline}
+.stay-aside-more{display:inline-block;margin-top:14px;font-size:.85rem;font-weight:700;color:var(--navy)}
+.stay-aside-owner{border-top:4px solid #e8a479;background:#fffaf6}
+.stay-aside-owner form{display:grid;gap:10px}.stay-aside-owner label{margin:0;font-size:.78rem}
+.stay-aside-owner .stay-owner-consent{font-weight:400;font-size:.75rem;color:var(--muted);display:flex;gap:8px;align-items:flex-start}
+.stay-aside-owner .stay-button{width:100%}
+.stay-aside-sent{color:#14532d!important;font-weight:600}.stay-aside-error{color:#9f1239!important;font-weight:600}
+.stay-aside-contact .stay-google-rating{margin:0 0 12px}
+.stay-aside-actions{display:grid;gap:8px}.stay-aside-actions .stay-button{width:100%;min-height:42px;font-size:.85rem}
+.stay-aside-guides{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.stay-aside-guides a{font-size:.86rem;line-height:1.4;color:var(--ink);text-decoration:none}.stay-aside-guides a:hover{color:var(--navy);text-decoration:underline}
+.stay-aside-contents{display:none}
+.stay-aside-contents ol{margin:0;padding:0 0 0 18px;display:grid;gap:7px;font-size:.84rem;line-height:1.4}
+.stay-aside-contents a{color:var(--muted);text-decoration:none}.stay-aside-contents a:hover{color:var(--navy)}
+.stay-aside-contents a.is-current{color:var(--navy);font-weight:700}
+@media(min-width:1024px){
+  .stay-post.has-aside .stay-post-head{max-width:1140px}.stay-post.has-aside .stay-post-head>*{max-width:760px}
+  .stay-post.has-aside .stay-post-cover{max-width:1140px}
+  .stay-post-layout{display:grid;grid-template-columns:minmax(0,760px) 320px;gap:60px;justify-content:center;align-items:stretch;max-width:1140px}
+  .stay-post-layout .stay-post-body,.stay-post-layout .stay-post-cta{margin-inline:0}
+  .stay-post-contents.is-inline{display:none}
+  .stay-post-aside{margin:0;align-content:start}
+  .stay-aside-contents{display:block;position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto}
+}
