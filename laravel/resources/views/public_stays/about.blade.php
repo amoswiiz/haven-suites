@@ -19,6 +19,23 @@
 </section>
 
 <div class="stay-container">
+    @if($about['why'] !== [])
+        <section class="stay-about-section" aria-labelledby="why-us">
+            <span class="stay-eyebrow">Why choose us</span>
+            <h2 id="why-us">Why guests and owners choose {{ $tenant->name }}</h2>
+            <div class="stay-about-why">@foreach($about['why'] as $reason)<div><strong>{{ $reason['title'] }}</strong>@if($reason['text'] !== '')<p>{{ $reason['text'] }}</p>@endif</div>@endforeach</div>
+        </section>
+    @endif
+    @if($team !== [])
+        <section class="stay-about-section" aria-labelledby="our-team">
+            <span class="stay-eyebrow">Meet our team</span>
+            <h2 id="our-team">The people behind your stay</h2>
+            <div class="stay-about-team">@foreach($team as $person)
+                <article>@if($person['photo_url'])<img src="{{ $person['photo_url'] }}" alt="{{ $person['name'] }}" width="160" height="160" loading="lazy" decoding="async">@else<span class="stay-about-initial" aria-hidden="true">{{ mb_substr($person['name'], 0, 1) }}</span>@endif
+                    <h3>{{ $person['name'] }}</h3>@if($person['role'] !== '')<p class="stay-about-role">{{ $person['role'] }}</p>@endif @if($person['bio'] !== '')<p>{{ $person['bio'] }}</p>@endif</article>
+            @endforeach</div>
+        </section>
+    @endif
     <section class="stay-about-section" aria-labelledby="how-we-work">
         <span class="stay-eyebrow">How we work</span>
         <h2 id="how-we-work">From first message to check-out</h2>

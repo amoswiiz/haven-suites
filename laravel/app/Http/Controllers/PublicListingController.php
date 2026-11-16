@@ -6,6 +6,7 @@ use App\Services\HomepageLayout;
 use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
 use App\Services\PublicAboutPage;
+use App\Services\PublicAboutTeam;
 use App\Services\PublicGuestInfo;
 use App\Services\PublicImageEncoder;
 use App\Services\PublicListingCatalog;
@@ -135,6 +136,11 @@ class PublicListingController extends Controller
             'logo' => 'nullable|file|mimes:webp,png|max:2048', 'remove_logo' => 'sometimes|boolean',
             'favicon' => 'nullable|file|mimes:png,webp,jpg,jpeg|max:1024', 'remove_favicon' => 'sometimes|boolean',
             'hero_photo' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:8192', 'remove_hero_photo' => 'sometimes|boolean',
+            'about_why' => 'nullable|string|max:3000',
+            'team' => 'sometimes|array|max:'.PublicAboutTeam::MAX_MEMBERS, 'team.*' => 'array:name,role,bio,remove,remove_photo',
+            'team.*.name' => 'nullable|string|max:80|not_regex:/[<>]/', 'team.*.role' => 'nullable|string|max:80|not_regex:/[<>]/',
+            'team.*.bio' => 'nullable|string|max:600|not_regex:/[<>]/', 'team.*.remove' => 'sometimes|boolean', 'team.*.remove_photo' => 'sometimes|boolean',
+            'team_photo' => 'sometimes|array', 'team_photo.*' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:5120',
             'about_intro' => 'nullable|string|max:5000', 'about_how' => 'nullable|string|max:3000',
             'about_main_locations' => 'nullable|string|max:255', 'about_other_areas' => 'nullable|string|max:2000',
             'cancellation_policy' => 'nullable|string|max:3000', 'payment_policy' => 'nullable|string|max:3000', 'faq' => 'nullable|string|max:15000',
@@ -190,7 +196,14 @@ class PublicListingController extends Controller
             $data['hero_photo_path'] = null;
             $data['hero_photo_updated_at'] = now();
         }
-        unset($data['settings_page'], $data['logo'], $data['remove_logo'], $data['favicon'], $data['remove_favicon'], $data['hero_photo'], $data['remove_hero_photo']);
+        $team = ['new_files' => [], 'unused_files' => []];
+        if (array_key_exists('team', $data)) {
+            $team = app(PublicAboutTeam::class)->fromForm($tenant, DB::table('public_sites')->where('tenant_id', $tenant->id)->first(),
+                $data['team'], $request->file('team_photo', []));
+            $data['about_team'] = $team['json'];
+        }
+        unset($data['settings_page'], $data['logo'], $data['remove_logo'], $data['favicon'], $data['remove_favicon'], $data['hero_photo'], $data['remove_hero_photo'],
+            $data['team'], $data['team_photo']);
         $data = $this->normalizePhones($data, ['whatsapp_number']);
         $data = $this->normalizePhones($data, ['contact_phone'], mobileOnly: false);
         try {
@@ -222,8 +235,10 @@ class PublicListingController extends Controller
                 Storage::disk('local')->delete($newHero);
                 app(ListingPhotoVariants::class)->delete($newHero);
             }
+            Storage::disk('local')->delete($team['new_files']);
             throw $exception;
         }
+        Storage::disk('local')->delete(array_values(array_filter($team['unused_files'], fn (string $path): bool => str_starts_with($path, 'public-sites/'.$tenant->id.'/team-'))));
         if (array_key_exists('hero_photo_path', $data) && $previousHero && str_starts_with($previousHero, 'public-sites/'.$tenant->id.'/')) {
             Storage::disk('local')->delete($previousHero);
             app(ListingPhotoVariants::class)->delete($previousHero);

@@ -61,6 +61,24 @@ class WebsiteBlogSource
     }
 
     /**
+     * One published page by its web address, or null when the website does not have it.
+     *
+     * @return array{slug: string, title: string, html: string, date: string, featured_media: int}|null
+     */
+    public function page(string $slug): ?array
+    {
+        $response = Http::acceptJson()->connectTimeout(10)->timeout(40)->withOptions(['allow_redirects' => false])->retry(2, 300)
+            ->get(self::ORIGIN.'/wp-json/wp/v2/pages', ['slug' => $slug, 'status' => 'publish', '_fields' => 'slug,date,title,content,featured_media']);
+        $row = $response->successful() ? ($response->json()[0] ?? null) : null;
+        if (! is_array($row) || ($row['slug'] ?? null) !== $slug) {
+            return null;
+        }
+
+        return ['slug' => $slug, 'title' => $this->text((string) ($row['title']['rendered'] ?? '')), 'html' => (string) ($row['content']['rendered'] ?? ''),
+            'date' => (string) ($row['date'] ?? ''), 'featured_media' => (int) ($row['featured_media'] ?? 0)];
+    }
+
+    /**
      * Full-size addresses of featured images, keyed by media ID.
      *
      * @param  list<int>  $ids

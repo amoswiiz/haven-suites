@@ -23,13 +23,13 @@ use Illuminate\Validation\ValidationException;
 class ImportWebsiteBlog extends Command
 {
     /** @var array<string, ?string> Image already stored for a website address, so a photo used twice is saved once. */
-    private array $storedImages = [];
+    protected array $storedImages = [];
 
     /** @var list<string> Files saved for the post being imported, removed again if that post fails. */
-    private array $newFiles = [];
+    protected array $newFiles = [];
 
     /** @var list<string> Website image addresses first stored while importing the current post. */
-    private array $newImageSources = [];
+    protected array $newImageSources = [];
 
     public function handle(WebsiteBlogSource $source, BlogHtmlToMarkdown $converter, PublicImageEncoder $encoder): int
     {
@@ -139,7 +139,7 @@ class ImportWebsiteBlog extends Command
         return $counts['failed'] > 0 ? self::FAILURE : self::SUCCESS;
     }
 
-    private function storeInlineImage(Tenant $tenant, string $src, WebsiteBlogSource $source, PublicImageEncoder $encoder): ?string
+    protected function storeInlineImage(Tenant $tenant, string $src, WebsiteBlogSource $source, PublicImageEncoder $encoder): ?string
     {
         if (array_key_exists($src, $this->storedImages)) {
             return $this->storedImages[$src];
@@ -152,7 +152,7 @@ class ImportWebsiteBlog extends Command
     }
 
     /** Download a website image, re-encode it as a JPEG without metadata and save it. Returns the storage path, or null. */
-    private function storeImage(string $url, string $path, int $maxSide, WebsiteBlogSource $source, PublicImageEncoder $encoder): ?string
+    protected function storeImage(string $url, string $path, int $maxSide, WebsiteBlogSource $source, PublicImageEncoder $encoder): ?string
     {
         $bytes = $source->image($url);
         if ($bytes === null) {
@@ -179,7 +179,7 @@ class ImportWebsiteBlog extends Command
     }
 
     /** WordPress gives the post date in the website's local time, which is Nairobi time. */
-    private function publishedAt(string $date): ?string
+    protected function publishedAt(string $date): ?string
     {
         try {
             return CarbonImmutable::parse($date, 'Africa/Nairobi')->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');

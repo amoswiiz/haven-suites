@@ -63,6 +63,21 @@
         <label for="about_how">How we work</label><textarea id="about_how" name="about_how" rows="6" maxlength="3000" placeholder="{{ $aboutDefaults->defaultHow() }}">{{ old('about_how', $site->about_how ?? '') }}</textarea><small class="muted">One step per line, written as "Step title: short explanation".</small>
         <div class="grid"><div><label for="about_main_locations">Main locations</label><input id="about_main_locations" name="about_main_locations" maxlength="255" placeholder="{{ \App\Services\PublicAboutPage::DEFAULT_MAIN_LOCATIONS }}" value="{{ old('about_main_locations', $site->about_main_locations ?? '') }}"><small class="muted">Separate with commas, e.g. Nairobi, Mombasa.</small></div></div>
         <label for="about_other_areas">Other areas we assist</label><textarea id="about_other_areas" name="about_other_areas" rows="3" maxlength="2000" placeholder="{{ $aboutDefaults->defaultOtherAreas() }}">{{ old('about_other_areas', $site->about_other_areas ?? '') }}</textarea>
+        <label for="about_why">Why choose us <small class="muted">optional</small></label><textarea id="about_why" name="about_why" rows="5" maxlength="3000" placeholder="Prime locations: Our apartments are in the heart of vibrant neighbourhoods…">{{ old('about_why', $site->about_why ?? '') }}</textarea><small class="muted">One reason per line, written as "Title: short explanation". Leave empty to hide this section.</small>
+        <h3 style="margin-top:20px">Meet our team <small class="muted">optional, up to {{ \App\Services\PublicAboutTeam::MAX_MEMBERS }} people</small></h3>
+        <p class="muted">Shown on the About page. A friendly photo and one or two sentences per person build trust. Leave a name empty to leave that row out.</p>
+        @php($teamMembers = \App\Services\PublicAboutTeam::saved($site))
+        @for($member = 0; $member < \App\Services\PublicAboutTeam::MAX_MEMBERS; $member++)
+            @php($saved = $teamMembers[$member] ?? ['name' => '', 'role' => '', 'bio' => '', 'photo' => null])
+            <fieldset class="card" style="margin:10px 0;padding:12px"><legend>Person {{ $member + 1 }}</legend>
+                <div class="grid"><div><label for="team-{{ $member }}-name">Name</label><input id="team-{{ $member }}-name" name="team[{{ $member }}][name]" maxlength="80" value="{{ old('team.'.$member.'.name', $saved['name']) }}"></div>
+                <div><label for="team-{{ $member }}-role">Role</label><input id="team-{{ $member }}-role" name="team[{{ $member }}][role]" maxlength="80" placeholder="Customer Success Manager" value="{{ old('team.'.$member.'.role', $saved['role']) }}"></div></div>
+                <label for="team-{{ $member }}-bio">Short introduction</label><textarea id="team-{{ $member }}-bio" name="team[{{ $member }}][bio]" rows="2" maxlength="600">{{ old('team.'.$member.'.bio', $saved['bio']) }}</textarea>
+                @if($saved['photo'])<p><img src="{{ route('public-stays.team-photo', [$tenantSlug, basename($saved['photo'])]) }}" alt="" width="56" height="56" style="border-radius:50%;object-fit:cover"> <label style="display:inline"><input type="checkbox" name="team[{{ $member }}][remove_photo]" value="1" style="width:auto"> Remove photo</label></p>@endif
+                <label for="team-{{ $member }}-photo">{{ $saved['photo'] ? 'Replace photo' : 'Photo' }} <small class="muted">square works best; JPG, PNG or WebP up to 5 MB</small></label><input id="team-{{ $member }}-photo" name="team_photo[{{ $member }}]" type="file" accept="image/jpeg,image/png,image/webp">
+                @if($saved['name'] !== '')<label><input type="checkbox" name="team[{{ $member }}][remove]" value="1" style="width:auto"> Remove {{ $saved['name'] }} from the page</label>@endif
+            </fieldset>
+        @endfor
     </section>
     <section class="card" aria-labelledby="site-host-heading"><h2 id="site-host-heading">Your team on the website</h2><p class="muted">Shown on every apartment page and the home page so guests know who they are dealing with. Leave a box empty to use the suggested wording.</p>
         <label for="host_intro">Team introduction</label><textarea id="host_intro" name="host_intro" rows="3" maxlength="1500" placeholder="{{ $guestInfo->defaultHostIntro(app('currentTenant')) }}">{{ old('host_intro', $site->host_intro ?? '') }}</textarea>

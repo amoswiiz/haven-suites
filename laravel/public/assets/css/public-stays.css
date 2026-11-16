@@ -422,3 +422,6 @@ nav.stay-breadcrumb span[aria-current]{color:var(--muted)}
 .stay-card:not(.is-v2) .stay-card-body{flex:1;display:flex;flex-direction:column}
 .stay-card:not(.is-v2) .stay-facts{border-bottom:0;padding-bottom:0;margin-bottom:10px}
 .stay-card:not(.is-v2) .stay-card-bottom{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+/* About page: why choose us and team */
+.stay-about-why{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:16px}.stay-about-why>div{padding:18px;border:1px solid var(--line);border-radius:14px;background:#fff}.stay-about-why p{color:var(--muted);margin-top:6px}
+.stay-about-team{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:22px;margin-top:18px}.stay-about-team article{text-align:center}.stay-about-team img,.stay-about-initial{width:132px;height:132px;border-radius:50%;object-fit:cover;margin:0 auto 12px;display:block}.stay-about-initial{display:grid;place-items:center;background:#eef3fb;color:#1f4ba8;font-size:2.4rem;font-weight:700}.stay-about-team h3{margin:0;font-size:1.05rem}.stay-about-role{color:#e28d57;font-weight:700;font-size:.85rem;margin:2px 0 8px}.stay-about-team p{color:var(--muted);font-size:.88rem}

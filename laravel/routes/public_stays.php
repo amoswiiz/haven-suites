@@ -14,6 +14,7 @@ Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'
     Route::get('logo', [PublicStayController::class, 'logo'])->name('logo');
     Route::get('favicon.png', [PublicStayController::class, 'favicon'])->name('favicon');
     Route::get('homepage-photo', [PublicStayController::class, 'heroPhoto'])->name('hero-photo');
+    Route::get('team/{name}', [PublicStayController::class, 'teamPhoto'])->where('name', 'team-[A-Za-z0-9]{16}\.jpg')->name('team-photo');
     Route::get('about', [PublicStayController::class, 'about'])->name('about');
     Route::get('faq', [PublicStayController::class, 'faq'])->name('faq');
     Route::get('saved', [PublicStayController::class, 'saved'])->name('saved');

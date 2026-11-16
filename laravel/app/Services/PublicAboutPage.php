@@ -35,7 +35,7 @@ class PublicAboutPage
 
     /**
      * @param  list<array{city: string, count: int, areas: list<array{name: string, count: int}>}>  $destinations
-     * @return array{intro: list<string>, steps: list<array{title: string, text: string}>, main_locations: list<array{name: string, count: int}>, other_areas: string, other_destinations: list<array{city: string, count: int}>}
+     * @return array{why: list<array{title: string, text: string}>, intro: list<string>, steps: list<array{title: string, text: string}>, main_locations: list<array{name: string, count: int}>, other_areas: string, other_destinations: list<array{city: string, count: int}>}
      */
     public function content(Tenant $tenant, ?object $site, array $destinations): array
     {
@@ -54,7 +54,16 @@ class PublicAboutPage
         $main = array_map(fn (string $name): array => ['name' => $name, 'count' => (int) ($byCity->get(mb_strtolower($name))['count'] ?? 0)], array_slice($mainNames, 0, 6));
         $mainKeys = array_map('mb_strtolower', $mainNames);
 
+        $why = [];
+        foreach (preg_split('/\R/u', $this->text($site->about_why ?? null)) ?: [] as $line) {
+            if (trim($line) !== '') {
+                [$title, $text] = str_contains($line, ':') ? array_map('trim', explode(':', $line, 2)) : [trim($line), ''];
+                $why[] = ['title' => $title, 'text' => $text];
+            }
+        }
+
         return [
+            'why' => array_slice($why, 0, 8),
             'intro' => array_values(array_filter(array_map('trim', preg_split('/\R{2,}/u', $intro) ?: []))),
             'steps' => array_slice($steps, 0, 8),
             'main_locations' => $main,

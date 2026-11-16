@@ -10,6 +10,7 @@ use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
 use App\Services\OwnerEnquiries;
 use App\Services\PublicAboutPage;
+use App\Services\PublicAboutTeam;
 use App\Services\PublicAreaGuides;
 use App\Services\PublicBlog;
 use App\Services\PublicEnquiries;
@@ -228,7 +229,7 @@ class PublicStayController extends Controller
         $areas = array_merge(array_column($content['main_locations'], 'name'), array_column($content['other_destinations'], 'city'));
 
         return $this->page('public_stays.about', [
-            'tenant' => $tenant, 'site' => $site, 'about' => $content, 'destinations' => $destinations,
+            'tenant' => $tenant, 'site' => $site, 'about' => $content, 'destinations' => $destinations, 'team' => app(PublicAboutTeam::class)->forPage($tenant, $site),
             'pageTitle' => 'About us | '.$this->plainText($tenant->name, 100),
             'pageDescription' => $this->plainText('Who we are, how we work and where we are: '.$tenant->name.' arranges serviced apartments and short stays in '
                 .implode(' and ', array_column($content['main_locations'], 'name')).', and helps guests find stays in other areas.', 320),
@@ -458,6 +459,17 @@ class PublicStayController extends Controller
         abort_unless($path && str_starts_with($path, 'public-sites/'.$tenant->id.'/') && Storage::disk('local')->exists($path), 404);
 
         return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/webp', 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'public, max-age=31536000, immutable']);
+    }
+
+    /** Team member photo on the About page. Only photos listed in the company's saved team are served. */
+    public function teamPhoto(string $company, string $name, PublicListingCatalog $catalog): BinaryFileResponse
+    {
+        $tenant = Tenant::where('slug', $company)->where('active', true)->firstOrFail();
+        $path = PublicAboutTeam::ownsPhoto($tenant, $catalog->settings($tenant), $name);
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'public, max-age=31536000, immutable']);
     }
 

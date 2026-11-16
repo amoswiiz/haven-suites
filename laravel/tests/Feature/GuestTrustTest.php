@@ -9,6 +9,7 @@ use App\Services\HomepageLayout;
 use App\Services\ListingAvailability;
 use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
+use App\Services\PublicAboutTeam;
 use App\Services\PublicEnquiries;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicReviews;
@@ -566,6 +567,32 @@ class GuestTrustTest extends TestCase
         DB::table('public_sites')->where('tenant_id', $this->company->id)->update(['hero_photo_path' => 'public-sites/'.$this->company->id.'/hero-'.str_repeat('a', 16).'.jpg', 'hero_photo_updated_at' => now()]);
         $html = $this->get('/stays/trust-stays?layout=new')->assertOk()->getContent();
         $this->assertStringContainsString('/stays/trust-stays/homepage-photo?v=', explode('</h1>', $html)[0]);
+    }
+
+    public function test_about_page_shows_why_choose_us_and_the_team_edited_in_settings(): void
+    {
+        $this->get('/stays/trust-stays/about')->assertOk()->assertDontSee('Why guests and owners choose')->assertDontSee('Meet our team');
+        $this->staff()->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Why choose us')->assertSee('Person 1');
+        Storage::fake('local');
+        $payload = ['version' => 1, 'enabled' => 1, 'enquiry_assignee_id' => $this->admin->id, 'response_hours' => 2, 'settings_page' => 1,
+            'about_why' => "Prime locations: Close to the beach and dining.\n24/7 support: Our team answers day and night.",
+            'team' => [['name' => 'Amos Mwaura', 'role' => 'Founder/CEO', 'bio' => 'Started Haven Suites to make short stays simple.'],
+                ['name' => 'Loise Wanjiru', 'role' => 'Customer Success Manager', 'bio' => ''], ['name' => '', 'role' => 'Ignored', 'bio' => '']],
+            'team_photo' => [UploadedFile::fake()->image('amos.jpg', 600, 600)]];
+        $this->post(route('public-listings.site.update', $this->company->slug), $payload)->assertSessionHasNoErrors();
+        $team = PublicAboutTeam::saved(DB::table('public_sites')->where('tenant_id', $this->company->id)->first());
+        $this->assertSame(['Amos Mwaura', 'Loise Wanjiru'], array_column($team, 'name'), 'Rows without a name are left out.');
+        Storage::disk('local')->assertExists($team[0]['photo']);
+
+        auth()->logout();
+        $this->get('/stays/trust-stays/about')->assertOk()->assertSee('Why guests and owners choose Haven Suites')->assertSee('Prime locations')
+            ->assertSee('Meet our team')->assertSee('Founder/CEO')->assertSee('/stays/trust-stays/team/'.basename($team[0]['photo']), false);
+
+        $this->staff()->post(route('public-listings.site.update', $this->company->slug), ['version' => 2, 'team' => [['name' => 'Amos Mwaura', 'remove_photo' => 1], ['name' => 'Loise Wanjiru', 'remove' => 1]]] + array_diff_key($payload, ['team_photo' => true]))
+            ->assertSessionHasNoErrors();
+        $team = PublicAboutTeam::saved(DB::table('public_sites')->where('tenant_id', $this->company->id)->first());
+        $this->assertSame([['name' => 'Amos Mwaura', 'role' => '', 'bio' => '', 'photo' => null]], $team);
+        $this->assertSame([], Storage::disk('local')->allFiles('public-sites'), 'Removed photos are deleted.');
     }
 
     public function test_warm_command_prepares_the_stays_list_ahead_of_visitors(): void
