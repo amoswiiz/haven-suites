@@ -12,7 +12,7 @@ class WebsiteListingSource
 {
     private const ORIGIN = 'https://havensuitesbnb.com';
 
-    private const FIELDS = 'id,slug,title.rendered,content.rendered,property_meta.fave_property_price,property_meta.fave_property_price_postfix,property_meta.fave_property_bedrooms,property_meta.fave_property_bathrooms,property_meta.fave_property_images,property_city,property_area,property_feature,property_status,property_label';
+    private const FIELDS = 'id,slug,title.rendered,content.rendered,property_meta.fave_property_price,property_meta.fave_property_price_postfix,property_meta.fave_property_bedrooms,property_meta.fave_property_bathrooms,property_meta.fave_property_images,property_meta.houzez_geolocation_lat,property_meta.houzez_geolocation_long,property_city,property_area,property_feature,property_status,property_label';
 
     /** @return list<array<string, mixed>> */
     public function fetch(): array
@@ -141,7 +141,19 @@ class WebsiteListingSource
             'website_bathrooms' => $this->value($meta['fave_property_bathrooms'] ?? [], 'bathrooms', $warnings),
             'photo_ids' => array_values(array_unique($photos)), 'amenities' => array_values(array_unique($amenities)),
             'legacy_url' => self::ORIGIN.'/property/'.$slug.'/', 'warnings' => array_values(array_unique($warnings)),
+            'labels' => $labels, 'daily' => $daily, 'for_sale' => preg_grep('/\bsale\b/i', $labels) !== [],
+            'latitude' => $this->coordinate($meta['houzez_geolocation_lat'] ?? [], 90),
+            'longitude' => $this->coordinate($meta['houzez_geolocation_long'] ?? [], 180),
         ];
+    }
+
+    /** A map coordinate within ±$limit, or null when missing, conflicting or out of range. */
+    private function coordinate(mixed $raw, int $limit): ?float
+    {
+        $ignored = [];
+        $value = $this->value($raw, 'coordinate', $ignored);
+
+        return preg_match('/^-?\d{1,3}(?:\.\d{1,12})?$/D', $value) && abs((float) $value) <= $limit && (float) $value !== 0.0 ? round((float) $value, 6) : null;
     }
 
     /** @param list<string> $warnings */
