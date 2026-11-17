@@ -3,11 +3,18 @@
 use App\Http\Controllers\PublicEnquiryController;
 use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicStayController;
+use App\Http\Middleware\PublicSiteCompany;
+use App\Http\Middleware\RedirectToPublicDomain;
+use App\Support\PublicSiteUrl;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/l/{code}', [PublicStayController::class, 'shortLink'])->where('code', '[0-9a-z]{1,8}')->middleware('throttle:60,1')->name('public-stays.short');
-
-Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'])->name('public-stays.')->group(function (): void {
+/*
+ * The public website. Each company's pages live under /stays/{company}. When PUBLIC_SITE_DOMAIN is set, the same
+ * pages are also served on that domain without the prefix (for one company), together with redirects from the old
+ * WordPress website's addresses, and the /stays/{company} addresses redirect there.
+ */
+$publicPages = function (bool $onDomain): void {
     Route::get('/', [PublicStayController::class, 'index'])->name('index');
     Route::get('sitemap.xml', [PublicStayController::class, 'sitemap'])->name('sitemap');
     Route::get('enquiries/{receipt}', [PublicEnquiryController::class, 'received'])->where('receipt', '[a-f0-9]{64}')->name('received');
@@ -33,5 +40,25 @@ Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'
     Route::get('{slug}/photos/{photo}', [PublicStayController::class, 'photo'])->whereNumber('photo')->name('photo');
     Route::get('{slug}/calendar', [PublicStayController::class, 'calendar'])->middleware('throttle:120,1')->name('calendar');
     Route::post('{listing}/enquire', [PublicEnquiryController::class, 'store'])->middleware('throttle:10,1')->name('enquire');
-    Route::get('{slug}', [PublicStayController::class, 'show'])->name('show');
-});
+    // On the main domain a single-segment address may also be an old WordPress page or article.
+    Route::get('{slug}', [PublicStayController::class, $onDomain ? 'domainPage' : 'show'])->name('show');
+};
+
+if ($publicDomain = PublicSiteUrl::domain()) {
+    Route::domain('www.'.$publicDomain)->group(function (): void {
+        Route::any('{path?}', fn (Request $request) => redirect()->to(PublicSiteUrl::root().$request->getRequestUri(), 301))->where('path', '.*');
+    });
+    Route::domain($publicDomain)->middleware(PublicSiteCompany::class)->name('site.')->group(function () use ($publicPages): void {
+        Route::get('property/{slug}', [PublicStayController::class, 'oldProperty'])->where('slug', '[A-Za-z0-9_-]+');
+        Route::get('city/{city}', [PublicStayController::class, 'oldCity'])->where('city', '[A-Za-z0-9_-]+');
+        Route::get('label/{label}', [PublicStayController::class, 'oldLabel'])->where('label', '[A-Za-z0-9_-]+');
+        Route::get('{section}/{rest}', [PublicStayController::class, 'oldSection'])
+            ->where(['section' => 'status|agency|agent|agents|category|tag|courses|course|property_city|property_area|author|page|feed', 'rest' => '.*']);
+        $publicPages(true);
+    });
+}
+
+Route::get('/l/{code}', [PublicStayController::class, 'shortLink'])->where('code', '[0-9a-z]{1,8}')->middleware('throttle:60,1')->name('public-stays.short');
+
+Route::prefix('stays/{company}')->where(['company' => '[a-z0-9]+(?:-[a-z0-9]+)*'])->middleware(RedirectToPublicDomain::class)->name('public-stays.')
+    ->group(fn () => $publicPages(false));

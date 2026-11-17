@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant;
+use App\Support\PublicSiteUrl;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
@@ -108,7 +109,7 @@ class PartnerAvailabilityRequests
             $published = DB::table('public_listings')->where('tenant_id', $tenant->id)->whereIn('partner_apartment_id', $partnerIds)
                 ->where('status', 'published')->pluck('slug', 'partner_apartment_id');
             foreach ($published as $id => $slug) {
-                $links[(int) $id] = rtrim(config('app.url'), '/').route('public-stays.show', ['company' => $tenant->slug, 'slug' => $slug], false);
+                $links[(int) $id] = PublicSiteUrl::canonical(route('public-stays.show', ['company' => $tenant->slug, 'slug' => $slug]));
             }
         }
 

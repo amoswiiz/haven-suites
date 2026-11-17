@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Tenant;
+use App\Support\PublicSiteUrl;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Support\Facades\DB;
@@ -110,7 +111,7 @@ class BlogSeoCheck
             'score' => $score, 'grade' => $score >= 80 ? 'good' : ($score >= 55 ? 'ok' : 'fix'), 'checks' => $checks,
             'stats' => ['words' => $words, 'reading_minutes' => max(1, (int) ceil($words / 200)), 'sections' => $sections, 'internal_links' => $internal,
                 'external_links' => count($content['external']), 'linked_from' => $linkedFrom, 'images' => $content['images']],
-            'snippet' => ['title' => Str::limit($searchTitle, 60, '…'), 'url' => preg_replace('#^https?://#', '', rtrim(config('app.url'), '/')).' › stays › blog › '.$slug,
+            'snippet' => ['title' => Str::limit($searchTitle, 60, '…'), 'url' => PublicSiteUrl::serves($tenant->slug) ? PublicSiteUrl::domain().' › blog › '.$slug : preg_replace('#^https?://#', '', rtrim(config('app.url'), '/')).' › stays › blog › '.$slug,
                 'description' => Str::limit($description, 160, '…')],
         ];
     }
@@ -120,7 +121,12 @@ class BlogSeoCheck
     {
         $links = [];
         foreach (DB::table('public_posts')->where('tenant_id', $tenant->id)->get(['title', 'body']) as $post) {
-            preg_match_all('#/stays/'.preg_quote($tenant->slug, '#').'/blog/([a-z0-9]+(?:-[a-z0-9]+)*)(?![a-z0-9/-])#', (string) $post->body, $matches);
+            // Links to the app address, and (once the website has its own domain) to that domain or a root-relative /blog/ link.
+            $prefix = '/stays/'.preg_quote($tenant->slug, '#').'/blog/';
+            if (PublicSiteUrl::serves($tenant->slug)) {
+                $prefix = '(?:'.$prefix.'|(?:https?://(?:www\.)?'.preg_quote((string) PublicSiteUrl::domain(), '#').'|\]\()/blog/)';
+            }
+            preg_match_all('#'.$prefix.'([a-z0-9]+(?:-[a-z0-9]+)*)(?![a-z0-9/-])#', (string) $post->body, $matches);
             foreach (array_unique($matches[1]) as $slug) {
                 $links[$slug][] = $post->title;
             }
@@ -163,6 +169,8 @@ class BlogSeoCheck
             $href = trim($anchor->getAttribute('href'));
             $host = strtolower((string) parse_url($href, PHP_URL_HOST));
             if ($host === '' && str_starts_with($href, '/')) {
+                $internal[] = $href;
+            } elseif (PublicSiteUrl::serves($tenant->slug) && in_array($host, [PublicSiteUrl::domain(), 'www.'.PublicSiteUrl::domain()], true)) {
                 $internal[] = $href;
             } elseif (in_array($host, WebsiteBlogSource::HOSTS, true)) {
                 $legacy[] = $href;

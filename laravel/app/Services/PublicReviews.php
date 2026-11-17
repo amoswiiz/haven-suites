@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\PublicSiteUrl;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -71,7 +72,7 @@ class PublicReviews
             'expires_at' => now()->addDays(self::LINK_DAYS), 'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        return ['id' => $id, 'url' => rtrim(config('app.url'), '/').route('public-stays.review', ['company' => $tenant->slug, 'token' => $token], false)];
+        return ['id' => $id, 'url' => PublicSiteUrl::canonical(route('public-stays.review', ['company' => $tenant->slug, 'token' => $token]))];
     }
 
     /**

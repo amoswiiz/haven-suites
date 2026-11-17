@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Support\PhoneNumber;
+use App\Support\PublicSiteUrl;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
@@ -287,7 +288,7 @@ class PublicWebsiteLinks
 
     private function canonicalUrl(string $routeName, array $parameters): string
     {
-        return rtrim(config('app.url'), '/').route($routeName, $parameters, false);
+        return PublicSiteUrl::canonical(route($routeName, $parameters));
     }
 
     private function whatsappUrl(string $number, string $template, string $title, string $url, string $reference): ?string

@@ -4,6 +4,12 @@ return [
     // Seconds the public website keeps its list of published stays before rebuilding it (0 turns caching off).
     'public_catalogue_cache_seconds' => (int) env('PUBLIC_CATALOGUE_CACHE_SECONDS', 60),
 
+    // Main website domain (for example havensuitesbnb.com). When set, this company's public pages are served there
+    // without "/stays/{company}", old app and old WordPress addresses redirect to it, and links use it. Empty keeps
+    // the website on the app address. Set it only once the domain's DNS points to this server.
+    'public_site_domain' => env('PUBLIC_SITE_DOMAIN'),
+    'public_site_company' => env('PUBLIC_SITE_COMPANY', 'haven'),
+
     // Address that receives an email when the live site hits an unexpected error (empty turns alerts off).
     'error_alert_email' => env('ERROR_ALERT_EMAIL'),
 

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Support\Migration\Connection;
+use App\Support\PublicSiteUrl;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -21,5 +22,6 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(6)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
             Limit::perMinute(60)->by('login-ip|'.$request->ip()),
         ]);
+        PublicSiteUrl::register($this->app['url']);
     }
 }

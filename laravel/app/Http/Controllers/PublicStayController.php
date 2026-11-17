@@ -19,6 +19,7 @@ use App\Services\PublicListingCatalog;
 use App\Services\PublicReviews;
 use App\Services\PublicWebsiteLinks;
 use App\Support\PhoneNumber;
+use App\Support\PublicSiteUrl;
 use Carbon\CarbonImmutable;
 use DOMDocument;
 use DOMXPath;
@@ -146,7 +147,7 @@ class PublicStayController extends Controller
      */
     private function businessData(Tenant $tenant, object $site, string $url, ?array $hero, Collection $stays): array
     {
-        $absolute = fn (?string $link): ?string => $link ? rtrim(config('app.url'), '/').parse_url($link, PHP_URL_PATH) : null;
+        $absolute = fn (?string $link): ?string => $link ? PublicSiteUrl::canonical($link) : null;
         $logo = ! empty($site->logo_path) ? $this->publicUrl('public-stays.logo', ['company' => $tenant->slug]) : null;
         $offices = array_map(fn (string $office): array => ['@type' => 'PostalAddress', 'streetAddress' => $office, 'addressCountry' => 'KE'],
             PublicWebsiteLinks::officeAddresses($site));
@@ -185,6 +186,93 @@ class PublicStayController extends Controller
 
         return $this->listingPage($request, $tenant, $site, $listing, $availability, $enquiries);
     }
+
+    /**
+     * A single-segment address on the main website domain: a listing, or else a page or article from the old
+     * WordPress website ("/business-accommodation/"), which redirects permanently to its new address.
+     */
+    public function domainPage(Request $request, string $company, string $slug, PublicListingCatalog $catalog, ListingAvailability $availability, PublicEnquiries $enquiries, PublicBlog $blog): Response|RedirectResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        if ($catalog->published($tenant)->contains('slug', $slug)) {
+            return $this->show($request, $company, $slug, $catalog, $availability, $enquiries);
+        }
+        $slug = strtolower($slug);
+        $route = self::OLD_PAGES[$slug] ?? null;
+        $target = match (true) {
+            preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug) === 1 && $blog->find($tenant, $slug) !== null => route('public-stays.blog.show', [$tenant->slug, $slug]),
+            $route === 'contact' => route('public-stays.index', $tenant->slug).'#stay-contact',
+            $route === 'stays' => route('public-stays.index', $tenant->slug).'#find-stay',
+            $route !== null => route('public-stays.'.$route, $tenant->slug),
+            default => null,
+        };
+        abort_unless($target, 404);
+
+        return redirect()->to($target, 301);
+    }
+
+    /** Old website property page: its imported listing, else stays in the town named in its address, else all stays. */
+    public function oldProperty(string $company, string $slug, PublicListingCatalog $catalog, PublicAreaGuides $guides): RedirectResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        $slug = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($slug)), '-');
+        $published = $catalog->published($tenant);
+        if ($published->contains('slug', $slug)) {
+            return redirect()->route('public-stays.show', [$tenant->slug, $slug], 301);
+        }
+        foreach (PublicListingCatalog::groupDestinations($published) as $destination) {
+            if (str_contains('-'.$slug.'-', '-'.Str::slug($destination['city']).'-')) {
+                return redirect()->to($guides->url($tenant, $destination['city']), 301);
+            }
+        }
+
+        return redirect()->to(route('public-stays.index', $tenant->slug).'#find-stay', 301);
+    }
+
+    public function oldCity(string $company, string $city, PublicListingCatalog $catalog, PublicAreaGuides $guides): RedirectResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        $city = Str::slug(str_replace('_', '-', $city));
+        foreach (PublicListingCatalog::groupDestinations($catalog->published($tenant)) as $destination) {
+            if (Str::slug($destination['city']) === $city || str_starts_with($city, Str::slug($destination['city']).'-')) {
+                return redirect()->to($guides->url($tenant, $destination['city']), 301);
+            }
+        }
+
+        return redirect()->to(route('public-stays.index', $tenant->slug).'#find-stay', 301);
+    }
+
+    public function oldLabel(string $company, string $label, PublicListingCatalog $catalog): RedirectResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        $collection = ['beachfront' => 'beachfront', 'beachfront-homes' => 'beachfront', 'sea-view' => 'sea_view', 'discount' => 'special_offer',
+            'hot-offer' => 'special_offer', 'guest-favorite' => 'guest_favourite', 'guest-favourite' => 'guest_favourite'][strtolower($label)] ?? null;
+
+        return redirect()->to(route('public-stays.index', $collection ? [$tenant->slug, 'collection' => $collection] : [$tenant->slug]).'#find-stay', 301);
+    }
+
+    /** Old website listing sections such as /agency/..., /category/... or /courses/...: their nearest new page. */
+    public function oldSection(string $company, string $section, PublicListingCatalog $catalog): RedirectResponse
+    {
+        [$tenant] = $this->company($company, $catalog);
+        $target = match ($section) {
+            'agency', 'agent', 'agents' => route('public-stays.owners', $tenant->slug),
+            'category', 'tag', 'courses', 'course', 'author', 'page', 'feed' => route('public-stays.blog', $tenant->slug),
+            default => route('public-stays.index', $tenant->slug).'#find-stay',
+        };
+
+        return redirect()->to($target, 301);
+    }
+
+    /** Old website pages and the new page each one moved to ("stays" and "contact" are sections of the homepage). */
+    private const OLD_PAGES = [
+        'about-haven-suites' => 'about', 'about-haven-suites-bnb' => 'about', 'about-us' => 'about',
+        'contact' => 'contact', 'contact-us' => 'contact',
+        'travel-tips' => 'blog', 'courses' => 'blog', 'haven-suites-blog' => 'blog', 'news' => 'blog',
+        'become-a-host' => 'owners', 'create-listing' => 'owners', 'agents' => 'owners', 'agency' => 'owners',
+        'haven-suites-bnb-accommodations' => 'stays', 'haven-suites-bnb-accommodations-2' => 'stays', 'search-results' => 'stays', 'properties' => 'stays', 'search-home' => 'stays',
+        'favorite-properties' => 'saved', 'faqs' => 'faq', 'frequently-asked-questions' => 'faq',
+    ];
 
     public function preview(Request $request, string $tenant, int $id, PublicListingCatalog $catalog, ListingAvailability $availability, PublicEnquiries $enquiries): Response
     {
@@ -361,7 +449,7 @@ class PublicStayController extends Controller
         $author = $post->author_id ? DB::table('users')->where('id', $post->author_id)->value('name') : null;
         $authorName = $author ? PublicReviews::displayName($author) : null;
         $html = $blog->html($post->body);
-        $image = $post->cover_url ? rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH) : null;
+        $image = $post->cover_url ? PublicSiteUrl::canonical($post->cover_url) : null;
         $publisher = array_filter(['@type' => 'Organization', 'name' => $tenant->name, 'url' => $homeUrl, 'sameAs' => array_values(PublicWebsiteLinks::socialLinks($site)) ?: null]);
         $published = CarbonImmutable::parse($post->published_at)->toAtomString();
         $modified = CarbonImmutable::parse($post->updated_at)->max(CarbonImmutable::parse($post->published_at))->toAtomString();
@@ -473,7 +561,7 @@ class PublicStayController extends Controller
                 return $listing;
             })->values();
         $name = $place['area'] ? $place['area'].', '.$place['city'] : $place['city'];
-        $canonicalUrl = rtrim(config('app.url'), '/').parse_url($guides->url($tenant, $place['city'], $place['area']), PHP_URL_PATH);
+        $canonicalUrl = PublicSiteUrl::canonical($guides->url($tenant, $place['city'], $place['area']));
 
         return $this->page('public_stays.area', [
             'tenant' => $tenant, 'site' => $site, 'place' => $place, 'stays' => $stays, 'destinations' => $destinations,
@@ -556,10 +644,10 @@ class PublicStayController extends Controller
         $published = $catalog->published($tenant);
         $guides = app(PublicAreaGuides::class);
         foreach (PublicListingCatalog::groupDestinations($published) as $destination) {
-            $entries[] = ['url' => rtrim(config('app.url'), '/').parse_url($guides->url($tenant, $destination['city']), PHP_URL_PATH)];
+            $entries[] = ['url' => PublicSiteUrl::canonical($guides->url($tenant, $destination['city']))];
             foreach ($destination['areas'] as $area) {
                 if (Str::slug($area['name']) !== '') {
-                    $entries[] = ['url' => rtrim(config('app.url'), '/').parse_url($guides->url($tenant, $destination['city'], $area['name']), PHP_URL_PATH)];
+                    $entries[] = ['url' => PublicSiteUrl::canonical($guides->url($tenant, $destination['city'], $area['name']))];
                 }
             }
         }
@@ -572,7 +660,7 @@ class PublicStayController extends Controller
             foreach ($posts as $post) {
                 $entries[] = ['url' => $this->publicUrl('public-stays.blog.show', ['company' => $tenant->slug, 'slug' => $post->slug]),
                     'lastmod' => CarbonImmutable::parse($post->updated_at, config('app.timezone'))->min(now())->toAtomString(),
-                    'photos' => $post->cover_url ? [rtrim(config('app.url'), '/').parse_url($post->cover_url, PHP_URL_PATH)] : []];
+                    'photos' => $post->cover_url ? [PublicSiteUrl::canonical($post->cover_url)] : []];
             }
         }
         foreach ($published as $listing) {
@@ -683,7 +771,7 @@ class PublicStayController extends Controller
 
     private function publicUrl(string $route, array $parameters, array $query = []): string
     {
-        $url = rtrim(config('app.url'), '/').route($route, $parameters, false);
+        $url = PublicSiteUrl::canonical(route($route, $parameters));
 
         return $query === [] ? $url : $url.'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
