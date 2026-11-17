@@ -339,7 +339,7 @@ class GuestTrustTest extends TestCase
         $page = $this->get('/stays/trust-stays/sea-view')->assertOk();
         $page->assertSee("Where you'll sleep", false)->assertSee('Master bedroom')->assertSee('1 king bed')->assertSee('Ensuite bathroom')
             ->assertSee('openstreetmap.org/export/embed.html', false)->assertSee('Nyali Beach')->assertSee('5 min walk')->assertSee('8 min drive')
-            ->assertSee('95 m²')->assertSee('5th floor')->assertSee('Lift available')->assertSee('1 parking space')->assertSee('Gated compound')
+            ->assertSee('<dl class="stay-facts-box">', false)->assertSee('href="#stay-details"', false)->assertSee('95 m²')->assertSee('5th floor')->assertSee('Lift available')->assertSee('1 parking space')->assertSee('Gated compound')
             ->assertSee('Photos checked '.now()->format('F Y'))->assertSee('Prices by date')->assertSee('December holidays')->assertDontSee('Old season')
             ->assertSee('data-weekend="15000"', false)->assertSee('2099-12-15', false)
             ->assertSee('data-tour-url="https://kuula.co/share/7abcD?fs=1', false)

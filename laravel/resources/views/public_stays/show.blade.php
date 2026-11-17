@@ -46,10 +46,25 @@
         </div>
     @endif
     @include('public_stays.media')
-    <nav class="stay-section-nav" aria-label="Explore this apartment"><a href="#stay-overview">About the stay</a>@if(!empty($listing['rooms']))<a href="#stay-rooms">Bedrooms</a>@endif @if(!empty($listing['videos']))<a href="#stay-videos">Video tours</a>@endif @if($listing['amenity_labels'])<a href="#stay-amenities">Amenities</a>@endif<a href="#stay-availability">Availability</a>@if($reviews['count'])<a href="#stay-reviews">Reviews</a>@endif<a href="#stay-rules">Good to know</a>@if($listing['public_location'] || !empty($listing['area_map']) || !empty($listing['nearby']))<a href="#stay-location">Location</a>@endif</nav>
+    <nav class="stay-section-nav" aria-label="Explore this apartment"><a href="#stay-overview">About the stay</a><a href="#stay-details">Details</a>@if(!empty($listing['rooms']))<a href="#stay-rooms">Bedrooms</a>@endif @if(!empty($listing['videos']))<a href="#stay-videos">Video tours</a>@endif @if($listing['amenity_labels'])<a href="#stay-amenities">Amenities</a>@endif<a href="#stay-availability">Availability</a>@if($reviews['count'])<a href="#stay-reviews">Reviews</a>@endif<a href="#stay-rules">Good to know</a>@if($listing['public_location'] || !empty($listing['area_map']) || !empty($listing['nearby']))<a href="#stay-location">Location</a>@endif</nav>
     <div class="stay-detail-grid"><div>
         <section class="stay-detail-section" id="stay-overview"><h2>Make yourself at home</h2><p class="stay-description">{{ $listing['description'] ?: 'Add a description in the listing editor to complete this preview.' }}</p>
-            <ul class="stay-layout-facts" aria-label="Rooms and beds"><li><strong>{{ $bedroomLabel }}</strong>@if(!empty($listing['property_type_label']) && $listing['bedrooms'] !== 0)<span>{{ $listing['property_type_label'] }}</span>@endif</li>@if($bedLabel)<li><strong>{{ $bedLabel }}</strong>@if(!empty($listing['bed_setup']))<span>{{ $listing['bed_setup'] }}</span>@endif</li>@endif<li><strong>{{ $bathroomLabel }}</strong></li>@if($listing['max_guests'])<li><strong>Up to {{ $listing['max_guests'] }} guests</strong></li>@endif @if(!empty($listing['size_sqm']))<li><strong>{{ number_format($listing['size_sqm']) }} m²</strong><span>Floor area</span></li>@endif @if(!empty($listing['floor_level']))<li><strong>{{ $listing['floor_level'] }}</strong>@if(in_array('elevator', $listing['amenities'] ?? [], true))<span>Lift available</span>@endif</li>@endif @if(($listing['parking_spaces'] ?? null) !== null)<li><strong>{{ $listing['parking_spaces'] === 0 ? 'No parking' : $listing['parking_spaces'].' parking space'.($listing['parking_spaces'] === 1 ? '' : 's') }}</strong></li>@endif</ul></section>
+        </section>
+        <section class="stay-detail-section" id="stay-details" aria-labelledby="stay-details-heading"><h2 id="stay-details-heading">Details</h2>
+            <dl class="stay-facts-box">
+                <div><dt>Price</dt><dd>@if((float) $listing['starting_price'] > 0)From {{ $listing['currency'] }} {{ number_format((float) $listing['starting_price']) }} / night @else On request @endif</dd></div>
+                @if(!empty($listing['property_type_label']))<div><dt>Property type</dt><dd>{{ $listing['property_type_label'] }}</dd></div>@endif
+                <div><dt>Bedrooms</dt><dd>{{ $bedroomLabel }}</dd></div>
+                @if($bedLabel)<div><dt>Beds</dt><dd>{{ $bedLabel }}@if(!empty($listing['bed_setup'])) <small>({{ $listing['bed_setup'] }})</small>@endif</dd></div>@endif
+                <div><dt>Bathrooms</dt><dd>{{ $bathroomLabel }}</dd></div>
+                @if($listing['max_guests'])<div><dt>Guests</dt><dd>Up to {{ $listing['max_guests'] }} guests</dd></div>@endif
+                @if(!empty($listing['size_sqm']))<div><dt>Floor area</dt><dd>{{ number_format($listing['size_sqm']) }} m²</dd></div>@endif
+                @if(!empty($listing['floor_level']))<div><dt>Floor</dt><dd>{{ $listing['floor_level'] }}@if(in_array('elevator', $listing['amenities'] ?? [], true)) <small>· Lift available</small>@endif</dd></div>@endif
+                @if(($listing['parking_spaces'] ?? null) !== null)<div><dt>Parking</dt><dd>{{ $listing['parking_spaces'] === 0 ? 'No parking' : $listing['parking_spaces'].' parking space'.($listing['parking_spaces'] === 1 ? '' : 's') }}</dd></div>@endif
+                <div><dt>Minimum stay</dt><dd>{{ $listing['min_nights'] ? $listing['min_nights'].' night'.($listing['min_nights'] === 1 ? '' : 's') : 'To be confirmed' }}</dd></div>
+                @if(!empty($listing['listing_code']))<div><dt>Listing code</dt><dd>{{ $listing['listing_code'] }}</dd></div>@endif
+            </dl>
+        </section>
         @include('public_stays.rooms')
         @include('public_stays.videos')
         @include('public_stays.tour')
