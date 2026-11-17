@@ -20,19 +20,21 @@
         <div><span>Total listings</span><strong>{{ $listings->count() }}</strong></div>
         <div><span>Live on website</span><strong>{{ $liveCount }}</strong></div>
         <div><span>Private drafts</span><strong>{{ $draftCount }}</strong></div>
+        <div class="lm-needs-work"><span>Need work</span><strong>{{ $needsWorkCount ?? 0 }}</strong>@if(($needsWorkCount ?? 0) > 0)<a href="{{ route('public-listings.index', $tenantSlug) }}?needs_work=1">Fix the weakest first &rarr;</a>@endif</div>
         <div class="lm-site-state"><span>Public website</span><strong>{{ $site?->enabled ? 'Enabled' : 'Offline' }}</strong>@if($site?->enabled)<a href="{{ route('public-stays.index', ['company' => $tenantSlug]) }}" target="_blank" rel="noopener noreferrer">Open public site &nearr;</a>@else<a href="{{ $settingsUrl }}">Complete website setup &rarr;</a>@endif</div>
     </section>
     @unless($site?->enabled)
         <div class="lm-notice" role="status"><strong>Your public website is offline.</strong> You can prepare and preview listings here. Choose your guest contact details and enquiry assignee in <a href="{{ $settingsUrl }}">Website settings</a>, then enable the site when ready.</div>
     @endunless
     <section class="lm-listings" aria-labelledby="listings-heading">
-        <div class="lm-section-heading"><h2 id="listings-heading">{{ ($showArchived ?? false) ? 'Archived listings' : 'Your listings' }}</h2><p class="muted">{{ ($showArchived ?? false) ? 'Archived listings are hidden from the website. Restore one to edit and publish it again.' : 'Edit details, review a private preview, or open the guest experience.' }} @if($showArchived ?? false)<a href="{{ route('public-listings.index', $tenantSlug) }}">Back to current listings</a>@elseif(($archivedCount ?? 0) > 0)<a href="{{ route('public-listings.index', $tenantSlug) }}?archived=1">Show archived listings ({{ $archivedCount }})</a>@endif</p></div>
+        <div class="lm-section-heading"><h2 id="listings-heading">{{ ($showArchived ?? false) ? 'Archived listings' : 'Your listings' }}</h2><p class="muted">{{ ($showArchived ?? false) ? 'Archived listings are hidden from the website. Restore one to edit and publish it again.' : 'Edit details, review a private preview, or open the guest experience.' }} @if($needsWork ?? false)<strong>Showing listings that need work, lowest score first.</strong> <a href="{{ route('public-listings.index', $tenantSlug) }}">Show all listings</a>@elseif($showArchived ?? false)<a href="{{ route('public-listings.index', $tenantSlug) }}">Back to current listings</a>@elseif(($archivedCount ?? 0) > 0)<a href="{{ route('public-listings.index', $tenantSlug) }}?archived=1">Show archived listings ({{ $archivedCount }})</a>@endif</p></div>
         @forelse($listings as $listing)
             @php
                 $reference = $listing->unit_id !== null ? 'unit:'.$listing->unit_id : 'partner:'.$listing->partner_apartment_id;
                 $apartment = $apartments->get($reference);
                 $links = $publicLinks[$listing->id] ?? null;
                 $photoCount = (int) ($photoCounts[$listing->id] ?? 0);
+                $listingQuality = $quality[$listing->id] ?? null;
                 $incomplete = $listing->max_guests === null || $listing->min_nights === null || trim($listing->description) === '' || trim($listing->city) === '';
                 $hiddenReason = match (true) {
                     !$site?->enabled => 'Enable the public website in Website settings to share this listing.',
@@ -47,9 +49,12 @@
             @endphp
             <article class="lm-listing" aria-labelledby="listing-title-{{ $listing->id }}" data-listing-id="{{ $listing->id }}">
                 <div class="lm-listing-main">
-                    <div class="lm-listing-title"><h3 id="listing-title-{{ $listing->id }}">{{ $listing->title }}</h3><span class="lm-status {{ $links ? 'is-live' : '' }}">{{ $links ? 'Live' : ucfirst($listing->status) }}</span></div>
+                    <div class="lm-listing-title"><h3 id="listing-title-{{ $listing->id }}">{{ $listing->title }}</h3><span class="lm-status {{ $links ? 'is-live' : '' }}">{{ $links ? 'Live' : ucfirst($listing->status) }}</span>@if($listingQuality)<span class="lm-score {{ $listingQuality['score'] >= 100 ? 'is-complete' : ($listingQuality['score'] < 60 ? 'is-low' : '') }}" title="Listing quality">Quality {{ $listingQuality['score'] }}%</span>@endif</div>
                     <p class="lm-apartment">{{ $apartment ? $apartment->property_name.($apartment->unit_number ? ' / '.$apartment->unit_number : '') : 'Apartment no longer available' }}</p>
                     <p class="muted lm-listing-meta">{{ $apartment ? ucfirst($apartment->kind).' apartment' : 'Apartment needs review' }} <span aria-hidden="true">&middot;</span> {{ $listing->city ?: 'Destination needed' }} <span aria-hidden="true">&middot;</span> {{ $photoCount }} {{ $photoCount === 1 ? 'photo' : 'photos' }}@if($incomplete) <span aria-hidden="true">&middot;</span> Guest details needed @endif</p>
+                    @if($listingQuality && ($listingQuality['todo'] !== [] || $listingQuality['duplicate_of']))
+                        <p class="lm-todo">@if($listingQuality['duplicate_of'])<strong>Possible duplicate of <a href="{{ route('public-listings.edit', ['tenant' => $tenantSlug, 'id' => $listingQuality['duplicate_of']->id]) }}">{{ $listingQuality['duplicate_of']->title }}</a>.</strong> @endif @if($listingQuality['todo'] !== [])To do: {{ implode(', ', array_slice($listingQuality['todo'], 0, 3)).(count($listingQuality['todo']) > 3 ? ' and '.(count($listingQuality['todo']) - 3).' more' : '') }}.@endif</p>
+                    @endif
                 </div>
                 <div class="lm-listing-controls">
                     <div class="lm-actions">

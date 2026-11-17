@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Console\Commands\ImportWebsiteProperties;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\PhoneNumber;
@@ -171,6 +172,32 @@ class PublicListingCatalog
             'reference' => 'unit:'.$unit->id, 'kind' => 'managed',
             'unit_id' => (int) $unit->id, 'partner_apartment_id' => null,
         ]);
+    }
+
+    /**
+     * Whether each partner apartment has a real owner on record (a name other than the import placeholder, and a
+     * phone number), keyed by partner apartment id. Staff use only.
+     *
+     * @return array<int, bool>
+     */
+    public function partnerOwners(Tenant $tenant): array
+    {
+        $config = config('database.connections.tenant');
+        $config['database'] = $tenant->database_name;
+        $db = DB::build($config);
+        try {
+            $schema = $db->getSchemaBuilder();
+            if (! $schema->hasTable('partner_apartments') || ! $schema->hasColumn('partner_apartments', 'owner_name')) {
+                return [];
+            }
+            $hasPhone = $schema->hasColumn('partner_apartments', 'owner_phone');
+
+            return $db->table('partner_apartments')->get(array_merge(['id', 'owner_name'], $hasPhone ? ['owner_phone'] : []))
+                ->mapWithKeys(fn (object $row): array => [(int) $row->id => ! in_array(trim((string) $row->owner_name), ['', ImportWebsiteProperties::OWNER_PLACEHOLDER], true)
+                    && (! $hasPhone || trim((string) $row->owner_phone) !== '')])->all();
+        } finally {
+            $db->disconnect();
+        }
     }
 
     private function loadPartners(Tenant $tenant, ?int $partnerId = null): Collection

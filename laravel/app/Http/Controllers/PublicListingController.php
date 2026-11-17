@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\HomepageLayout;
 use App\Services\ListingDetails;
 use App\Services\ListingPhotoVariants;
+use App\Services\ListingQuality;
 use App\Services\PublicAboutPage;
 use App\Services\PublicAboutTeam;
 use App\Services\PublicGuestInfo;
@@ -43,10 +44,19 @@ class PublicListingController extends Controller
         $listings = DB::table('public_listings')->where('tenant_id', $tenant->id)
             ->when($showArchived, fn ($query) => $query->where('status', 'archived'), fn ($query) => $query->where('status', '!=', 'archived'))
             ->orderBy('title')->get();
+        $quality = app(ListingQuality::class)->forListings($tenant, $listings);
+        $needsWorkCount = collect($quality)->filter(fn (array $item): bool => $item['score'] < 100 || $item['duplicate_of'] !== null)->count();
+        // "Needs work" shows the listings with the most to fix first.
+        $needsWork = ! $showArchived && request()->boolean('needs_work');
+        if ($needsWork) {
+            $listings = $listings->filter(fn (object $listing): bool => $quality[$listing->id]['score'] < 100 || $quality[$listing->id]['duplicate_of'] !== null)
+                ->sortBy([fn (object $a, object $b): int => $quality[$a->id]['score'] <=> $quality[$b->id]['score'], fn (object $a, object $b): int => strcasecmp($a->title, $b->title)])->values();
+        }
         $publicLinks = $catalog->published($tenant)->mapWithKeys(fn (array $listing): array => [$listing['id'] => app(PublicWebsiteLinks::class)->forListing($tenant, $listing, $site)]);
 
         return view('public_listings.index', [
             'listings' => $listings, 'site' => $site, 'publicLinks' => $publicLinks, 'showArchived' => $showArchived, 'archivedCount' => $archivedCount,
+            'quality' => $quality, 'needsWork' => $needsWork, 'needsWorkCount' => $needsWorkCount,
             'photoCounts' => DB::table('public_listing_photos')->where('tenant_id', $tenant->id)->selectRaw('listing_id, COUNT(*) as photos')->groupBy('listing_id')->pluck('photos', 'listing_id'),
             'apartments' => $catalog->apartments($tenant)->keyBy('reference'),
         ]);
@@ -93,6 +103,7 @@ class PublicListingController extends Controller
             'videos' => app(YouTubeListingVideos::class)->forForm($listing->youtube_videos ?? null),
             'owner' => $catalog->ownerContact(app('currentTenant'), $listing->unit_id !== null ? (int) $listing->unit_id : null,
                 ($listing->partner_apartment_id ?? null) !== null ? (int) $listing->partner_apartment_id : null),
+            'quality' => app(ListingQuality::class)->forEditor(app('currentTenant'), $listing),
             ...$this->placeSuggestions(),
         ]);
     }

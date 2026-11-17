@@ -214,12 +214,42 @@ class ListingDetails
     }
 
     /**
-     * Suggestions that make a listing more likely to get enquiries. Each item says what to fix.
+     * Suggestions that make a listing more likely to get enquiries and to rank in search. Each item says what to fix.
+     * Owner and import checks are only added when the caller knows them (null leaves them out).
      *
      * @param  Collection<int, object>  $photos  Rows from public_listing_photos.
+     * @param  array{owner_recorded?: ?bool, unchecked_import?: ?bool}  $context
      * @return list<array{label: string, done: bool, tip: string}>
      */
-    public static function checklist(?object $listing, Collection $photos): array
+    public static function checklist(?object $listing, Collection $photos, array $context = []): array
+    {
+        $title = trim((string) ($listing->title ?? ''));
+        $text = ($listing->description ?? '').' '.($listing->seo_description ?? '');
+        $extra = array_values(array_filter([
+            ($context['unchecked_import'] ?? null) === null ? null
+                : ['label' => 'Details checked since import', 'done' => ! $context['unchecked_import'], 'tip' => 'Guest numbers were estimated (two per bedroom). Confirm guests, beds and price, then save.'],
+            ($context['owner_recorded'] ?? null) === null ? null
+                : ['label' => 'Owner contact recorded', 'done' => (bool) $context['owner_recorded'], 'tip' => 'Add the owner\'s name and phone in Partner apartments so availability requests reach them.'],
+            ['label' => 'Neighbourhood set', 'done' => trim((string) ($listing->neighbourhood ?? '')) !== '', 'tip' => 'Add the area, such as Nyali or Kilimani. It goes into the search title and area pages.'],
+            ['label' => 'Clear listing name', 'done' => mb_strlen($title) >= 12 && mb_strlen($title) <= 60 && ! self::hasOldCode($title),
+                'tip' => 'Use 12 to 60 characters without old website codes, for example "Lake-view 4-bedroom home, Naivasha".'],
+            ['label' => 'No web links in descriptions', 'done' => ! preg_match('~https?://|www\.~i', $text), 'tip' => 'Remove links such as Google Maps from the description and search description. Use the map location instead.'],
+        ]));
+
+        return [...self::photoAndDetailChecks($listing, $photos), ...$extra];
+    }
+
+    /** Whether a name ends with an old website code such as "– 010" or "- 2BR 005". */
+    public static function hasOldCode(string $title): bool
+    {
+        return (bool) preg_match('/[–—-]\s*\d{3}\s*$/u', $title);
+    }
+
+    /**
+     * @param  Collection<int, object>  $photos
+     * @return list<array{label: string, done: bool, tip: string}>
+     */
+    private static function photoAndDetailChecks(?object $listing, Collection $photos): array
     {
         $captioned = $photos->filter(fn (object $photo): bool => trim((string) $photo->caption) !== '')->count();
         $rooms = $photos->pluck('room')->filter()->unique();
