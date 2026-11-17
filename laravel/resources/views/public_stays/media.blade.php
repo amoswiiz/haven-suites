@@ -8,7 +8,7 @@
             <div class="stay-slider-track" data-slider-track tabindex="0" aria-label="Photos. Swipe or use the arrow keys.">
                 @foreach($listing['photos'] as $photo)
                     <a class="stay-slide" href="{{ $photo['url'] }}?w=1200" data-gallery-photo data-slide data-photo-index="{{ $loop->index }}" data-photo-caption="{{ $photo['caption'] }}" role="group" aria-roledescription="slide" aria-label="Photo {{ $loop->iteration }} of {{ $photoCount }}: {{ $photo['caption'] }}">
-                        <img src="{{ $photo['url'] }}?w=1200" srcset="{{ \App\Services\ListingPhotoVariants::srcset($photo['url']) }}" sizes="(max-width: 1100px) 100vw, 1060px" alt="{{ $photo['caption'] }}" width="1200" height="800" @if($loop->first) fetchpriority="high" @else loading="lazy" @endif decoding="async">
+                        <img src="{{ $photo['url'] }}?w=1200" srcset="{{ \App\Services\ListingPhotoVariants::srcset($photo['url']) }}" sizes="(max-width: 1100px) 100vw, 1060px" alt="{{ $photo['alt'] ?? $photo['caption'] }}" width="1200" height="800" @if($loop->first) fetchpriority="high" @else loading="lazy" @endif decoding="async">
                     </a>
                 @endforeach
             </div>
@@ -45,7 +45,7 @@
                     @if($grouped)<h3 class="stay-photo-room-title" id="photos-{{ $group['key'] }}">{{ $group['label'] }}</h3>@endif
                     @foreach($group['photos'] as $photo)
                         <a href="{{ $photo['url'] }}?w=1200" data-gallery-photo data-photo-index="{{ $photo['index'] }}" data-photo-caption="{{ $photo['caption'] }}" aria-label="View photo {{ $photo['index'] + 1 }} of {{ $photoCount }}: {{ $photo['caption'] }}">
-                            <img src="{{ $photo['url'] }}?w=480" alt="{{ $photo['caption'] }}" width="700" height="480" loading="lazy" decoding="async"><span>{{ $photo['caption'] }}</span>
+                            <img src="{{ $photo['url'] }}?w=480" alt="{{ $photo['alt'] ?? $photo['caption'] }}" width="700" height="480" loading="lazy" decoding="async"><span>{{ $photo['caption'] }}</span>
                         </a>
                     @endforeach
                 @endforeach

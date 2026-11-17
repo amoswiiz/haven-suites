@@ -729,14 +729,12 @@ class PublicStayController extends Controller
                 return $other;
             });
         $canonicalUrl = $this->publicUrl('public-stays.show', ['company' => $tenant->slug, 'slug' => $listing['slug']]);
-        $listingTitle = $this->plainText($listing['title'], 180);
-        $destination = $this->plainText(implode(', ', array_filter([$listing['neighbourhood'], $listing['city']])), 150);
-        $pageTitle = $this->plainText($listing['seo_title'] ?? '', 180) ?: implode(' | ', array_unique(array_filter([$listingTitle, $destination, $this->plainText($tenant->name, 100)])));
-        $pageDescription = $this->plainText($listing['seo_description'] ?? '', 320) ?: $this->plainText($listing['description'], 160);
-        $structuredData = $preview ? null : $this->listingSchema($tenant, $listing, $canonicalUrl);
+        $pageTitle = $this->listingPageTitle($tenant, $listing);
+        $pageDescription = $this->listingPageDescription($listing);
         $publicLinks = $this->listingLinks($tenant, $listing, $site, $request);
         $enquiryDefaults = $this->enquiryDefaults($request);
         $reviews = app(PublicReviews::class)->forListing($tenant, $listing['id']);
+        $structuredData = $preview ? null : $this->listingSchema($tenant, $listing, $canonicalUrl, $reviews);
         $guestInfo = app(PublicGuestInfo::class)->content($tenant, $site);
 
         return $this->page('public_stays.show', compact('tenant', 'site', 'listing', 'calendar', 'month', 'weeks', 'canEnquire', 'formContext', 'alternatives', 'preview', 'canonicalUrl', 'structuredData', 'publicLinks', 'enquiryDefaults', 'reviews', 'guestInfo') + [
@@ -746,27 +744,140 @@ class PublicStayController extends Controller
         ], $preview);
     }
 
-    private function listingSchema(Tenant $tenant, array $listing, string $canonicalUrl): array
+    /** Fields the search details read, for listings built without them. */
+    private const LISTING_SEARCH_DEFAULTS = [
+        'seo_title' => null, 'seo_description' => null, 'description' => '', 'neighbourhood' => null, 'city' => null, 'layout_label' => null,
+        'bedrooms' => null, 'bathrooms' => null, 'max_guests' => null, 'size_sqm' => null, 'starting_price' => null, 'currency' => '',
+        'amenity_labels' => [], 'photos' => [], 'listing_code' => null, 'check_in_time' => null, 'check_out_time' => null, 'area_point' => null,
+    ];
+
+    /**
+     * Search title for a listing: its name, then what and where it is, then the company, shortened to fit the about
+     * 65 characters search results show. A short custom search title is used as the name; a full one is kept as is.
+     */
+    private function listingPageTitle(Tenant $tenant, array $listing): string
     {
+        $listing += self::LISTING_SEARCH_DEFAULTS;
+        $custom = $this->plainText((string) $listing['seo_title'], 180);
+        // A full custom title, or one already split into parts ("Name | Brand"), is used as written.
+        if (mb_strlen($custom) >= 45 || preg_match('/\s[|–—-]\s/u', $custom)) {
+            return $custom;
+        }
+        $name = $custom ?: $this->plainText($listing['title'], 120);
+        $brand = $this->plainText($tenant->name, 60);
+        $named = mb_strtolower($name);
+        $places = array_values(array_unique(array_filter(
+            [$this->plainText((string) $listing['neighbourhood'], 60), $this->plainText((string) $listing['city'], 60)],
+            fn (string $place): bool => $place !== '' && ! str_contains($named, mb_strtolower($place)),
+        )));
+        $place = implode(', ', $places);
+        $layout = preg_match('/\b(?:\d+\s*(?:br|bed|bedroom)s?|studio)\b/i', $name) ? null : $listing['layout_label'];
+        $candidates = [
+            $layout && $place ? $name.' – '.$layout.' in '.$place.' | '.$brand : null,
+            $place ? $name.' – '.$place.' | '.$brand : null,
+            $layout ? $name.' – '.$layout.' | '.$brand : null,
+            $name.' | '.$brand,
+        ];
+        foreach (array_filter($candidates) as $candidate) {
+            if (mb_strlen($candidate) <= 65) {
+                return $candidate;
+            }
+        }
+
+        return $place ? $name.' – '.$place : $name;
+    }
+
+    /**
+     * Search description for a listing: a fact line (size, place, guests, price), the main amenities, then the
+     * custom search description or the listing description, cut at a word near 160 characters. A long custom search
+     * description is used on its own. Web addresses are left out.
+     */
+    private function listingPageDescription(array $listing): string
+    {
+        $listing += self::LISTING_SEARCH_DEFAULTS;
+        $clean = fn (string $text, int $limit): string => trim((string) preg_replace(['~\bhttps?://\S+~i', '~\bwww\.\S+~i', '/\s+/u'], ['', '', ' '], $this->plainText($text, $limit)));
+        $custom = $clean((string) $listing['seo_description'], 320);
+        if (mb_strlen($custom) >= 110) {
+            return $custom;
+        }
+        $place = implode(', ', array_filter([$this->plainText((string) $listing['neighbourhood'], 60), $this->plainText((string) $listing['city'], 60)]));
+        $facts = ($listing['layout_label'] ?: 'Stay').($place !== '' ? ' in '.$place : '');
+        if ($listing['max_guests']) {
+            $facts .= ' for up to '.$listing['max_guests'].' '.($listing['max_guests'] === 1 ? 'guest' : 'guests');
+        }
+        if ((float) $listing['starting_price'] > 0) {
+            $facts .= ', from '.$listing['currency'].' '.number_format((float) $listing['starting_price']).' a night';
+        }
+        $amenities = array_map(
+            fn (string $label): string => preg_match('/Wi-Fi|TV/', $label) ? $label : mb_strtolower($label),
+            array_slice($listing['amenity_labels'], 0, 4),
+        );
+        $parts = [$facts.'.'];
+        if ($amenities !== []) {
+            $last = array_pop($amenities);
+            $parts[] = Str::ucfirst($amenities === [] ? $last : implode(', ', $amenities).' and '.$last).'.';
+        }
+        $parts[] = $custom !== '' ? $custom : $clean((string) $listing['description'], 400);
+
+        return Str::limit(trim(implode(' ', $parts)), 160, '…', preserveWords: true);
+    }
+
+    /**
+     * Structured data for a listing as a vacation rental (schema.org VacationRental, which Google reads for holiday
+     * homes): the place, its rooms and guests, check-in times, approximate location and approved guest ratings.
+     *
+     * @param  array{average: ?float, count: int}  $reviews
+     */
+    private function listingSchema(Tenant $tenant, array $listing, string $canonicalUrl, array $reviews = ['average' => null, 'count' => 0]): array
+    {
+        $listing += self::LISTING_SEARCH_DEFAULTS;
         $images = [];
         foreach ($listing['photos'] as $index => $photo) {
             $images[] = ['@type' => 'ImageObject', '@id' => $canonicalUrl.'#photo-'.($index + 1),
-                'contentUrl' => $photo['url'], 'caption' => $this->plainText($photo['caption'], 180)];
+                'contentUrl' => $photo['url'], 'caption' => $this->plainText($photo['alt'] ?? $photo['caption'], 180)];
         }
-        $accommodation = [
-            '@type' => 'LodgingBusiness', '@id' => $canonicalUrl.'#accommodation',
+        $time = fn (?string $value): ?string => $value && preg_match('/^\d{2}:\d{2}/', $value) ? substr($value, 0, 5).':00' : null;
+        $accommodation = array_filter([
+            '@type' => 'Accommodation',
+            'additionalType' => 'EntirePlace',
             'name' => $this->plainText($listing['title'], 180),
-            'description' => $this->plainText($listing['description'], 400), 'url' => $canonicalUrl,
-            'image' => array_map(fn (array $image): array => ['@id' => $image['@id']], $images),
-            'address' => ['@type' => 'PostalAddress', 'addressLocality' => $this->plainText($listing['city'], 100)],
-            'amenityFeature' => array_map(fn (string $label): array => ['@type' => 'LocationFeatureSpecification', 'name' => $this->plainText($label, 100), 'value' => true], $listing['amenity_labels']),
-        ];
-        $breadcrumbs = ['@type' => 'BreadcrumbList', '@id' => $canonicalUrl.'#breadcrumbs', 'itemListElement' => [
-            ['@type' => 'ListItem', 'position' => 1, 'name' => 'Find a stay', 'item' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])],
-            ['@type' => 'ListItem', 'position' => 2, 'name' => $this->plainText($listing['title'], 180), 'item' => $canonicalUrl],
-        ]];
+            'numberOfBedrooms' => $listing['bedrooms'],
+            'numberOfBathroomsTotal' => $listing['bathrooms'],
+            'occupancy' => $listing['max_guests'] ? ['@type' => 'QuantitativeValue', 'value' => $listing['max_guests']] : null,
+            'floorSize' => $listing['size_sqm'] ? ['@type' => 'QuantitativeValue', 'value' => $listing['size_sqm'], 'unitCode' => 'MTK'] : null,
+            'amenityFeature' => array_map(fn (string $label): array => ['@type' => 'LocationFeatureSpecification', 'name' => $this->plainText($label, 100), 'value' => true], $listing['amenity_labels']) ?: null,
+        ], fn (mixed $value): bool => $value !== null);
+        $rental = array_filter([
+            '@type' => 'VacationRental', '@id' => $canonicalUrl.'#accommodation',
+            'name' => $this->plainText($listing['title'], 180),
+            'identifier' => (string) ($listing['listing_code'] ?: $listing['id']),
+            'description' => $this->plainText((string) $listing['description'], 400), 'url' => $canonicalUrl,
+            'brand' => ['@type' => 'Brand', 'name' => $this->plainText($tenant->name, 100)],
+            'image' => array_map(fn (array $photo): string => $photo['url'], $listing['photos']) ?: null,
+            'address' => array_filter(['@type' => 'PostalAddress', 'addressLocality' => $this->plainText((string) ($listing['neighbourhood'] ?: $listing['city']), 100),
+                'addressRegion' => $listing['neighbourhood'] ? $this->plainText((string) $listing['city'], 100) : null,
+                'addressCountry' => $listing['currency'] === 'KES' ? 'KE' : null]),
+            // Rounded to about 500 m: the exact address is shared with confirmed guests only.
+            'latitude' => $listing['area_point'][0] ?? null,
+            'longitude' => $listing['area_point'][1] ?? null,
+            'checkinTime' => $time($listing['check_in_time']),
+            'checkoutTime' => $time($listing['check_out_time']),
+            'priceRange' => (float) $listing['starting_price'] > 0 ? 'From '.$listing['currency'].' '.number_format((float) $listing['starting_price']).' per night' : null,
+            'knowsLanguage' => ['en', 'sw'],
+            'containsPlace' => $accommodation,
+            'aggregateRating' => ($reviews['count'] ?? 0) > 0 && ($reviews['average'] ?? null) !== null
+                ? ['@type' => 'AggregateRating', 'ratingValue' => $reviews['average'], 'ratingCount' => $reviews['count'], 'bestRating' => 5, 'worstRating' => 1] : null,
+        ], fn (mixed $value): bool => $value !== null);
+        $crumbs = [['name' => 'Find a stay', 'item' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])]];
+        if (Str::slug((string) $listing['city']) !== '') {
+            $crumbs[] = ['name' => $this->plainText((string) $listing['city'], 100), 'item' => PublicSiteUrl::canonical(app(PublicAreaGuides::class)->url($tenant, (string) $listing['city']))];
+        }
+        $crumbs[] = ['name' => $this->plainText($listing['title'], 180), 'item' => $canonicalUrl];
+        $breadcrumbs = ['@type' => 'BreadcrumbList', '@id' => $canonicalUrl.'#breadcrumbs', 'itemListElement' => array_map(
+            fn (array $crumb, int $index): array => ['@type' => 'ListItem', 'position' => $index + 1] + $crumb, $crumbs, array_keys($crumbs),
+        )];
 
-        return ['@context' => 'https://schema.org', '@graph' => [$accommodation, $breadcrumbs, ...$images]];
+        return ['@context' => 'https://schema.org', '@graph' => [$rental, $breadcrumbs, ...$images]];
     }
 
     private function publicUrl(string $route, array $parameters, array $query = []): string
@@ -830,7 +941,7 @@ class PublicStayController extends Controller
 
     private function socialImage(?array $photo): ?array
     {
-        return $photo ? ['url' => $photo['url'], 'caption' => $this->plainText($photo['caption'] ?? '', 180)] : null;
+        return $photo ? ['url' => $photo['url'], 'caption' => $this->plainText($photo['alt'] ?? $photo['caption'] ?? '', 180)] : null;
     }
 
     /**

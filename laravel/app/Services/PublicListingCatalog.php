@@ -448,8 +448,12 @@ class PublicListingCatalog
             'seo_title' => $listing->seo_title ?? null, 'seo_description' => $listing->seo_description ?? null,
             'whatsapp_number' => $listing->whatsapp_number ?? null, 'whatsapp_message' => $listing->whatsapp_message ?? null,
             'updated_at' => $listing->updated_at,
-            'photos' => $photos->map(fn (object $photo): array => [
+            // Alt text names the stay and what the photo shows (its caption or room, else its place in the gallery),
+            // so no two photos share the same description.
+            'photos' => $photos->values()->map(fn (object $photo, int $index): array => [
                 'id' => (int) $photo->id, 'caption' => $photo->caption ?: $listing->title,
+                'alt' => $listing->title.' – '.($photo->caption ?: (isset(ListingDetails::ROOM_TAGS[$photo->room ?? '']) && $photo->room !== 'other'
+                    ? ListingDetails::ROOM_TAGS[$photo->room] : 'photo '.($index + 1))).($listing->neighbourhood || $listing->city ? ', '.($listing->neighbourhood ?: $listing->city) : ''),
                 'room' => isset(ListingDetails::ROOM_TAGS[$photo->room ?? '']) ? $photo->room : null,
                 'url' => $preview
                     ? route('public-listings.photo', ['tenant' => $tenant->slug, 'id' => $listing->id, 'photo' => $photo->id])

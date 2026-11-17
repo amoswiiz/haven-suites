@@ -89,8 +89,8 @@ class PublicListingSeoTest extends TestCase
         $document = $this->document($response->getContent());
         $canonical = 'http://localhost/stays/seo-stays/coral-gables-f5';
         $this->assertSame($canonical, $document->query('//head/link[@rel="canonical"]')->item(0)->getAttribute('href'));
-        $this->assertSame('Sea View Retreat | Nyali, Mombasa | Haven Suites', $document->query('//head/title')->item(0)->textContent);
-        $this->assertSame('A bright & peaceful apartment. Enjoy the balcony.', $this->meta($document, 'description'));
+        $this->assertSame('Sea View Retreat – Nyali, Mombasa | Haven Suites', $document->query('//head/title')->item(0)->textContent);
+        $this->assertStringEndsWith('A bright & peaceful apartment. Enjoy the balcony.', $this->meta($document, 'description'));
         $this->assertSame($canonical, $this->meta($document, 'og:url'));
         $this->assertSame('website', $this->meta($document, 'og:type'));
         $this->assertSame('Haven Suites', $this->meta($document, 'og:site_name'));
@@ -116,9 +116,9 @@ class PublicListingSeoTest extends TestCase
         $schema = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('https://schema.org', $schema['@context']);
         $nodes = collect($schema['@graph'])->groupBy('@type');
-        $this->assertSame('Sea View Retreat', $nodes['LodgingBusiness'][0]['name']);
-        $this->assertSame('Mombasa', $nodes['LodgingBusiness'][0]['address']['addressLocality']);
-        $this->assertSame('Wi-Fi', $nodes['LodgingBusiness'][0]['amenityFeature'][0]['name']);
+        $this->assertSame('Sea View Retreat', $nodes['VacationRental'][0]['name']);
+        $this->assertSame(['Nyali', 'Mombasa'], [$nodes['VacationRental'][0]['address']['addressLocality'], $nodes['VacationRental'][0]['address']['addressRegion']]);
+        $this->assertSame('Wi-Fi', $nodes['VacationRental'][0]['containsPlace']['amenityFeature'][0]['name']);
         $this->assertCount(2, $nodes['ImageObject']);
         $this->assertSame('Sunny apartment balcony', $nodes['ImageObject'][0]['caption']);
         $this->assertSame('http://localhost/stays/seo-stays', $nodes['BreadcrumbList'][0]['itemListElement'][0]['item']);

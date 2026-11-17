@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\ListingAvailability;
 use App\Services\PublicEnquiries;
+use App\Services\PublicListingCatalog;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,6 +105,30 @@ class PublicSiteDomainTest extends TestCase
         $this->assertSame('https://app.havensuites.test/stays/other-company', route('public-stays.index', 'other-company'), 'Other companies stay on the app address.');
         $this->assertSame('https://app.havensuites.test/login', route('login'), 'Staff pages are linked on the app address.');
         $this->get('http://havensuites.test/')->assertSee('href="https://app.havensuites.test/login"', false);
+    }
+
+    public function test_listing_pages_carry_full_search_details(): void
+    {
+        $page = $this->get('http://havensuites.test/sea-view')->assertOk()
+            ->assertSee('<title>Sea View Retreat – 2 bedrooms in Nyali, Mombasa | Haven Suites</title>', false)
+            ->assertSee('<meta name="description" content="2 bedrooms in Nyali, Mombasa for up to 4 guests, from KES 12,000 a night. A bright two bedroom apartment near the beach.">', false)
+            ->assertSee('alt="Sea View Retreat – photo 1, Nyali"', false);
+        preg_match('~<script type="application/ld\+json">(.*?)</script>~s', $page->getContent(), $match);
+        $graph = json_decode($match[1] ?? '{}', true)['@graph'] ?? [];
+        $rental = collect($graph)->firstWhere('@type', 'VacationRental');
+        $this->assertNotNull($rental, 'The listing is described as a vacation rental.');
+        $this->assertSame(['12:00:00', '10:00:00', 2, 4, 'KE', 'From KES 12,000 per night'], [$rental['checkinTime'], $rental['checkoutTime'],
+            $rental['containsPlace']['numberOfBedrooms'], $rental['containsPlace']['occupancy']['value'], $rental['address']['addressCountry'], $rental['priceRange']]);
+        $crumbs = collect($graph)->firstWhere('@type', 'BreadcrumbList')['itemListElement'];
+        $this->assertSame(['https://havensuites.test/', 'https://havensuites.test/in/mombasa', 'https://havensuites.test/sea-view'], array_column($crumbs, 'item'));
+
+        DB::table('public_listings')->where('slug', 'sea-view')->update(['seo_title' => 'Beach flat', 'seo_description' => 'Steps from the sand https://maps.app.goo.gl/abc']);
+        PublicListingCatalog::forget(Tenant::where('slug', 'domain-stays')->firstOrFail()->id);
+        $this->get('http://havensuites.test/sea-view')
+            ->assertSee('<title>Beach flat – 2 bedrooms in Nyali, Mombasa | Haven Suites</title>', false)
+            ->assertSee('from KES 12,000 a night. Steps from the sand">', false);
+
+        $this->get('http://havensuites.test/robots.txt')->assertOk()->assertSee('Sitemap: https://havensuites.test/sitemap.xml');
     }
 
     public function test_old_app_and_wordpress_addresses_redirect_permanently(): void

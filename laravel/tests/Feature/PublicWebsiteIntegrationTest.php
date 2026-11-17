@@ -80,7 +80,7 @@ class PublicWebsiteIntegrationTest extends TestCase
     {
         $response = $this->get('/stays/'.$this->tenant->slug.'/coral-gables-f2?check_in=2026-11-10&check_out=2026-11-12&guests=3&utm_source=campaign');
         $response->assertOk()->assertSee('<title>Seaview apartment F2 | Haven</title>', false)
-            ->assertSee('content="Plan your seaside stay in this comfortable Nyali apartment."', false);
+            ->assertSee('Plan your seaside stay in this comfortable Nyali apartment.">', false);
         $links = $response->viewData('publicLinks');
         $this->assertSame('https://app.havensuitesbnb.com/stays/'.$this->tenant->slug.'/coral-gables-f2?check_in=2026-11-10&check_out=2026-11-12&guests=3#enquire', $links['enquiry_url']);
         $this->assertStringNotContainsString('utm_source', $links['public_url']);
@@ -120,7 +120,7 @@ class PublicWebsiteIntegrationTest extends TestCase
         $this->listing['seo_description'] = null;
         $this->get('/stays/'.$this->tenant->slug)->assertOk()->assertSee('<title>Haven Suites | Find your next stay</title>', false);
         $response = $this->get('/stays/'.$this->tenant->slug.'/coral-gables-f2');
-        $response->assertOk()->assertSee('Coral Gables / F2 | Nyali, Mombasa | Haven Suites');
+        $response->assertOk()->assertSee('<title>Coral Gables / F2 – Nyali, Mombasa | Haven Suites</title>', false);
         $this->assertDatabaseCount('sales_leads', 0);
     }
 

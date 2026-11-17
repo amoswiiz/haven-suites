@@ -44,10 +44,17 @@ $publicPages = function (bool $onDomain): void {
     Route::get('{slug}', [PublicStayController::class, $onDomain ? 'domainPage' : 'show'])->name('show');
 };
 
+// One robots.txt for every address, pointing search engines to the website's sitemap when it has its own domain.
+// Routes for a domain are matched before routes without one, so the main domain registers its own copy.
+$robots = fn () => response("User-agent: *\nDisallow:\n".(PublicSiteUrl::enabled() ? "\nSitemap: ".PublicSiteUrl::root()."/sitemap.xml\n" : ''), 200)
+    ->header('Content-Type', 'text/plain; charset=UTF-8');
+Route::get('robots.txt', $robots)->name('robots');
+
 if ($publicDomain = PublicSiteUrl::domain()) {
     Route::domain('www.'.$publicDomain)->group(function (): void {
         Route::any('{path?}', fn (Request $request) => redirect()->to(PublicSiteUrl::root().$request->getRequestUri(), 301))->where('path', '.*');
     });
+    Route::domain($publicDomain)->get('robots.txt', $robots)->name('site.robots');
     Route::domain($publicDomain)->middleware(PublicSiteCompany::class)->name('site.')->group(function () use ($publicPages): void {
         Route::get('property/{slug}', [PublicStayController::class, 'oldProperty'])->where('slug', '[A-Za-z0-9_-]+');
         Route::get('city/{city}', [PublicStayController::class, 'oldCity'])->where('city', '[A-Za-z0-9_-]+');
