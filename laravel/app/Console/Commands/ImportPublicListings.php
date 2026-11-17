@@ -98,7 +98,7 @@ class ImportPublicListings extends Command
                     $changes['amenities'] = json_encode(array_values(array_unique($data['amenities'])), JSON_THROW_ON_ERROR);
                     $id = DB::table('public_listings')->insertGetId($changes + [
                         'tenant_id' => $tenant->id, 'status' => 'draft', 'featured' => false, 'version' => 1,
-                        'check_in_time' => '14:00', 'check_out_time' => '10:00', 'created_at' => now(), 'updated_at' => now(),
+                        'check_in_time' => '12:00', 'check_out_time' => '10:00', 'created_at' => now(), 'updated_at' => now(),
                     ]);
                     DB::table('public_listing_audit_events')->insert([
                         'tenant_id' => $tenant->id, 'listing_id' => $id, 'actor_id' => (int) $this->option('actor'),

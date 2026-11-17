@@ -36,6 +36,7 @@
                         <p>Free and with no obligation. Leave your details and we'll call you about managing your property.</p>
                         @if($errors->any())<p class="stay-aside-error" role="alert">{{ $errors->first() }}</p>@endif
                         <form method="post" action="{{ route('public-stays.owners.enquire', $tenant->slug) }}">
+                            @csrf
                             <input type="hidden" name="form_issued_at" value="{{ $ownerForm['issued_at'] }}"><input type="hidden" name="form_token" value="{{ $ownerForm['token'] }}"><input type="hidden" name="article" value="{{ $post->slug }}">
                             <div class="stay-owner-honeypot" aria-hidden="true"><label for="owner-quick-website">Leave this empty</label><input id="owner-quick-website" name="website" tabindex="-1" autocomplete="off"></div>
                             <label>Your name<input name="full_name" required maxlength="150" autocomplete="name" value="{{ old('full_name') }}"></label>

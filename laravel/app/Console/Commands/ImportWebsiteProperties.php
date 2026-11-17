@@ -206,7 +206,7 @@ class ImportWebsiteProperties extends Command
                     'title' => mb_substr($property['title'], 0, 180), 'description' => mb_substr($description, 0, 15000),
                     'city' => mb_substr($property['city'], 0, 100), 'neighbourhood' => $area !== '' ? mb_substr($area, 0, 150) : null,
                     'public_location' => mb_substr($area !== '' ? $area.', '.$property['city'] : $property['city'], 0, 255),
-                    'max_guests' => $bedrooms ? min(16, $bedrooms * 2) : 2, 'min_nights' => 1, 'check_in_time' => '14:00', 'check_out_time' => '10:00',
+                    'max_guests' => $bedrooms ? min(16, $bedrooms * 2) : 2, 'min_nights' => 1, 'check_in_time' => '12:00', 'check_out_time' => '10:00',
                     'starting_price' => $property['price'], 'amenities' => json_encode($property['amenities'], JSON_THROW_ON_ERROR),
                     'status' => $publish ? 'published' : 'draft', 'featured' => false, 'version' => 1,
                     'property_type' => $this->propertyType($property['title'], $bedrooms), 'collections' => json_encode($collections, JSON_THROW_ON_ERROR),

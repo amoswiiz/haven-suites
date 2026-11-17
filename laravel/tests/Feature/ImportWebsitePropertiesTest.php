@@ -132,6 +132,7 @@ class ImportWebsitePropertiesTest extends TestCase
         $listing = DB::table('public_listings')->where('slug', 'panoramic-views-4br-naivasha-010')->first();
         $this->assertSame(['published', 'Naivasha', 'Karagita', '010', 8, 4, 4], [$listing->status, $listing->city, $listing->neighbourhood, $listing->listing_code, (int) $listing->max_guests, (int) $listing->bedrooms, (int) $listing->bathrooms]);
         $this->assertSame(18000.0, (float) $listing->starting_price);
+        $this->assertSame(['12:00', '10:00'], [$listing->check_in_time, $listing->check_out_time]);
         $this->assertSame(['wifi', 'balcony'], json_decode($listing->amenities, true));
         $this->assertSame(['guest_favourite'], json_decode($listing->collections, true));
         $this->assertSame([-0.7612, 36.4103], [(float) $listing->latitude, (float) $listing->longitude]);

@@ -53,7 +53,7 @@ class PreparePublicCatalogue extends Command
                         'tenant_id' => $tenant->id, 'unit_id' => $apartment->unit_id, 'partner_apartment_id' => $apartment->partner_apartment_id,
                         'slug' => $slug, 'title' => $title, 'description' => '', 'city' => '',
                         'max_guests' => null, 'min_nights' => null, 'starting_price' => null,
-                        'check_in_time' => '14:00', 'check_out_time' => '10:00', 'amenities' => json_encode([]),
+                        'check_in_time' => '12:00', 'check_out_time' => '10:00', 'amenities' => json_encode([]),
                         'status' => 'draft', 'featured' => false, 'version' => 1, 'created_at' => now(), 'updated_at' => now(),
                     ]);
                     DB::table('public_listing_audit_events')->insert([

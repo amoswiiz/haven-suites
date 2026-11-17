@@ -543,7 +543,7 @@ class GuestTrustTest extends TestCase
         $this->assertStringContainsString('href="'.route('public-stays.show', [$slug, 'sea-view']).'"', $guest->getContent());
         $this->get('/stays/'.$slug.'/blog/business-trips-to-kisumu')->assertOk()->assertSee('Stays you might like')->assertSee('Sea View Retreat');
 
-        $owner = $this->get('/stays/'.$slug.'/blog/airbnb-taxes-in-kenya-for-investors')->assertOk()->assertSee('Get your property assessed')->assertSee('Talk to our team')->assertDontSee('Stays you might like');
+        $owner = $this->get('/stays/'.$slug.'/blog/airbnb-taxes-in-kenya-for-investors')->assertOk()->assertSee('Get your property assessed')->assertSee('name="_token"', false)->assertSee('Talk to our team')->assertDontSee('Stays you might like');
         preg_match('/name="form_issued_at" value="(\d+)"/', $owner->getContent(), $issued);
         preg_match('/name="form_token" value="([a-f0-9]{64})"/', $owner->getContent(), $token);
         $this->travel(5)->seconds();
