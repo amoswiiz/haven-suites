@@ -17,6 +17,7 @@ use App\Services\PublicEnquiries;
 use App\Services\PublicGuestInfo;
 use App\Services\PublicListingCatalog;
 use App\Services\PublicReviews;
+use App\Services\PublicStayTopics;
 use App\Services\PublicWebsiteLinks;
 use App\Support\PhoneNumber;
 use App\Support\PublicSiteUrl;
@@ -28,6 +29,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -550,9 +552,13 @@ class PublicStayController extends Controller
         [$tenant, $site] = $this->company($company, $catalog);
         $published = $catalog->published($tenant);
         $destinations = PublicListingCatalog::groupDestinations($published);
+        if ($area !== null && PublicStayTopics::exists($area)) {
+            return $this->topic($request, $tenant, $site, $published, $destinations, $city, $area, $guides);
+        }
         $place = $guides->resolve($destinations, $city, $area);
         abort_unless($place, 404);
         $ratings = app(PublicReviews::class)->summaries($tenant);
+        $cityTopics = $place['area'] === null ? PublicStayTopics::forCity($published->filter(fn (array $listing): bool => $listing['city'] === $place['city'])) : [];
         $stays = $published->filter(fn (array $listing): bool => $listing['city'] === $place['city'] && ($place['area'] === null || $listing['neighbourhood'] === $place['area']))
             ->map(function (array $listing) use ($tenant, $site, $request, $ratings): array {
                 $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
@@ -565,7 +571,7 @@ class PublicStayController extends Controller
 
         return $this->page('public_stays.area', [
             'tenant' => $tenant, 'site' => $site, 'place' => $place, 'stays' => $stays, 'destinations' => $destinations,
-            'guide' => $guides->content($tenant, $place['city'], $place['area'], $stays->count()), 'areaGuides' => $guides,
+            'guide' => $guides->content($tenant, $place['city'], $place['area'], $stays->count()), 'areaGuides' => $guides, 'cityTopics' => $cityTopics,
             'pageTitle' => 'Serviced apartments in '.$this->plainText($name, 150).' | '.$this->plainText($tenant->name, 100),
             'pageDescription' => $this->plainText('Browse '.$stays->count().' short-stay '.($stays->count() === 1 ? 'apartment' : 'apartments').' in '.$name.' with '.$tenant->name.'. See photos, amenities and prices, and enquire for your dates.', 320),
             'canonicalUrl' => $canonicalUrl, 'socialImage' => $this->socialImage($stays->first()['photos'][0] ?? null),
@@ -574,6 +580,50 @@ class PublicStayController extends Controller
                 ['@type' => 'ListItem', 'position' => 2, 'name' => $this->plainText($place['city'], 100), 'item' => $this->publicUrl('public-stays.city', ['company' => $tenant->slug, 'city' => $city])],
                 $place['area'] ? ['@type' => 'ListItem', 'position' => 3, 'name' => $this->plainText($place['area'], 150), 'item' => $canonicalUrl] : null,
             ]))],
+        ]);
+    }
+
+    /**
+     * A page for one kind of stay in a city, such as "Sea view apartments in Mombasa".
+     *
+     * @param  Collection<int, array<string, mixed>>  $published
+     * @param  list<array<string, mixed>>  $destinations
+     */
+    private function topic(Request $request, Tenant $tenant, object $site, Collection $published, array $destinations, string $city, string $slug, PublicAreaGuides $guides): Response
+    {
+        $place = $guides->resolve($destinations, $city);
+        abort_unless($place, 404);
+        $cityStays = $published->filter(fn (array $listing): bool => $listing['city'] === $place['city']);
+        $ratings = app(PublicReviews::class)->summaries($tenant);
+        $stays = $cityStays->filter(fn (array $listing): bool => PublicStayTopics::matches($slug, $listing))
+            ->map(function (array $listing) use ($tenant, $site, $request, $ratings): array {
+                $listing['links'] = $this->listingLinks($tenant, $listing, $site, $request);
+                $listing['rating'] = $ratings[$listing['id']] ?? null;
+
+                return $listing;
+            })->sortBy(fn (array $listing): float => (float) $listing['starting_price'] > 0 ? (float) $listing['starting_price'] : PHP_FLOAT_MAX)->values();
+        abort_if($stays->count() < PublicStayTopics::MIN_STAYS, 404);
+        $topic = PublicStayTopics::TOPICS[$slug] + ['slug' => $slug];
+        $cityName = $this->plainText($place['city'], 100);
+        $prices = $stays->pluck('starting_price')->map(fn ($price): float => (float) $price)->filter(fn (float $price): bool => $price > 0);
+        $fromPrice = $prices->isNotEmpty() ? ' from '.($stays->first()['currency'] ?? 'KES').' '.number_format($prices->min()).' a night' : '';
+        $canonicalUrl = PublicSiteUrl::canonical(PublicStayTopics::url($tenant, $place['city'], $slug));
+        $areas = $stays->pluck('neighbourhood')->filter()->countBy()->sortDesc()->keys()->take(4)->all();
+        $intro = [$topic['intro'], 'Compare '.$stays->count().' '.Str::lower($topic['label']).' in '.$cityName.$fromPrice.($areas !== [] ? ', in '.Arr::join($areas, ', ', ' and ') : '')
+            .'. Choose your dates on any apartment to see the price, then send an enquiry or WhatsApp us. Our team confirms availability and the final price.'];
+
+        return $this->page('public_stays.area', [
+            'tenant' => $tenant, 'site' => $site, 'place' => $place, 'stays' => $stays, 'destinations' => $destinations, 'areaGuides' => $guides,
+            'topic' => $topic, 'cityTopics' => PublicStayTopics::forCity($cityStays),
+            'guide' => ['intro' => $intro, 'highlights' => [], 'custom' => false],
+            'pageTitle' => $topic['label'].' in '.$cityName.' | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => Str::limit($this->plainText($stays->count().' '.Str::lower($topic['label']).' in '.$cityName.$fromPrice.'. See photos, amenities and prices, and enquire for your dates with '.$tenant->name.'.', 320), 160, preserveWords: true),
+            'canonicalUrl' => $canonicalUrl, 'socialImage' => $this->socialImage($stays->first()['photos'][0] ?? null),
+            'structuredData' => ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => 'Find a stay', 'item' => $this->publicUrl('public-stays.index', ['company' => $tenant->slug])],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => $cityName, 'item' => $this->publicUrl('public-stays.city', ['company' => $tenant->slug, 'city' => $city])],
+                ['@type' => 'ListItem', 'position' => 3, 'name' => $topic['label'], 'item' => $canonicalUrl],
+            ]],
         ]);
     }
 
@@ -645,6 +695,9 @@ class PublicStayController extends Controller
         $guides = app(PublicAreaGuides::class);
         foreach (PublicListingCatalog::groupDestinations($published) as $destination) {
             $entries[] = ['url' => PublicSiteUrl::canonical($guides->url($tenant, $destination['city']))];
+            foreach (PublicStayTopics::forCity($published->filter(fn (array $listing): bool => $listing['city'] === $destination['city'])) as $topic) {
+                $entries[] = ['url' => PublicSiteUrl::canonical(PublicStayTopics::url($tenant, $destination['city'], $topic['slug']))];
+            }
             foreach ($destination['areas'] as $area) {
                 if (Str::slug($area['name']) !== '') {
                     $entries[] = ['url' => PublicSiteUrl::canonical($guides->url($tenant, $destination['city'], $area['name']))];

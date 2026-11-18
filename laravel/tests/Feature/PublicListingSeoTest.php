@@ -184,7 +184,8 @@ class PublicListingSeoTest extends TestCase
         $xpath = new DOMXPath($document);
         $xpath->registerNamespace('s', 'http://www.sitemaps.org/schemas/sitemap/0.9');
         $xpath->registerNamespace('image', 'http://www.google.com/schemas/sitemap-image/1.1');
-        $this->assertSame(9, $xpath->query('//s:url')->length, 'Catalogue, About us, FAQ, List your property, the city and area pages and the published listings.');
+        $this->assertSame(10, $xpath->query('//s:url')->length, 'Catalogue, About us, FAQ, List your property, the city, stay-type and area pages and the published listings.');
+        $this->assertSame(1, $xpath->query('//s:url/s:loc[contains(., "/in/mombasa/2-bedroom-apartments")]')->length);
         $this->assertSame(1, $xpath->query('//s:url/s:loc[contains(., "/list-your-property")]')->length);
         $this->assertSame(1, $xpath->query('//s:url/s:loc[contains(., "/in/mombasa/nyali")]')->length);
         $this->assertSame(1, $xpath->query('//s:url/s:loc[contains(., "/about")]')->length);
