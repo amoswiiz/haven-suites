@@ -97,7 +97,7 @@
         @include('public_stays.location')
     </div><aside class="stay-enquiry" id="enquire"><div class="stay-price">
         @if((float)$listing['starting_price'] > 0)<small>From</small><strong>{{ $listing['currency'] }} {{ number_format((float)$listing['starting_price'], (float)$listing['starting_price'] == floor((float)$listing['starting_price']) ? 0 : 2) }}</strong><small>per night &middot; Final price confirmed by our team</small>@else<strong>Price on request</strong><small>Our team will prepare your quote.</small>@endif
-    </div><h2>Let's plan your stay</h2><p>Tell us when you'd like to visit. We'll confirm availability and help you with the next steps.</p>
+    </div>@include('public_stays.direct_perks')<h2>Let's plan your stay</h2><p>Tell us when you'd like to visit. We'll confirm availability and help you with the next steps.</p>
         @if($canEnquire)
             <form method="post" action="{{ route('public-stays.enquire', [$tenant->slug, $listing['slug']]) }}" data-enquiry-form data-min-nights="{{ $listing['min_nights'] }}" data-nightly="{{ (float) $listing['starting_price'] > 0 ? (float) $listing['starting_price'] : '' }}" data-weekend="{{ $listing['weekend_price'] ?? '' }}" data-seasons="{{ json_encode(array_map(fn ($season) => [$season['from'], $season['to'], $season['price']], $listing['seasonal_rates'] ?? [])) }}" data-cleaning="{{ $listing['cleaning_fee'] ?? '' }}" data-weekly="{{ $listing['weekly_discount'] ?? '' }}" data-monthly="{{ $listing['monthly_discount'] ?? '' }}" data-currency="{{ $listing['currency'] }}">
                 @csrf

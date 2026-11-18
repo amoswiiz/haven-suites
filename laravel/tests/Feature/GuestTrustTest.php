@@ -583,6 +583,23 @@ class GuestTrustTest extends TestCase
             'response_hours' => 2, 'google_rating' => '6'])->assertSessionHasErrors('google_rating');
     }
 
+    public function test_staff_add_tracking_ids_and_book_direct_perks_in_website_settings(): void
+    {
+        $settings = ['enabled' => 1, 'enquiry_assignee_id' => $this->admin->id, 'response_hours' => 2];
+        $version = (int) DB::table('public_sites')->where('tenant_id', $this->company->id)->value('version');
+        $this->staff()->get(route('public-listings.settings', $this->company->slug))->assertOk()->assertSee('Visitor tracking')->assertSee('Perks of booking direct');
+        $this->staff()->post(route('public-listings.site.update', $this->company->slug), $settings + ['version' => $version, 'ga_measurement_id' => ' g-abc123xyz ', 'meta_pixel_id' => '', 'direct_perks' => "No service fees\nPay by M-Pesa"])
+            ->assertSessionHasNoErrors();
+        $site = DB::table('public_sites')->where('tenant_id', $this->company->id)->first();
+        $this->assertSame(['G-ABC123XYZ', null, "No service fees\nPay by M-Pesa"], [$site->ga_measurement_id, $site->meta_pixel_id, $site->direct_perks]);
+
+        $this->staff()->post(route('public-listings.site.update', $this->company->slug), $settings + ['version' => $version + 1, 'ga_measurement_id' => 'UA-12345-1', 'meta_pixel_id' => 'pixel'])
+            ->assertSessionHasErrors(['ga_measurement_id', 'meta_pixel_id']);
+
+        auth()->logout();
+        $this->get('/stays/trust-stays')->assertOk()->assertSee('gtag/js?id=G-ABC123XYZ', false);
+    }
+
     public function test_new_homepage_is_photo_first_with_a_date_picker_and_chosen_photo(): void
     {
         DB::table('public_listings')->where('id', $this->listingId)->update(['collections' => json_encode(['sea_view'])]);

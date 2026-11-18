@@ -11,6 +11,8 @@
     $tagLabels = collect($stay['collection_labels'] ?? [])->sortBy(fn (string $label): int => $label === $activeCollectionLabel ? 0 : 1)->values()->all();
     $cardPhotos = array_slice($stay['photos'], 0, 5);
     $price = (float) $stay['starting_price'];
+    $otaSaving = $price > 0 && (float) ($stay['ota_price'] ?? 0) > $price ? (float) $stay['ota_price'] - $price : 0;
+    $otaSaving = $otaSaving >= (float) ($stay['ota_price'] ?? 0) * 0.03 ? $otaSaving : 0;
     $money = fn (float $amount): string => $stay['currency'].' '.number_format($amount, $amount == floor($amount) ? 0 : 2);
     $badge = in_array('Guest favourite', $tagLabels, true) ? 'Guest favourite' : ($tagLabels[0] ?? null);
 @endphp
@@ -47,6 +49,7 @@
             @if(!empty($stay['availability']))
                 <span class="stay-availability {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
             @endif
+            @if($otaSaving > 0)<p class="stay-card-saving">Save {{ $money($otaSaving) }} a night booking direct</p>@endif
             <div class="stay-card-foot">
                 <p class="stay-card-price">
                     @if(!empty($stay['estimate']))
@@ -71,6 +74,7 @@
             @if(!empty($stay['availability']))
                 <span class="stay-availability {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
             @endif
+            @if($otaSaving > 0)<p class="stay-card-saving">Save {{ $money($otaSaving) }} a night booking direct</p>@endif
             <div class="stay-facts"><span>{{ $bedroomLabel }}</span>@if($bedLabel)<span>{{ $bedLabel }}</span>@endif<span>{{ $bathroomLabel }}</span><span>Up to {{ $stay['max_guests'] }} guests</span></div>
             <div class="stay-card-bottom"><div class="stay-price">
                 @if($price > 0)<small>From</small> <strong>{{ $money($price) }}</strong> <small>/ night</small>@else<strong>Price on request</strong>@endif

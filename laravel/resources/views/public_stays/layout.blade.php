@@ -50,6 +50,7 @@
     @elseif($logoUrl)<link rel="icon" type="image/webp" href="{{ $logoUrl }}">@endif
     <link rel="stylesheet" href="{{ \App\Support\AssetVersion::url('assets/css/public-stays.css') }}">
     @if(!empty($structuredData) && empty($preview))<script type="application/ld+json">@json($structuredData)</script>@endif
+    @include('public_stays.analytics')
 </head>
 <body class="public-stays">
     <a class="stay-skip" href="#stay-content">Skip to content</a>

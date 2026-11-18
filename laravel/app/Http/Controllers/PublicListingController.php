@@ -134,6 +134,9 @@ class PublicListingController extends Controller
     {
         $this->authorizeAccess();
         $tenant = app('currentTenant');
+        if ($request->has('ga_measurement_id')) {
+            $request->merge(['ga_measurement_id' => strtoupper(trim((string) $request->input('ga_measurement_id'))) ?: null, 'meta_pixel_id' => trim((string) $request->input('meta_pixel_id')) ?: null]);
+        }
         $data = $request->validate([
             'version' => 'required|integer|min:0', 'enabled' => 'sometimes|boolean',
             'settings_page' => 'sometimes|boolean',
@@ -160,7 +163,9 @@ class PublicListingController extends Controller
             'social_links' => 'sometimes|array', 'social_links.*' => 'nullable|string|max:300',
             'office_addresses' => ['nullable', 'string', 'max:600', 'not_regex:/[<>]/'],
             'google_rating' => ['nullable', 'numeric', 'min:1', 'max:5', 'regex:/^\d(\.\d)?$/D'], 'google_review_count' => 'nullable|integer|min:1|max:1000000',
-        ], ['logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
+            'ga_measurement_id' => ['nullable', 'string', 'regex:/^G-[A-Z0-9]{4,15}$/D'], 'meta_pixel_id' => ['nullable', 'string', 'regex:/^\d{8,20}$/D'],
+            'direct_perks' => 'nullable|string|max:1000|not_regex:/[<>]/',
+        ], ['ga_measurement_id.regex' => 'Paste the Google Analytics measurement ID, which looks like G-ABC123XYZ.', 'meta_pixel_id.regex' => 'The Meta Pixel ID is a long number, e.g. 123456789012345.', 'logo.mimes' => 'Upload the logo as a WebP or PNG image.', 'logo.max' => 'Keep the logo file under 2 MB.']);
         if (array_key_exists('navigation_links', $data)) {
             $data['navigation_links'] = json_encode(app(PublicWebsiteLinks::class)->normalizeNavigation($data['navigation_links']), JSON_THROW_ON_ERROR);
         }
@@ -380,6 +385,7 @@ class PublicListingController extends Controller
             'max_guests' => 'required|integer|min:1|max:100', 'min_nights' => 'required|integer|min:1|max:365',
             'check_in_time' => 'required|date_format:H:i', 'check_out_time' => 'required|date_format:H:i',
             'starting_price' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999.99', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
+            'ota_price' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999.99', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
             'amenities' => 'nullable|array|max:30', 'amenities.*' => ['string', Rule::in(array_keys(PublicListingCatalog::AMENITIES))],
             'property_type' => ['nullable', Rule::in(array_keys(PublicListingCatalog::PROPERTY_TYPES))],
             'bedrooms' => ['nullable', 'integer', Rule::in(array_keys(PublicListingCatalog::LAYOUTS))],
@@ -464,8 +470,8 @@ class PublicListingController extends Controller
                 if ($photoCount > 30 || ($data['status'] === 'published' && ($photoCount < 1 || $unit->status !== 'active'))) {
                     throw ValidationException::withMessages(['photos' => 'A published listing needs an active apartment and at least one photo. Keep at most 30 photos.']);
                 }
-                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message', 'cleaning_fee', 'weekly_discount_percent', 'monthly_discount_percent', 'bedrooms', 'bathrooms', 'beds', 'bed_setup']));
-                $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'house_rules' => null, 'cleaning_fee' => null, 'weekly_discount_percent' => null, 'monthly_discount_percent' => null,
+                $changes = array_intersect_key($data, array_flip(['unit_id', 'partner_apartment_id', 'slug', 'title', 'description', 'city', 'neighbourhood', 'public_location', 'max_guests', 'min_nights', 'check_in_time', 'check_out_time', 'starting_price', 'ota_price', 'house_rules', 'status', 'seo_title', 'seo_description', 'whatsapp_number', 'whatsapp_message', 'cleaning_fee', 'weekly_discount_percent', 'monthly_discount_percent', 'bedrooms', 'bathrooms', 'beds', 'bed_setup']));
+                $changes += ['neighbourhood' => null, 'public_location' => null, 'starting_price' => null, 'ota_price' => null, 'house_rules' => null, 'cleaning_fee' => null, 'weekly_discount_percent' => null, 'monthly_discount_percent' => null,
                     'bedrooms' => null, 'bathrooms' => null, 'beds' => null, 'bed_setup' => null];
                 $keptPhotoIds = array_values(array_diff($currentPhotos->keys()->map(fn ($photoId): int => (int) $photoId)->all(), array_map('intval', $deletedIds)));
                 $changes += [

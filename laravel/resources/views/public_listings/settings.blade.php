@@ -41,6 +41,19 @@
             @endforeach
         </div>
     </section>
+    <section class="card" aria-labelledby="site-direct-heading"><h2 id="site-direct-heading">Why book direct</h2>
+        <p class="muted">Shown on every listing next to the price, so guests choose your website over Airbnb or Booking.com. Add each listing's booking-site price in the listing editor to show how much guests save.</p>
+        <label for="direct_perks">Perks of booking direct <small class="muted">one per line, up to 4</small></label>
+        <textarea id="direct_perks" name="direct_perks" rows="4" maxlength="1000" placeholder="No booking-site service fees&#10;Free late checkout when available&#10;Talk directly to the host on WhatsApp&#10;Pay by M-Pesa">{{ old('direct_perks', $site->direct_perks ?? '') }}</textarea>
+    </section>
+    <section class="card" aria-labelledby="site-tracking-heading"><h2 id="site-tracking-heading">Visitor tracking</h2>
+        <p class="muted">See how many people visit, which listings they view, and how many send an enquiry, WhatsApp or call you. Visits by signed-in staff are not counted. Leave blank to turn tracking off.</p>
+        <div class="grid">
+            <div><label for="ga_measurement_id">Google Analytics measurement ID <small class="muted">starts with G-</small></label><input id="ga_measurement_id" name="ga_measurement_id" maxlength="20" placeholder="G-ABC123XYZ" value="{{ old('ga_measurement_id', $site->ga_measurement_id ?? '') }}" autocomplete="off" spellcheck="false"></div>
+            <div><label for="meta_pixel_id">Meta (Facebook) Pixel ID <small class="muted">optional, for Facebook and Instagram ads</small></label><input id="meta_pixel_id" name="meta_pixel_id" inputmode="numeric" maxlength="20" placeholder="123456789012345" value="{{ old('meta_pixel_id', $site->meta_pixel_id ?? '') }}" autocomplete="off"></div>
+        </div>
+        <p class="muted">Find the ID in Google Analytics under Admin → Data streams → your website. Enquiries are recorded as “generate_lead”; mark it as a key event in Google Analytics to see conversions.</p>
+    </section>
     <section class="card" aria-labelledby="site-layout-heading"><h2 id="site-layout-heading">Homepage layout</h2>
     <p class="muted">Turn on the new homepage one step at a time. Searches, addresses, enquiries and WhatsApp messages work the same in both layouts, so you can switch a step off again at any time.</p>
     <p class="muted">Preview before switching on: <a href="{{ route('public-stays.index', $tenantSlug) }}?layout=new" target="_blank" rel="noopener">new layout</a> &middot; <a href="{{ route('public-stays.index', $tenantSlug) }}?layout=classic" target="_blank" rel="noopener">current layout</a></p>

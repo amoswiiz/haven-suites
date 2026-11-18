@@ -1,5 +1,6 @@
 @extends('public_stays.layout')
 @section('title', 'Enquiry received')
+@section('conversion', 'enquiry')
 @section('content')
 <div class="stay-container">
 <section class="stay-track" aria-labelledby="received-heading">

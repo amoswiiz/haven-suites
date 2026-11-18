@@ -454,6 +454,7 @@ class PublicListingCatalog
             'max_guests' => $listing->max_guests !== null ? (int) $listing->max_guests : null, 'min_nights' => $listing->min_nights !== null ? (int) $listing->min_nights : null,
             'check_in_time' => $listing->check_in_time, 'check_out_time' => $listing->check_out_time,
             'starting_price' => $listing->starting_price ?? $unit->nightly_rate, 'currency' => $tenant->currency,
+            'ota_price' => (float) ($listing->ota_price ?? 0) > 0 ? (float) $listing->ota_price : null,
             'amenities' => $amenities, 'amenity_labels' => array_map(fn (string $key): string => self::AMENITIES[$key], $amenities),
             'house_rules' => $listing->house_rules, 'featured' => (bool) $listing->featured,
             'cleaning_fee' => (float) ($listing->cleaning_fee ?? 0) > 0 ? (float) $listing->cleaning_fee : null,
