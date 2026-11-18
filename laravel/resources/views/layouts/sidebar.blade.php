@@ -268,7 +268,11 @@ document.addEventListener('DOMContentLoaded', function () {
  const key=@json('haven.navigation.'.app('currentTenant')->id.'.'.auth()->id());
  let state={};try{state=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
  let filtering=false;
- groups.forEach(g=>{const name=g.dataset.group;if(state[name]!==undefined && !g.querySelector('[aria-current="page"]'))g.open=state[name];g.addEventListener('toggle',()=>{if(filtering)return;state[name]=g.open;try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}})});
+ groups.forEach(g=>{const name=g.dataset.group;if(state[name]!==undefined && !g.querySelector('[aria-current="page"]'))g.open=state[name]});
+ // One menu open at a time: keep the current page's menu (or the first open one) and close the rest.
+ const keep=groups.find(g=>g.querySelector('[aria-current="page"]'))||groups.find(g=>g.open);
+ groups.forEach(g=>{if(g!==keep)g.open=false});
+ groups.forEach(g=>{const name=g.dataset.group;g.addEventListener('toggle',()=>{if(filtering)return;if(g.open)groups.forEach(o=>{if(o!==g&&o.open)o.open=false});state[name]=g.open;try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}})});
  const synonyms={booking:'reservation bookings',receipt:'invoices payments',rent:'accounting',kyc:'verification',remittance:'payouts',sms:'messages',cleaning:'housekeeping cleaner'};
  let snapshot=null;
  search.addEventListener('input',()=>{const query=search.value.trim().toLowerCase();filtering=!!query;if(query&&!snapshot)snapshot=groups.map(g=>g.open);let count=0;
