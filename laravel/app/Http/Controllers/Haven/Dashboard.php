@@ -8,6 +8,7 @@ use App\Models\Haven\ReservationModel;
 use App\Models\Haven\StaffModel;
 use App\Models\Haven\UnitModel;
 use App\Services\DueCommunications;
+use App\Services\ListingQuality;
 use App\Services\OwnerRemittanceCalculator;
 use App\Services\SalesPipelineSummary;
 use App\Services\UnitAccounting;
@@ -115,6 +116,9 @@ class Dashboard extends BaseController
             : null;
         $data['communicationQueue'] = auth()->user()->can('messaging.view')
             ? app(DueCommunications::class)->summary()
+            : null;
+        $data['listingCleanup'] = auth()->user()->can('properties.manage')
+            ? app(ListingQuality::class)->cleanup(app('currentTenant'))
             : null;
         $data['completedCheckouts'] = $reservationModel->where('check_out', $today)->where('status', 'checked_out')->countAllResults();
         $data['remainingCheckouts'] = $data['todayCheckouts'] - $data['completedCheckouts'];

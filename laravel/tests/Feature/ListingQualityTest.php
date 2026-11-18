@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Console\Commands\ImportWebsiteProperties;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\ListingQuality;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -126,5 +127,36 @@ class ListingQualityTest extends TestCase
 
         $this->get(route('public-listings.edit', ['tenant' => $this->company->slug, 'id' => $imported]))->assertOk()
             ->assertSee('Possible duplicate:')->assertSee('Pinecrest View / A110')->assertSee('Owner contact recorded')->assertSee('Details checked since import');
+    }
+
+    public function test_staff_tick_listings_as_optimised_on_the_dashboard_clean_up_list(): void
+    {
+        $weak = $this->listing(['partner_apartment_id' => 1, 'slug' => 'pinecrest-2br-kilimani-562', 'title' => 'Pinecrest 2BR Kilimani – 562', 'city' => 'Nairobi', 'bedrooms' => 2]);
+        $strong = $this->listing(['unit_id' => 1, 'slug' => 'pinecrest-view-a110', 'title' => 'Pinecrest View / A110', 'city' => 'Nairobi', 'neighbourhood' => 'Kilimani', 'bedrooms' => 2]);
+        $archived = $this->listing(['unit_id' => 2, 'slug' => 'old-flat', 'title' => 'Old flat in town', 'city' => 'Nairobi', 'status' => 'archived']);
+
+        $cleanup = app(ListingQuality::class)->cleanup($this->company);
+        $this->assertSame(['optimised' => 0, 'total' => 2], ['optimised' => $cleanup['optimised'], 'total' => $cleanup['total']], 'Archived listings are left out.');
+        $this->assertSame($weak, $cleanup['rows'][0]['listing']->id, 'The weakest listing comes first.');
+
+        $this->from('/t/'.$this->company->slug.'/dashboard')->post(route('public-listings.optimised', ['tenant' => $this->company->slug, 'id' => $strong]), ['optimised' => 1])
+            ->assertRedirect('/t/'.$this->company->slug.'/dashboard#cleanup-listing-'.$strong);
+        $row = DB::table('public_listings')->find($strong);
+        $this->assertNotNull($row->optimised_at);
+        $this->assertSame($this->admin->id, (int) $row->optimised_by);
+        $this->assertDatabaseHas('public_listing_audit_events', ['listing_id' => $strong, 'action' => 'listing_marked_optimised']);
+
+        app()->instance('currentTenant', $this->company);
+        $cleanup = app(ListingQuality::class)->cleanup($this->company);
+        $this->assertSame(1, $cleanup['optimised']);
+        $this->assertSame($strong, end($cleanup['rows'])['listing']->id, 'Optimised listings move below the to-do list.');
+        $html = view('dashboard.listings', ['listingCleanup' => $cleanup])->render();
+        $this->assertStringContainsString('1 of 2 listings optimised', $html);
+        $this->assertStringContainsString('Optimised by '.e($this->admin->name), $html);
+        $this->assertStringNotContainsString('Old flat in town', $html);
+
+        $this->post(route('public-listings.optimised', ['tenant' => $this->company->slug, 'id' => $strong]), ['optimised' => 0])->assertRedirect();
+        $this->assertNull(DB::table('public_listings')->find($strong)->optimised_at);
+        $this->post(route('public-listings.optimised', ['tenant' => $this->company->slug, 'id' => $archived + 999]), ['optimised' => 1])->assertNotFound();
     }
 }

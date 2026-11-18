@@ -49,6 +49,33 @@ final class ListingQuality
     }
 
     /**
+     * The clean-up list for the dashboard: listings still to optimise (weakest first), then those staff marked done.
+     *
+     * @return array{rows: list<array{listing: object, score: int, todo: list<string>, duplicate_of: ?object, optimised_by: ?string}>, optimised: int, total: int}
+     */
+    public function cleanup(Tenant $tenant): array
+    {
+        $listings = DB::table('public_listings')->where('tenant_id', $tenant->id)->where('status', '!=', 'archived')->get();
+        $quality = $this->forListings($tenant, $listings);
+        $names = DB::table('users')->whereIn('id', $listings->pluck('optimised_by')->filter()->unique()->all() ?: [0])->pluck('name', 'id');
+        $rows = $listings->map(fn (object $listing): array => [
+            'listing' => $listing,
+            'score' => $quality[(int) $listing->id]['score'],
+            'todo' => $quality[(int) $listing->id]['todo'],
+            'duplicate_of' => $quality[(int) $listing->id]['duplicate_of'],
+            'optimised_by' => $listing->optimised_by !== null ? ($names[(int) $listing->optimised_by] ?? 'A former team member') : null,
+        ]);
+        [$done, $todo] = $rows->partition(fn (array $row): bool => $row['listing']->optimised_at !== null);
+
+        return [
+            'rows' => $todo->sortBy([['score', 'asc'], fn (array $a, array $b): int => strcasecmp((string) $a['listing']->title, (string) $b['listing']->title)])
+                ->concat($done->sortByDesc(fn (array $row): string => (string) $row['listing']->optimised_at))->values()->all(),
+            'optimised' => $done->count(),
+            'total' => $rows->count(),
+        ];
+    }
+
+    /**
      * Owner and import facts for one listing in the editor, and a listing it may duplicate.
      *
      * @return array{context: array{owner_recorded: ?bool, unchecked_import: ?bool}, duplicate_of: ?object}

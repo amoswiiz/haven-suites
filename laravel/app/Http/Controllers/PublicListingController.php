@@ -282,6 +282,24 @@ class PublicListingController extends Controller
         return redirect()->route('public-listings.edit', ['tenant' => $tenant, 'id' => $id])->with('success', 'Listing restored as a private draft. Review it and publish when ready.');
     }
 
+    /** Mark a listing as optimised (renamed, details checked and completed), or take the mark off again. */
+    public function optimised(string $tenant, int $id, Request $request): RedirectResponse
+    {
+        $this->authorizeAccess();
+        $optimised = $request->boolean('optimised');
+        $company = app('currentTenant');
+        $listing = DB::transaction(function () use ($company, $id, $optimised): object {
+            $listing = DB::table('public_listings')->where('tenant_id', $company->id)->where('id', $id)->lockForUpdate()->firstOrFail();
+            $changes = $optimised ? ['optimised_at' => now(), 'optimised_by' => auth()->id()] : ['optimised_at' => null, 'optimised_by' => null];
+            DB::table('public_listings')->where('tenant_id', $company->id)->where('id', $id)->update($changes);
+            $this->audit($id, $optimised ? 'listing_marked_optimised' : 'listing_unmarked_optimised', $listing, (object) $changes);
+
+            return $listing;
+        });
+
+        return redirect()->to(url()->previous().'#cleanup-listing-'.$id)->with('success', $optimised ? '“'.$listing->title.'” marked as optimised.' : '“'.$listing->title.'” moved back to the to-do list.');
+    }
+
     /** Permanently delete a listing that no enquiry refers to, with its photos. */
     public function destroy(string $tenant, int $id, Request $request): RedirectResponse
     {
