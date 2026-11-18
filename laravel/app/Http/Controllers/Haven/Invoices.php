@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Haven;
 
 use App\Services\BookingAmendments;
+use App\Support\CompanyLogo;
 use App\Support\InvoiceDefaults;
 use App\Support\Migration\PageNotFoundException;
 use Dompdf\Dompdf;
@@ -330,8 +331,7 @@ class Invoices extends BaseController
     {
         $data = $this->documentData($id);
         abort_unless($data['invoice']['status'] === 'issued', 404);
-        $path = public_path('assets/images/haven-suites-logo.png');
-        $data['logoDataUri'] = app('currentTenant')->slug === 'haven' && is_file($path) ? 'data:image/png;base64,'.base64_encode(file_get_contents($path)) : '';
+        $data['logoDataUri'] = CompanyLogo::dataUri(app('currentTenant')) ?? '';
         $options = new Options;
         $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);

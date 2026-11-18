@@ -48,7 +48,7 @@ body,.hs-main,.hs-content{background:white!important;margin:0!important;padding:
 </style>
 <article class="hs-invoice-sheet hs-invoice-accent invoice-document" aria-label="Invoice document">
 <table class="doc-header" role="presentation"><tr><td class="doc-brand">
-@if(app('currentTenant')->slug === 'haven')<img src="{{ $logoDataUri ?? base_url('assets/images/haven-suites-logo.png') }}" alt="Haven Suites" class="hs-invoice-logo" style="width:200px;height:auto">@else<strong>{{ $settings['business_name'] ?? app('currentTenant')->name }}</strong>@endif
+@php($documentLogo = ($logoDataUri ?? null) ?: \App\Support\CompanyLogo::dataUri(app('currentTenant')))@if($documentLogo)<img src="{{ $documentLogo }}" alt="{{ $settings['business_name'] ?? app('currentTenant')->name }}" class="hs-invoice-logo" style="width:200px;height:auto">@else<strong>{{ $settings['business_name'] ?? app('currentTenant')->name }}</strong>@endif
 <div class="doc-contact">@foreach(['business_website','business_email','business_phone','business_address'] as $field)@if(!empty($settings[$field]))<div class="doc-text">{{ $field === 'business_website' ? preg_replace('~^https?://~i', '', $settings[$field]) : $settings[$field] }}</div>@endif @endforeach</div>
 </td><td class="doc-meta"><h2 class="doc-title">INVOICE</h2><div class="doc-number">{{ $invoice['invoice_number'] ?: 'DRAFT #'.$invoice['id'] }}</div>
 @if(!empty($invoiceRevision))<div>Revision {{ $invoiceRevision['number'] }} &middot; Amended {{ date('d M Y', strtotime($invoiceRevision['created_at'])) }}</div>@endif

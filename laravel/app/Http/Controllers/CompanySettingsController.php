@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use App\Services\CompanyMail;
 use App\Services\GoogleReviewLink;
+use App\Support\CompanyLogo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -30,7 +31,7 @@ class CompanySettingsController extends Controller
             return $this->emailSettings($request);
         }
         $data = $request->validate(['name' => 'required|string|max:150', 'contact_email' => 'nullable|email|max:180', 'contact_phone' => 'nullable|string|max:40',
-            'report_logo' => 'nullable|image|mimes:png,jpg,jpeg|max:2048|dimensions:max_width=4000,max_height=4000',
+            'report_logo' => 'nullable|image|mimes:png,jpg,jpeg|max:2048|dimensions:max_width=4000,max_height=4000', 'remove_report_logo' => 'sometimes|boolean',
             'report_primary_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'report_accent_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'reference_prefix' => ['nullable', 'string', 'regex:/^\s*[A-Za-z]{2,5}\s*$/D'],
@@ -46,13 +47,15 @@ class CompanySettingsController extends Controller
         if (array_key_exists('reference_prefix', $data)) {
             $data['reference_prefix'] = $data['reference_prefix'] === null ? null : strtoupper(trim($data['reference_prefix']));
         }
-        unset($data['report_logo']);
+        unset($data['report_logo'], $data['remove_report_logo']);
         if ($request->hasFile('report_logo')) {
-            $data['report_logo_path'] = $request->file('report_logo')->store('company-branding/'.app('currentTenant')->id, 'local');
+            $data['report_logo_path'] = CompanyLogo::store(app('currentTenant'), $request->file('report_logo'));
+        } elseif ($request->boolean('remove_report_logo')) {
+            $data['report_logo_path'] = null;
         }
         $oldLogo = app('currentTenant')->report_logo_path;
         app('currentTenant')->update($data);
-        if (isset($data['report_logo_path']) && $oldLogo && str_starts_with($oldLogo, 'company-branding/'.app('currentTenant')->id.'/')) {
+        if (array_key_exists('report_logo_path', $data) && $oldLogo && str_starts_with($oldLogo, 'company-branding/'.app('currentTenant')->id.'/')) {
             Storage::disk('local')->delete($oldLogo);
         }
 

@@ -51,7 +51,7 @@ tbody tr:nth-child(even) { background:#f5f8fc; }
 <div class="actions"><button onclick="window.print()">Print / Save as PDF</button></div>
 <main class="sheet">
 <header class="masthead">
-  <div><img class="brand-logo" src="<?= esc(base_url('assets/img/haven-suites-logo.png'), 'attr') ?>" alt="Haven Suites — BNBs and STR Homes" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="brand-fallback">HAVEN SUITES</span></div>
+  <div><img class="brand-logo" src="<?= esc(\App\Support\CompanyLogo::dataUri(app('currentTenant')) ?? base_url('assets/img/haven-suites-logo.png'), 'attr') ?>" alt="Haven Suites — BNBs and STR Homes" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="brand-fallback">HAVEN SUITES</span></div>
   <div class="report-tag"><div class="eyebrow">Investor financial report</div><div class="report-title">Owner Statement</div><div class="period">KES · <?= esc($fromMonth) ?> to <?= esc($toMonth) ?></div></div>
 </header>
 <section class="identity"><div class="name"><?= esc($unitLabel) ?></div><div class="detail">Reporting period: <?= esc($fromMonth) ?> to <?= esc($toMonth) ?> · Currency: Kenyan Shillings (KES)</div></section>

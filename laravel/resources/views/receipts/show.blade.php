@@ -9,7 +9,7 @@ $businessName = $settings['business_name'] ?? 'Haven Suites BNB';
 $businessEmail = $settings['business_email'] ?? '';
 $businessWebsite = $settings['business_website'] ?? '';
 $businessPhone = $settings['business_phone'] ?? '';
-$logoUrl = base_url('assets/images/haven-suites-logo.png');
+$logoUrl = \App\Support\CompanyLogo::dataUri(app('currentTenant'));
 ?>
 @extends('layouts/main')
 @section('content')
@@ -53,7 +53,7 @@ $logoUrl = base_url('assets/images/haven-suites-logo.png');
     <article class="hs-receipt-paper">
         <div class="hs-receipt-header">
             <div class="hs-receipt-brand">
-                <img src="<?= esc($logoUrl, 'attr') ?>" alt="Haven Suites — BNBs and STR Homes" class="hs-receipt-logo">
+                <?php if ($logoUrl): ?><img src="<?= esc($logoUrl, 'attr') ?>" alt="<?= esc($businessName, 'attr') ?>" class="hs-receipt-logo"><?php else: ?><strong><?= esc($businessName) ?></strong><?php endif; ?>
                 <?php if ($businessPhone || $businessEmail || $businessWebsite): ?>
                     <div class="hs-receipt-contact">
                         <?php if ($businessPhone): ?><div><?= esc($businessPhone) ?></div><?php endif; ?>

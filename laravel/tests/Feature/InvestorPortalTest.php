@@ -7,6 +7,7 @@ use App\Models\CompanyInvitation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\InvestorNotifications;
+use App\Support\CompanyLogo;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -154,12 +155,39 @@ class InvestorPortalTest extends TestCase
         $this->actingAs($owner)->get($url)->assertForbidden();
     }
 
+    public function test_the_uploaded_logo_is_resized_used_on_every_document_and_can_be_removed(): void
+    {
+        Storage::fake('local');
+        $tenant = $this->company();
+        $admin = $this->member($tenant, 'admin');
+        $url = '/t/'.$tenant->slug.'/company/settings';
+        $this->assertNull(CompanyLogo::dataUri($tenant), 'Without an upload or built-in file there is no logo.');
+
+        $this->actingAs($admin)->post($url, ['name' => $tenant->name, 'report_logo' => UploadedFile::fake()->image('wide-logo.jpg', 2400, 600)])->assertSessionHasNoErrors();
+        $tenant->refresh();
+        $this->assertStringEndsWith('.png', $tenant->report_logo_path);
+        [$width, $height] = getimagesize(Storage::disk('local')->path($tenant->report_logo_path));
+        $this->assertSame([CompanyLogo::MAX_WIDTH, 225], [$width, $height], 'Large logos are scaled down, keeping their shape.');
+        $this->assertStringStartsWith('data:image/png;base64,', CompanyLogo::dataUri($tenant));
+        $this->actingAs($admin)->get($url)->assertOk()->assertSee('Logo and document colours')->assertSee('Remove the uploaded logo')->assertSee('data:image/png;base64,', false);
+
+        foreach (['invoices/document.blade.php', 'receipts/show.blade.php', 'quotations/quotation.blade.php', 'investors/pdf_brand.blade.php', 'reports/investor_print.blade.php'] as $view) {
+            $this->assertStringContainsString('CompanyLogo::dataUri', (string) file_get_contents(resource_path('views/'.$view)), $view.' uses the company logo.');
+        }
+
+        $old = $tenant->report_logo_path;
+        $this->actingAs($admin)->post($url, ['name' => $tenant->name, 'remove_report_logo' => 1])->assertSessionHasNoErrors();
+        $this->assertNull($tenant->refresh()->report_logo_path);
+        Storage::disk('local')->assertMissing($old);
+        $this->assertNull(CompanyLogo::dataUri($tenant));
+    }
+
     public function test_company_pdf_branding_is_configurable_and_restricted_to_company_admins(): void
     {
         Storage::fake('local');
         $tenant = $this->company();
         $admin = $this->member($tenant, 'admin');
-        $logo = UploadedFile::fake()->createWithContent('logo.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aTf8AAAAASUVORK5CYII='));
+        $logo = UploadedFile::fake()->image('logo.png', 200, 60);
         $url = '/t/'.$tenant->slug.'/company/settings';
         $this->actingAs($admin)->post($url, ['name' => 'Coastal Investments', 'contact_email' => 'office@example.test', 'report_logo' => $logo, 'report_primary_color' => '#123456', 'report_accent_color' => '#abcdef'])->assertSessionHasNoErrors()->assertRedirect();
         $tenant->refresh();

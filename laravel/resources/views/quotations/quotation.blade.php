@@ -28,7 +28,7 @@ $balance = max(0, $total - $paid);
 $payment = $quote['payment_method'] ?? [];
 $agent = $quote['agent_name'] ?? '';
 $phone = $quote['contact_phone'] ?? '';
-$logo = $quote['logo_url'] ?? base_url('assets/images/logo.png');
+$logo = \App\Support\CompanyLogo::dataUri(app('currentTenant')) ?? ($quote['logo_url'] ?? base_url('assets/images/logo.png'));
 ?>
 <!doctype html>
 <html lang="en">

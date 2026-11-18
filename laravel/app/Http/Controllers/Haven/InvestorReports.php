@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Haven;
 
 use App\Services\OwnerRemittanceCalculator;
 use App\Services\UnitAccounting;
+use App\Support\CompanyLogo;
 use DateTimeImmutable;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -212,9 +213,7 @@ class InvestorReports extends BaseController
             );
         }
         // The PDF view uses embedded local branding; no external image requests.
-        $logoPath = (public_path().DIRECTORY_SEPARATOR).'assets/img/haven-suites-logo.png';
-        $data['logoDataUri'] = is_file($logoPath)
-            ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath)) : '';
+        $data['logoDataUri'] = CompanyLogo::dataUri(app('currentTenant')) ?? '';
         $options = new Options;
         $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);
