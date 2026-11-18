@@ -45,7 +45,7 @@
             <h3><a class="stay-card-link" href="{{ $stayUrl }}">{{ $stay['title'] }}</a></h3>
             <p class="stay-card-facts">{{ implode(' · ', array_filter(['Up to '.$stay['max_guests'].' guests', $bedLabel, $stay['bathrooms'] !== null ? $stay['bathrooms'].' bath'.($stay['bathrooms'] === 1 ? '' : 's') : null])) }}</p>
             @if(!empty($stay['availability']))
-                <span class="stay-pill {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
+                <span class="stay-availability {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
             @endif
             <div class="stay-card-foot">
                 <p class="stay-card-price">
@@ -69,7 +69,7 @@
             @if(!empty($stay['rating']['count']))<p class="stay-card-rating">@include('public_stays.stars', ['rating' => $stay['rating']['average']]) <strong>{{ number_format($stay['rating']['average'], 1) }}</strong> <span class="stay-card-count">({{ $stay['rating']['count'] }})</span></p>@endif
             @if(!empty($tagLabels) || !empty($stay['weekly_discount']) || !empty($stay['monthly_discount']))<p class="stay-card-tags">@foreach(array_slice($tagLabels, 0, 2) as $collectionLabel)<span class="stay-tag">{{ $collectionLabel }}</span>@endforeach @if(!empty($stay['monthly_discount']) || !empty($stay['weekly_discount']))<span class="stay-tag is-offer">{{ max((int) ($stay['weekly_discount'] ?? 0), (int) ($stay['monthly_discount'] ?? 0)) }}% off long stays</span>@endif</p>@endif
             @if(!empty($stay['availability']))
-                <span class="stay-pill {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
+                <span class="stay-availability {{ !$stay['availability']['available'] ? 'unavailable' : (!$stay['availability']['fresh'] ? 'attention' : '') }}">{{ !$stay['availability']['available'] ? 'Unavailable for these dates' : (!$stay['availability']['fresh'] ? 'Ask us to confirm dates' : 'Dates currently available') }}</span>
             @endif
             <div class="stay-facts"><span>{{ $bedroomLabel }}</span>@if($bedLabel)<span>{{ $bedLabel }}</span>@endif<span>{{ $bathroomLabel }}</span><span>Up to {{ $stay['max_guests'] }} guests</span></div>
             <div class="stay-card-bottom"><div class="stay-price">
