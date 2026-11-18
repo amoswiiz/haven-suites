@@ -118,6 +118,7 @@
             ...($footerPosts->isNotEmpty() ? [['label' => 'Travel tips & guides', 'url' => route('public-stays.blog', $tenant->slug)]] : []),
             ['label' => 'Track an enquiry', 'url' => route('public-stays.track', $tenant->slug)],
             ['label' => 'List your property with us', 'url' => route('public-stays.owners', $tenant->slug)],
+            ['label' => 'Privacy policy', 'url' => route('public-stays.privacy', $tenant->slug)],
         ])->unique(fn ($link) => strtok($link['url'], '?'))->values();
         $socialLinks = \App\Services\PublicWebsiteLinks::socialLinks($site ?? null);
         $offices = \App\Services\PublicWebsiteLinks::officeAddresses($site ?? null);

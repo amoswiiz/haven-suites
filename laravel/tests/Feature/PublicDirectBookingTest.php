@@ -75,6 +75,17 @@ class PublicDirectBookingTest extends TestCase
         $this->get('/stays/direct-stays/coral-gables-f2')->assertOk()->assertDontSee('googletagmanager.com', false)->assertDontSee('fbq(', false);
     }
 
+    public function test_privacy_and_data_deletion_pages_explain_social_messages_and_how_to_ask_for_deletion(): void
+    {
+        $this->catalogue(['contact_email' => 'hello@example.test'], []);
+
+        $this->get('/stays/direct-stays/privacy')->assertOk()->assertSee('<title>Privacy policy | Haven Suites</title>', false)
+            ->assertSee('Messages on social media')->assertSee('Kenya Data Protection Act')->assertSee('/stays/direct-stays/data-deletion', false);
+        $this->get('/stays/direct-stays/data-deletion')->assertOk()->assertSee('How to have your data deleted')
+            ->assertSee('mailto:hello@example.test', false)->assertSee('within 30 days');
+        $this->get('/stays/direct-stays')->assertOk()->assertSee('/stays/direct-stays/privacy', false);
+    }
+
     public function test_no_tracking_code_without_an_id(): void
     {
         $this->catalogue([], []);

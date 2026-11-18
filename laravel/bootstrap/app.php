@@ -26,7 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->redirectGuestsTo('/login');
         $middleware->web(append: [ImpersonateUser::class, ForgetPublicCatalogue::class]);
-        $middleware->preventRequestForgery(except: ['billing/webhooks/stripe', 'billing/webhooks/mpesa/*']);
+        $middleware->preventRequestForgery(except: ['billing/webhooks/stripe', 'billing/webhooks/mpesa/*', 'webhooks/meta']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(fn (Throwable $exception) => ErrorAlerts::report($exception));

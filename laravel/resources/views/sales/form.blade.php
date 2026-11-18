@@ -22,6 +22,7 @@
 <form method="post" action="{{ route('sales.store',app('currentTenant')->slug) }}" class="card">@csrf<div class="grid">
 <input type="hidden" name="capture_token" value="{{ old('capture_token', (string) \Illuminate\Support\Str::uuid()) }}">
 @if($value('public_listing_id'))<input type="hidden" name="public_listing_id" value="{{ $value('public_listing_id') }}">@endif
+@if($value('social_thread_id'))<input type="hidden" name="social_thread_id" value="{{ $value('social_thread_id') }}">@endif
 @foreach(['name'=>'Guest name','phone'=>'Phone number','email'=>'Email address','campaign'=>'Campaign / Advert','location'=>'Preferred location','unit_preference'=>'Preferred apartment'] as $key=>$label)
 <div><label for="{{ $key }}">{{ $label }}</label><input id="{{ $key }}" name="{{ $key }}" type="{{ $key==='email'?'email':($key==='phone'?'tel':'text') }}" value="{{ $value($key, $key === 'phone' ? \App\Support\PhoneNumber::DEFAULT_PREFIX.' ' : '') }}" maxlength="{{ $key==='phone'?50:255 }}" @required($key==='name')></div>
 @endforeach

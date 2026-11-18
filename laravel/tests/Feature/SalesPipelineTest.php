@@ -120,7 +120,7 @@ class SalesPipelineTest extends TestCase
         $this->get('/t/'.$tenant->slug.'/invoices')->assertForbidden();
         $this->post('/t/'.$tenant->slug.'/sales/'.$id.'/win', ['reservation_id' => 1, 'required_deposit' => 100])->assertForbidden();
         $this->post('/t/'.$tenant->slug.'/sales/'.$id.'/booking', ['reservation_id' => 1, 'version' => 1])->assertForbidden();
-        $this->get('/t/'.$tenant->slug.'/sales/connections')->assertOk()->assertSee('Disconnected');
+        $this->get('/t/'.$tenant->slug.'/sales/connections')->assertOk()->assertSee('Facebook and Instagram')->assertSee('Waiting for Meta setup');
     }
 
     public function test_agent_attribution_and_messaging_module_restrictions(): void

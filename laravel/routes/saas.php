@@ -8,6 +8,7 @@ use App\Http\Controllers\CompanySettingsController;
 use App\Http\Controllers\DueCommunicationController;
 use App\Http\Controllers\GuestCommunicationController;
 use App\Http\Controllers\InvestorController;
+use App\Http\Controllers\MetaWebhookController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PartnerDirectoryController;
 use App\Http\Controllers\PasswordChangeController;
@@ -19,6 +20,8 @@ use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\PublicStayController;
 use App\Http\Controllers\SaasAccountController;
 use App\Http\Controllers\SalesController;
+use App\Http\Controllers\SocialConnectionController;
+use App\Http\Controllers\SocialInboxController;
 use App\Http\Controllers\StaffBillController;
 use App\Http\Controllers\StaffProfileController;
 use App\Http\Controllers\SubscriptionController;
@@ -154,6 +157,9 @@ Route::prefix('t/{tenant}')->middleware(['auth', 'saas.verified', 'tenant', 'ten
     Route::post('company/subscription/payments/{reference}', [BillingController::class, 'evidence'])->name('company.billing.evidence');
     Route::get('company/subscription/payments/{reference}/invoice', [BillingController::class, 'invoice'])->name('company.billing.invoice');
 });
+Route::get('webhooks/meta', [MetaWebhookController::class, 'verify'])->middleware('throttle:30,1')->name('meta.webhook.verify');
+Route::post('webhooks/meta', [MetaWebhookController::class, 'receive'])->middleware('throttle:600,1')->name('meta.webhook');
+Route::get('integrations/meta/callback', [SocialConnectionController::class, 'callback'])->middleware(['auth', 'throttle:20,1'])->name('meta.callback');
 Route::post('billing/webhooks/stripe', [BillingController::class, 'stripe'])->middleware('throttle:60,1')->name('billing.stripe');
 Route::post('billing/webhooks/mpesa/{token}', [BillingController::class, 'mpesa'])->middleware('throttle:60,1')->name('billing.mpesa');
 
@@ -169,6 +175,8 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
     Route::get('agents/{id}/edit', [SalesController::class, 'editAgent'])->whereNumber('id')->middleware('permission:agents.manage')->name('sales.agent.edit');
     Route::post('agents/{id}', [SalesController::class, 'updateAgent'])->whereNumber('id')->middleware('permission:agents.manage')->name('sales.agent.update');
     Route::get('connections', [SalesController::class, 'connections'])->middleware('permission:messaging.view')->name('sales.connections');
+    Route::post('connections/meta', [SocialConnectionController::class, 'connect'])->middleware(['permission:messaging.manage', 'throttle:10,1'])->name('social.connect');
+    Route::post('connections/social/{id}/disconnect', [SocialConnectionController::class, 'disconnect'])->whereNumber('id')->middleware('permission:messaging.manage')->name('social.disconnect');
     Route::get('{id}', [SalesController::class, 'show'])->whereNumber('id')->middleware('permission:sales.view')->name('sales.show');
     Route::post('{id}', [SalesController::class, 'update'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.update');
     Route::post('{id}/notes', [SalesController::class, 'note'])->whereNumber('id')->middleware('permission:sales.manage')->name('sales.note');
@@ -184,6 +192,10 @@ Route::prefix('t/{tenant}/sales')->middleware(['auth', 'saas.verified', 'tenant'
 Route::get('investor-login', fn () => redirect('/login'))->name('investor.login');
 Route::prefix('t/{tenant}/communications')->middleware(['auth', 'saas.verified', 'tenant', 'tenant.member', 'tenant.write'])->group(function (): void {
     Route::get('due', [DueCommunicationController::class, 'index'])->middleware('permission:messaging.view')->name('communications.due');
+    Route::get('inbox', [SocialInboxController::class, 'index'])->middleware('permission:messaging.view')->name('social.index');
+    Route::get('inbox/{id}', [SocialInboxController::class, 'show'])->whereNumber('id')->middleware('permission:messaging.view')->name('social.show');
+    Route::post('inbox/{id}/reply', [SocialInboxController::class, 'reply'])->whereNumber('id')->middleware(['permission:messaging.manage', 'throttle:60,1'])->name('social.reply');
+    Route::post('inbox/{id}', [SocialInboxController::class, 'update'])->whereNumber('id')->middleware('permission:messaging.manage')->name('social.update');
     Route::get('guests', [GuestCommunicationController::class, 'compose'])->middleware('permission:messaging.manage')->name('communications.guests');
     Route::post('guests/preview', [GuestCommunicationController::class, 'preview'])->middleware('permission:messaging.manage')->name('communications.preview');
     Route::get('templates', [GuestCommunicationController::class, 'index'])->middleware('permission:messaging.view')->name('communications.templates');

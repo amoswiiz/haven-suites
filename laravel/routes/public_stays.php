@@ -24,6 +24,8 @@ $publicPages = function (bool $onDomain): void {
     Route::get('team/{name}', [PublicStayController::class, 'teamPhoto'])->where('name', 'team-[A-Za-z0-9]{16}\.jpg')->name('team-photo');
     Route::get('about', [PublicStayController::class, 'about'])->name('about');
     Route::get('faq', [PublicStayController::class, 'faq'])->name('faq');
+    Route::get('privacy', [PublicStayController::class, 'privacy'])->name('privacy');
+    Route::get('data-deletion', [PublicStayController::class, 'dataDeletion'])->name('data-deletion');
     Route::get('saved', [PublicStayController::class, 'saved'])->name('saved');
     Route::get('list-your-property', [PublicStayController::class, 'owners'])->name('owners');
     Route::post('list-your-property', [PublicStayController::class, 'ownerEnquiry'])->middleware('throttle:5,1')->name('owners.enquire');

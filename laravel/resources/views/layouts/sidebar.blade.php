@@ -30,6 +30,7 @@ $groups = [
         ['label' => 'Cleaner earnings', 'path' => 'payments/cleaners/earnings', 'access' => 'cleaner_module', 'icon' => 'wallet', 'keywords' => 'cleaner earnings'],
     ]],
     ['label' => 'Messages', 'icon' => 'message-circle', 'items' => [
+        ['label' => 'Social inbox', 'path' => 'communications/inbox', 'permission' => 'messaging.view', 'icon' => 'inbox', 'keywords' => 'social inbox facebook instagram comments messages dm'],
         ['label' => 'Communications due today', 'path' => 'communications/due', 'permission' => 'messaging.view', 'icon' => 'calendar-clock', 'keywords' => 'communications due'],
         ['label' => 'Guest messages', 'path' => 'communications/guests', 'permission' => 'messaging.manage', 'icon' => 'message-circle', 'keywords' => 'guest messages'],
         ['label' => 'SMS messages & history', 'path' => 'communications/sms', 'permission' => 'messaging.view', 'icon' => 'mail', 'keywords' => 'compose sms'],

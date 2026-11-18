@@ -414,6 +414,31 @@ class PublicStayController extends Controller
         ]);
     }
 
+    /** Privacy policy, also required by Meta for the social inbox connection. */
+    public function privacy(string $company, PublicListingCatalog $catalog): Response
+    {
+        return $this->legal($company, $catalog, 'privacy');
+    }
+
+    /** How guests ask for their data to be deleted, also required by Meta. */
+    public function dataDeletion(string $company, PublicListingCatalog $catalog): Response
+    {
+        return $this->legal($company, $catalog, 'deletion');
+    }
+
+    private function legal(string $company, PublicListingCatalog $catalog, string $legalPage): Response
+    {
+        [$tenant, $site] = $this->company($company, $catalog);
+        $privacy = $legalPage === 'privacy';
+
+        return $this->page('public_stays.legal', [
+            'tenant' => $tenant, 'site' => $site, 'legalPage' => $legalPage,
+            'pageTitle' => ($privacy ? 'Privacy policy' : 'Data deletion').' | '.$this->plainText($tenant->name, 100),
+            'pageDescription' => $privacy ? 'What personal information '.$this->plainText($tenant->name, 100).' collects, why, and your rights.' : 'How to ask '.$this->plainText($tenant->name, 100).' to delete your personal information.',
+            'canonicalUrl' => $this->publicUrl($privacy ? 'public-stays.privacy' : 'public-stays.data-deletion', ['company' => $tenant->slug]),
+        ]);
+    }
+
     public function blog(Request $request, string $company, PublicListingCatalog $catalog, PublicBlog $blog): Response
     {
         [$tenant, $site] = $this->company($company, $catalog);

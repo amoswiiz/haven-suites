@@ -94,7 +94,8 @@ class SalesController extends Controller
     public function create(Request $request): View
     {
         $input = $request->validate(['listing' => 'nullable|integer|min:1', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|date_format:Y-m-d',
-            'guests' => 'nullable|integer|min:1|max:1000', 'message' => 'nullable|string|max:3000', 'phone' => 'nullable|string|max:50', 'name' => 'nullable|string|max:150']);
+            'guests' => 'nullable|integer|min:1|max:1000', 'message' => 'nullable|string|max:3000', 'phone' => 'nullable|string|max:50', 'name' => 'nullable|string|max:150',
+            'source' => ['nullable', Rule::in(['facebook', 'instagram', 'whatsapp'])], 'social_thread' => 'nullable|integer|min:1']);
         $tenant = app('currentTenant');
         $published = $request->hasAny(['listing', 'message']) ? app(PublicListingCatalog::class)->published($tenant) : collect();
         $read = filled($input['message'] ?? null) ? app(WhatsAppEnquiryReader::class)->read($tenant, $input['message']) : [];
@@ -106,15 +107,18 @@ class SalesController extends Controller
         if ($checkIn && $checkOut && $checkOut <= $checkIn) {
             $checkOut = null;
         }
+        $socialSource = $input['source'] ?? null;
+        $socialThread = ! empty($input['social_thread']) && $this->table('social_threads')->where('id', $input['social_thread'])->exists() ? (int) $input['social_thread'] : null;
         $fromWhatsApp = filled($input['message'] ?? null);
         $prefill = array_filter([
             'name' => $input['name'] ?? null, 'phone' => $input['phone'] ?? null,
             'unit_preference' => $listing ? $listing['title'].($listing['listing_code'] ? ' (Code '.$listing['listing_code'].')' : '') : null,
             'location' => $listing ? implode(', ', array_filter([$listing['neighbourhood'], $listing['city']])) : null,
             'check_in' => $checkIn, 'check_out' => $checkOut, 'guests' => $read['guests'] ?? $input['guests'] ?? null,
-            'source' => $fromWhatsApp ? 'whatsapp' : ($listing ? 'phone' : null), 'channel' => $fromWhatsApp ? 'whatsapp' : ($listing ? 'phone' : null),
-            'notes' => $fromWhatsApp ? "Guest's WhatsApp message:\n".trim($input['message']) : null,
-            'public_listing_id' => $listing['id'] ?? null,
+            'source' => $socialSource ?? ($fromWhatsApp ? 'whatsapp' : ($listing ? 'phone' : null)),
+            'channel' => $socialSource ?? ($fromWhatsApp ? 'whatsapp' : ($listing ? 'phone' : null)),
+            'notes' => $fromWhatsApp ? "Guest's ".(config('sales.sources.'.($socialSource ?? 'whatsapp')) ?? 'WhatsApp')." message:\n".trim($input['message']) : null,
+            'public_listing_id' => $listing['id'] ?? null, 'social_thread_id' => $socialThread,
         ], fn ($value): bool => $value !== null && $value !== '');
 
         return view('sales.form', ['members' => $this->members(), 'agents' => CompanyModules::enabled('agents') ? $this->table('sales_agents')->where('active', true)->get() : collect(),
@@ -124,7 +128,7 @@ class SalesController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'source' => ['required', Rule::in(array_keys(config('sales.sources')))], 'channel' => ['required', Rule::in(array_keys(config('sales.channels')))], 'campaign' => 'nullable|string|max:255', 'assigned_to' => ['required', Rule::in($this->members()->pluck('id')->all())], 'agent_id' => 'nullable|integer', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'next_action' => 'required|string|max:255', 'follow_up_at' => 'required|date|after:now', 'notes' => 'nullable|string|max:5000', 'duplicate_acknowledged' => 'sometimes|accepted', 'capture_token' => 'nullable|uuid', 'public_listing_id' => 'nullable|integer|min:1']);
+        $data = $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable|string|max:50', 'email' => 'nullable|email|max:255', 'source' => ['required', Rule::in(array_keys(config('sales.sources')))], 'channel' => ['required', Rule::in(array_keys(config('sales.channels')))], 'campaign' => 'nullable|string|max:255', 'assigned_to' => ['required', Rule::in($this->members()->pluck('id')->all())], 'agent_id' => 'nullable|integer', 'check_in' => 'nullable|date_format:Y-m-d', 'check_out' => 'nullable|required_with:check_in|date_format:Y-m-d|after:check_in', 'guests' => 'required|integer|min:1|max:1000', 'location' => 'nullable|string|max:255', 'unit_preference' => 'nullable|string|max:255', 'budget' => 'nullable|numeric|min:0|max:999999999.99', 'next_action' => 'required|string|max:255', 'follow_up_at' => 'required|date|after:now', 'notes' => 'nullable|string|max:5000', 'duplicate_acknowledged' => 'sometimes|accepted', 'capture_token' => 'nullable|uuid', 'public_listing_id' => 'nullable|integer|min:1', 'social_thread_id' => 'nullable|integer|min:1']);
         $listingLink = [];
         if (! empty($data['public_listing_id'])) {
             $listing = DB::table('public_listings')->where('tenant_id', app('currentTenant')->id)->where('id', $data['public_listing_id'])->first();
@@ -133,7 +137,8 @@ class SalesController extends Controller
             }
             $listingLink = ['public_listing_id' => $listing->id, 'public_unit_id' => $listing->unit_id, 'public_partner_apartment_id' => $listing->partner_apartment_id ?? null, 'public_origin' => 'staff'];
         }
-        unset($data['public_listing_id']);
+        $socialThreadId = isset($data['social_thread_id']) ? (int) $data['social_thread_id'] : null;
+        unset($data['public_listing_id'], $data['social_thread_id']);
         $data['capture_token'] = ! empty($data['capture_token']) ? strtolower($data['capture_token']) : null;
         if ($data['capture_token'] !== null && ($existing = $this->table('sales_leads')->where('capture_token', $data['capture_token'])->first())) {
             $this->acknowledgeAfterCommit((int) $existing->id);
@@ -169,8 +174,11 @@ class SalesController extends Controller
         $tenant = app('currentTenant');
         $actor = auth()->user();
         try {
-            $id = DB::transaction(function () use ($data, $phone, $tenant, $actor, $listingLink): int {
+            $id = DB::transaction(function () use ($data, $phone, $tenant, $actor, $listingLink, $socialThreadId): int {
                 $id = DB::table('sales_leads')->insertGetId([...$data, ...$listingLink, 'tenant_id' => $tenant->id, 'phone_normalized' => $phone ?: null, 'stage' => 'new', 'created_at' => now(), 'updated_at' => now()]);
+                if ($socialThreadId !== null) {
+                    DB::table('social_threads')->where('tenant_id', $tenant->id)->where('id', $socialThreadId)->whereNull('sales_lead_id')->update(['sales_lead_id' => $id]);
+                }
                 $this->activity($id, 'created', 'Enquiry captured from '.$data['source'].'.');
                 app(EnquiryAcknowledgements::class)->prepare($tenant, $id, $actor);
                 $this->acknowledgeAfterCommit($id);
@@ -511,6 +519,7 @@ class SalesController extends Controller
 
     public function connections(): View
     {
-        return view('sales.connections', ['connections' => $this->table('messaging_connections')->get()]);
+        return view('sales.connections', ['connections' => $this->table('messaging_connections')->get(),
+            'socialAccounts' => $this->table('social_accounts')->where('status', '!=', 'disconnected')->orderBy('page_id')->orderBy('platform')->get()]);
     }
 }
