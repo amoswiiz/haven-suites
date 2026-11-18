@@ -33,6 +33,8 @@
 .hs-invoices-page .hs-invoice-actions .btn-outline-secondary{border-color:#d6dfeb;color:#425675;background:#fff}
 .hs-invoices-page .hs-invoice-actions .btn-outline-secondary:hover{background:#eaf0fa;color:#294780}
 .hs-invoices-page .hs-invoice-help{border-top:1px solid var(--hs-line);padding-top:12px;line-height:1.6}
+.hs-invoices-page .hs-select-col{width:38px;text-align:center}.hs-invoices-page .hs-select-col .form-check-input{width:18px;height:18px;cursor:pointer;margin:0}
+.hs-invoices-page .hs-bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;margin-bottom:12px;background:#fff4ec;border:1px solid #f2c9ad;border-radius:10px;font-size:13px;font-weight:650;color:#7a3d14}.hs-invoices-page .hs-bulk-bar[hidden]{display:none!important}
 @media(max-width:1100px){.hs-invoices-page .hs-invoice-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.hs-invoices-page .hs-invoice-search-wrap{grid-column:1/-1}}
 @media(max-width:650px){.hs-invoices-page .hs-invoice-toolbar{grid-template-columns:1fr 1fr}.hs-invoices-page .hs-invoice-search-wrap{grid-column:1/-1}.hs-invoices-page .hs-invoice-advanced{grid-template-columns:1fr}.hs-invoices-page .hs-invoice-card .card-body{padding:15px}}
 </style>
@@ -42,6 +44,8 @@
 <div class="hs-invoices-page">
 <?php
 $today = date('Y-m-d');
+$canDiscard = (bool) haven_auth()->user()?->can('invoices.manage') && haven_can_access(site_url('invoices/discard'), 'POST');
+$columns = $canDiscard ? 12 : 11;
 $totalIssuedAmount = 0.0;
 $overdueCount = 0;
 foreach ($invoices as $inv) {
@@ -86,7 +90,8 @@ foreach ($invoices as $inv) {
   <div><label class="hs-filter-label" for="invoice-date-from">Issued from</label><input id="invoice-date-from" type="date" class="form-control"></div>
   <div><label class="hs-filter-label" for="invoice-date-to">Issued to</label><input id="invoice-date-to" type="date" class="form-control"></div>
  </div>
-<div class="table-responsive"><table class="table table-hover align-middle hs-invoice-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Type</th><th>Issued</th><th>Due</th><th>Invoice status</th><th>Payment status</th><th class="text-end">Total</th><th class="text-end">Allocated</th><th class="text-end">Balance</th><th>Actions</th></tr></thead><tbody>
+<?php if ($canDiscard): ?><form id="invoice-discard-form" method="post" action="<?= site_url('invoices/discard') ?>" data-discard-form>@csrf</form><div class="hs-bulk-bar" data-bulk-bar hidden><span data-bulk-count>0 drafts selected</span><button type="submit" form="invoice-discard-form" class="btn btn-sm btn-danger" data-bulk-discard>Discard selected drafts</button><button type="button" class="btn btn-sm btn-outline-secondary" data-bulk-clear>Clear selection</button></div><?php endif; ?>
+<div class="table-responsive"><table class="table table-hover align-middle hs-invoice-table"><thead><tr><?php if ($canDiscard): ?><th class="hs-select-col"><input type="checkbox" class="form-check-input" data-select-all aria-label="Select all draft invoices shown" title="Select all draft invoices shown"></th><?php endif; ?><th>Invoice</th><th>Customer</th><th>Type</th><th>Issued</th><th>Due</th><th>Invoice status</th><th>Payment status</th><th class="text-end">Total</th><th class="text-end">Allocated</th><th class="text-end">Balance</th><th>Actions</th></tr></thead><tbody>
  <?php foreach ($invoices as $invoice): ?>
  <?php
   $id = (int) $invoice['id'];
@@ -100,6 +105,7 @@ foreach ($invoices as $inv) {
   $paymentsUrl = site_url('invoices/'.$id.'/payments');
  ?>
  <tr class="invoice-row" data-type="<?= esc($invoice['invoice_type'],'attr') ?>" data-status="<?= esc($status,'attr') ?>" data-payment="<?= esc($paymentStatus,'attr') ?>" data-overdue="<?= $overdue ? 'yes' : 'no' ?>" data-issue-date="<?= esc((string)($invoice['issue_date'] ?? ''),'attr') ?>">
+  <?php if ($canDiscard): ?><td class="hs-select-col"><?php if ($status === 'draft' && empty($invoice['invoice_number'])): ?><input type="checkbox" class="form-check-input invoice-select" name="invoice_ids[]" value="<?= $id ?>" form="invoice-discard-form" aria-label="Select Draft #<?= $id ?> for <?= esc($invoice['customer_name'],'attr') ?>"><?php endif; ?></td><?php endif; ?>
   <td><a class="hs-invoice-number text-decoration-none" href="<?= $invoiceUrl ?>"><?= esc($invoice['invoice_number'] ?: 'Draft #'.$id) ?></a></td>
   <td><?= esc($invoice['customer_name']) ?></td>
   <td><?= esc(ucfirst($invoice['invoice_type'])) ?><?php if ($invoice['reservation_id']): ?><div class="small text-muted">Booking #<?= (int)$invoice['reservation_id'] ?></div><?php endif; ?></td>
@@ -113,8 +119,8 @@ foreach ($invoices as $inv) {
   <td><div class="hs-invoice-actions"><a class="btn btn-sm btn-outline-primary" href="<?= $invoiceUrl ?>">View Invoice</a><?php if ($status === 'issued'): ?><a class="btn btn-sm btn-outline-secondary" href="<?= $paymentsUrl ?>">Manage Payments / Receipts</a><?php endif; ?></div></td>
  </tr>
  <?php endforeach; ?>
- <?php if (!$invoices): ?><tr><td colspan="11" class="text-center text-muted py-5">No invoices yet. Select Create Invoice to save your first draft.</td></tr><?php endif; ?>
- <tr id="invoice-no-match" style="display:none"><td colspan="11" class="text-center text-muted py-4">No invoices match these filters.</td></tr>
+ <?php if (!$invoices): ?><tr><td colspan="<?= $columns ?>" class="text-center text-muted py-5">No invoices yet. Select Create Invoice to save your first draft.</td></tr><?php endif; ?>
+ <tr id="invoice-no-match" style="display:none"><td colspan="<?= $columns ?>" class="text-center text-muted py-4">No invoices match these filters.</td></tr>
  </tbody></table></div>
  <div class="small text-muted" id="invoice-count" aria-live="polite"></div>
  <p class="small text-muted mt-3 mb-0 hs-invoice-help">Allocated payments reflect invoice allocations only, not all guest payments. Financial summaries exclude draft and void invoices. Receipt links are available from the payment history on each issued invoice.</p>
@@ -129,6 +135,16 @@ document.addEventListener('DOMContentLoaded',function(){
  function filter(){const term=search.value.trim().toLocaleLowerCase();let visible=0;rows.forEach(function(row){const d=row.dataset.issueDate||'';const show=(!term||row.textContent.toLocaleLowerCase().includes(term))&&(!type.value||row.dataset.type===type.value)&&(!status.value||row.dataset.status===status.value)&&(!payment.value||row.dataset.payment===payment.value)&&(!due.value||(due.value==='overdue'?row.dataset.overdue==='yes':row.dataset.overdue==='no'))&&(!from.value||(d&&d>=from.value))&&(!to.value||(d&&d<=to.value));row.style.display=show?'':'none';if(show)visible++});noMatch.style.display=rows.length&&!visible?'':'none';count.textContent='Showing '+visible+' of '+rows.length+' invoices'}
  [search,type,status,payment,due,from,to].forEach(function(el){el.addEventListener(el===search?'input':'change',filter)});
  reset.addEventListener('click',function(){search.value='';type.value='';status.value='';payment.value='';due.value='';from.value='';to.value='';filter()});filter();
+ const form=document.querySelector('[data-discard-form]');
+ if(form){const boxes=Array.from(document.querySelectorAll('.invoice-select')),all=document.querySelector('[data-select-all]'),bar=document.querySelector('[data-bulk-bar]'),label=document.querySelector('[data-bulk-count]');
+  const visible=function(box){return box.closest('tr').style.display!=='none'};
+  const update=function(){const chosen=boxes.filter(function(box){return box.checked}).length;bar.hidden=chosen===0;label.textContent=chosen+' draft '+(chosen===1?'invoice':'invoices')+' selected';const shown=boxes.filter(visible);all.checked=shown.length>0&&shown.every(function(box){return box.checked});all.indeterminate=!all.checked&&shown.some(function(box){return box.checked});all.disabled=shown.length===0};
+  boxes.forEach(function(box){box.addEventListener('change',update)});
+  all.addEventListener('change',function(){boxes.filter(visible).forEach(function(box){box.checked=all.checked});update()});
+  document.querySelector('[data-bulk-clear]').addEventListener('click',function(){boxes.forEach(function(box){box.checked=false});update()});
+  [search,type,status,payment,due,from,to].forEach(function(el){el.addEventListener(el===search?'input':'change',update)});reset.addEventListener('click',update);
+  form.addEventListener('submit',function(e){const chosen=boxes.filter(function(box){return box.checked}).length;if(!chosen||!confirm('Permanently discard '+chosen+' draft '+(chosen===1?'invoice':'invoices')+'? This cannot be undone. Issued invoices are never discarded.'))e.preventDefault()});
+  update();}
 });
 </script>
 @endsection

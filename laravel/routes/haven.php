@@ -163,6 +163,7 @@ Route::get('invoices/{id}', [Invoices::class, 'show'])->middleware([
 Route::get('invoices/settings', [InvoiceSettingsController::class, 'edit'])->middleware(['auth', 'tenant.member', 'permission:finance.manage']);
 Route::post('invoices/settings', [InvoiceSettingsController::class, 'update'])->middleware(['auth', 'tenant.member', 'permission:finance.manage']);
 Route::get('invoices/{id}/pdf', [Invoices::class, 'pdf'])->middleware(['auth', 'tenant.member', 'permission:invoices.view'])->whereNumber('id');
+Route::post('invoices/discard', [Invoices::class, 'discard'])->middleware(['auth', 'tenant.member', 'permission:invoices.manage', 'throttle:30,1']);
 Route::post('invoices/{id}/issue', [Invoices::class, 'issue'])->middleware([
     0 => 'auth',
     1 => 'tenant.member',

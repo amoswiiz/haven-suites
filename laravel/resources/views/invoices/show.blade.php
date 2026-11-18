@@ -18,6 +18,9 @@
    <?php if (haven_can_access(site_url('invoices/' . (int) $invoice['id'] . '/issue'), 'POST')): ?><form method="post" action="<?= site_url('invoices/' . (int) $invoice['id'] . '/issue') ?>" onsubmit="return confirm('Issue this invoice? It will receive an official invoice number and cannot be returned to draft.');">
     <?= csrf_field() ?><button class="btn btn-primary" style="background:#294780;border-color:#294780">Issue Invoice</button>
    </form><?php endif; ?>
+   <?php if (empty($invoice['invoice_number']) && haven_can_access(site_url('invoices/discard'), 'POST')): ?><form method="post" action="<?= site_url('invoices/discard') ?>" onsubmit="return confirm('Permanently discard this draft invoice? This cannot be undone.');">
+    <?= csrf_field() ?><input type="hidden" name="invoice_ids[]" value="<?= (int) $invoice['id'] ?>"><button class="btn btn-outline-danger">Discard draft</button>
+   </form><?php endif; ?>
   <?php endif; ?>
  </div>
 </div>

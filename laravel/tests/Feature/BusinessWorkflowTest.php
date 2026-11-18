@@ -135,6 +135,36 @@ class BusinessWorkflowTest extends TestCase
         $this->post($url.'/booking', ['reservation_id' => $reservation, 'version' => 1])->assertSessionHasErrors('version');
     }
 
+    public function test_staff_select_and_discard_draft_invoices_but_issued_invoices_are_kept(): void
+    {
+        $db = DB::connection('tenant');
+        $invoices = [];
+        foreach ([1, 2] as $index) {
+            $booking = ['check_in' => '2035-0'.$index.'-10', 'check_out' => '2035-0'.$index.'-12'] + $this->reservation($this->unit());
+            $this->post('/t/workflow/reservations/store', $booking)->assertSessionHas('success');
+            $reservation = $db->table('reservations')->where('unit_id', $booking['unit_id'])->value('id');
+            $this->post('/t/workflow/invoices', ['invoice_type' => 'reservation', 'reservation_id' => $reservation, 'issue_date' => date('Y-m-d'), 'due_date' => date('Y-m-d')])->assertSessionHas('success');
+            $invoices[] = (int) $db->table('invoices')->where('reservation_id', $reservation)->value('id');
+        }
+        [$draft, $issued] = $invoices;
+        $this->post('/t/workflow/invoices/'.$issued.'/issue', [])->assertSessionHas('success');
+        $this->assertGreaterThan(0, $db->table('invoice_items')->where('invoice_id', $draft)->count());
+
+        $list = $this->get('/t/workflow/invoices')->assertOk()->assertSee('Discard selected drafts')->assertSee('data-select-all', false)->getContent();
+        $this->assertStringContainsString('name="invoice_ids[]" value="'.$draft.'"', $list, 'Drafts can be selected.');
+        $this->assertStringNotContainsString('name="invoice_ids[]" value="'.$issued.'"', $list, 'Issued invoices cannot be selected.');
+        $this->get('/t/workflow/invoices/'.$draft)->assertOk()->assertSee('Discard draft');
+        $this->get('/t/workflow/invoices/'.$issued)->assertOk()->assertDontSee('Discard draft');
+
+        $this->post('/t/workflow/invoices/discard', ['invoice_ids' => [$draft, $issued]])
+            ->assertRedirect()->assertSessionHas('success', 'Discarded 1 draft invoice. 1 selected invoice was kept because it is issued, has a payment allocated, or is linked to a booking change.');
+        $this->assertNull($db->table('invoices')->find($draft));
+        $this->assertSame(0, $db->table('invoice_items')->where('invoice_id', $draft)->count());
+        $this->assertSame('issued', $db->table('invoices')->where('id', $issued)->value('status'));
+
+        $this->post('/t/workflow/invoices/discard', ['invoice_ids' => []])->assertSessionHas('error', 'Select at least one draft invoice to discard.');
+    }
+
     public function test_sales_can_select_an_eligible_invoice_without_typing_its_number(): void
     {
         $db = DB::connection('tenant');

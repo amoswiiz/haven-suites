@@ -404,6 +404,45 @@ class Invoices extends BaseController
         ];
     }
 
+    /**
+     * Permanently delete unnumbered draft invoices that nothing depends on. Issued invoices, and drafts with a payment
+     * allocated or linked to a booking change, are kept.
+     * Route: POST invoices/discard with invoice_ids[], invoices.manage permission.
+     */
+    public function discard()
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array) request()->input('invoice_ids', [])), fn (int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return redirect()->to(site_url('invoices'))->with('error', 'Select at least one draft invoice to discard.');
+        }
+        $db = DB::connection('tenant');
+        $discarded = $db->transaction(function () use ($db, $ids): array {
+            $drafts = $db->table('invoices')->whereIn('id', $ids)->where('status', 'draft')->whereNull('invoice_number')->lockForUpdate()
+                ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $inUse = $drafts === [] ? [] : $db->table('invoice_payment_allocations')->whereIn('invoice_id', $drafts)->pluck('invoice_id')->all();
+            if ($drafts !== [] && $db->getSchemaBuilder()->hasTable('booking_amendments')) {
+                $inUse = array_merge($inUse, $db->table('booking_amendments')->whereIn('invoice_id', $drafts)->pluck('invoice_id')->all());
+            }
+            $discard = array_values(array_diff($drafts, array_map('intval', $inUse)));
+            if ($discard !== []) {
+                $db->table('invoice_items')->whereIn('invoice_id', $discard)->delete();
+                $db->table('invoices')->whereIn('id', $discard)->where('status', 'draft')->whereNull('invoice_number')->delete();
+            }
+
+            return $discard;
+        });
+        if ($discarded !== []) {
+            log_message('info', 'Draft invoices discarded by user '.auth()->id().': #'.implode(', #', $discarded));
+        }
+        $kept = count($ids) - count($discarded);
+        $message = count($discarded) > 0 ? 'Discarded '.count($discarded).' draft '.(count($discarded) === 1 ? 'invoice' : 'invoices').'.' : 'No invoices were discarded.';
+        if ($kept > 0) {
+            $message .= ' '.$kept.' selected '.($kept === 1 ? 'invoice was' : 'invoices were').' kept because '.($kept === 1 ? 'it is' : 'they are').' issued, '.($kept === 1 ? 'has' : 'have').' a payment allocated, or '.($kept === 1 ? 'is' : 'are').' linked to a booking change.';
+        }
+
+        return redirect()->to(site_url('invoices'))->with(count($discarded) > 0 ? 'success' : 'error', $message);
+    }
+
     public function issue(int $id)
     {
         $db = db_connect();
